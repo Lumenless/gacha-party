@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 750" role="img" aria-label="Collector's Spark pack artwork">
+  <defs><linearGradient id="b" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#20252b"/><stop offset="1" stop-color="#080a0c"/></linearGradient><radialGradient id="g"><stop stop-color="#d7ff8c"/><stop offset=".45" stop-color="#b8ff3d"/><stop offset="1" stop-color="#6b9a16"/></radialGradient></defs>
+  <rect width="600" height="750" rx="40" fill="url(#b)"/><path d="M30 120 300 28l270 92-48 560H78z" fill="none" stroke="#b8ff3d" stroke-opacity=".32" stroke-width="3"/>
+  <circle cx="300" cy="344" r="170" fill="url(#g)" opacity=".16"/><path d="m300 170 42 126 132 2-106 78 39 127-107-75-107 75 39-127-106-78 132-2z" fill="url(#g)"/>
+  <text x="300" y="88" text-anchor="middle" fill="#b8ff3d" font-family="monospace" font-size="22" letter-spacing="7">GACHA PARTY</text><text x="300" y="615" text-anchor="middle" fill="#f4f5f5" font-family="Arial,sans-serif" font-weight="700" font-size="44">COLLECTOR'S</text><text x="300" y="665" text-anchor="middle" fill="#b8ff3d" font-family="Arial,sans-serif" font-weight="700" font-size="48">SPARK</text><text x="300" y="706" text-anchor="middle" fill="#a6adb7" font-family="monospace" font-size="16">DEMO PACK · 1 CARD</text>
+</svg>

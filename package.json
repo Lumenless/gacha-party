@@ -1,0 +1,70 @@
+{
+  "name": "gacha-party",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22 <25"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "deploy:check": "tsx scripts/check-vercel-env.ts",
+    "deploy:build": "pnpm deploy:check && next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:program": "cargo test -p gacha-party-room",
+    "build:program": "anchor build",
+    "generate:program-client": "tsx scripts/generate-program-client.ts",
+    "smoke:program:devnet": "tsx scripts/smoke-room-devnet.ts",
+    "smoke:escrow:localnet": "tsx scripts/smoke-escrow-localnet.ts"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "5.2.2",
+    "@magicblock-labs/ephemeral-rollups-kit": "0.16.2",
+    "@solana-program/token": "0.7.0",
+    "@solana/kit": "4.0.0",
+    "@solana/wallet-standard-features": "1.4.0",
+    "@supabase/supabase-js": "2.57.4",
+    "@wallet-standard/app": "1.1.1",
+    "@wallet-standard/base": "1.1.1",
+    "@wallet-standard/features": "1.1.1",
+    "bs58": "6.0.0",
+    "clsx": "2.1.1",
+    "lucide-react": "0.468.0",
+    "next": "16.2.12",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-hook-form": "7.62.0",
+    "tailwind-merge": "3.3.1",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@codama/nodes-from-anchor": "1.3.7",
+    "@codama/renderers-js": "1.4.3",
+    "@tailwindcss/postcss": "4.1.14",
+    "@types/node": "24.3.0",
+    "@types/react": "19.1.12",
+    "@types/react-dom": "19.1.9",
+    "codama": "1.3.7",
+    "eslint": "9.35.0",
+    "eslint-config-next": "16.2.12",
+    "tailwindcss": "4.1.14",
+    "tsx": "4.20.6",
+    "typescript": "5.9.2",
+    "vitest": "4.1.10"
+  },
+  "pnpm": {
+    "overrides": {
+      "@solana-program/system": "0.9.0",
+      "@codama/errors": "1.3.7",
+      "@codama/node-types": "1.3.7",
+      "@codama/nodes": "1.3.7",
+      "@codama/renderers-core": "1.2.2",
+      "@codama/visitors": "1.3.7",
+      "@codama/visitors-core": "1.3.7"
+    }
+  }
+}

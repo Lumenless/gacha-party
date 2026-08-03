@@ -1,0 +1,31 @@
+[package]
+name = "gacha-party-room"
+version = "0.1.0"
+description = "Collaborative room state for Gacha Party on MagicBlock Ephemeral Rollups"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+name = "gacha_party_room"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+anchor-debug = ["anchor-lang/anchor-debug", "ephemeral-rollups-sdk/anchor-compat-debug"]
+custom-heap = []
+custom-panic = []
+
+[dependencies]
+anchor-lang = { workspace = true }
+anchor-spl = { workspace = true }
+ephemeral-rollups-sdk = { workspace = true }
+
+[lints.rust]
+unexpected_cfgs = { level = "allow", check-cfg = [
+  'cfg(target_os, values("solana"))',
+  'cfg(feature, values("custom-heap", "custom-panic"))',
+] }
