@@ -2,12 +2,12 @@ import type { VoteChoice } from "@/domain/party";
 import type { SealedVotingAdapter } from "@/integrations/contracts";
 
 /**
- * Transport boundary for the future on-chain PER implementation.
+ * Transport boundary between party outcome orchestration and the PER client.
  *
- * A real transport must create one permissioned vote account per voter,
- * verify the TEE attestation, authenticate the wallet to the TEE RPC, and
- * publish only the final tally back to public party state. A shared account
- * readable by all party members does not meet Gacha Party's privacy model.
+ * The program and Kit client now create one permissioned vote account per voter,
+ * verify TEE attestation, and authenticate the wallet. This adapter remains
+ * fail-closed until deadline/all-voted reveal and aggregate tally orchestration
+ * publish only the result back to public party state.
  */
 export interface PrivateVoteTransport {
   commit(partyId: string, wallet: string, commitment: string): Promise<void>;
@@ -25,7 +25,7 @@ export class MagicBlockPrivateVotingAdapter implements SealedVotingAdapter {
   private requireTransport(): PrivateVoteTransport {
     if (!this.transport) {
       throw new Error(
-        "Private ER voting is not configured. Use commit-reveal until the permissioned vote program, TEE attestation, and wallet authorization flow are enabled.",
+        "Private ER tally orchestration is not configured. Use commit-reveal until the verified private accounts can publish an aggregate result without an early reveal.",
       );
     }
     return this.transport;

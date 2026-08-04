@@ -6,10 +6,14 @@
  * @see https://github.com/codama-idl/codama
  */
 
+export * from './castPrivateVote';
 export * from './commitRoom';
+export * from './delegatePrivateVote';
 export * from './delegateRoom';
 export * from './depositContribution';
 export * from './initializeEscrow';
+export * from './initializePrivateVote';
+export * from './initializePrivateVotePermission';
 export * from './initializeRoom';
 export * from './joinRoom';
 export * from './lockEscrow';

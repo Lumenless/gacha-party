@@ -1,6 +1,6 @@
 # MVP architecture
 
-_Last verified against official documentation: 2026-08-03._
+_Last verified against official documentation: 2026-08-04._
 
 ## Smallest useful system
 
@@ -125,7 +125,15 @@ MagicBlock's eATA model is the later path if contribution balances themselves mu
 - `VOTING_MODE=magicblock-per` now selects a separate adapter and fails closed. It cannot silently fall back to server memory or make a privacy claim without a configured PER transport.
 - The PER design uses one delegated vote account per wallet. A single account permissioned to every participant would allow every member to read every choice because current Permission Program access grants reads.
 - Enabling the transport requires all of: Permission Program integration in the Anchor program, per-wallet account delegation to the TEE validator, client-side TEE attestation verification, wallet challenge authentication, and a TEE tally instruction that publishes only aggregate counts.
-- The next slice is the on-chain `PrivateVote` and public `VoteTally` account lifecycle. Until it is built and verified on devnet, the UI and default demo continue to use tested commit-reveal.
+- The on-chain `PrivateVote` lifecycle is now implemented and verified on devnet. The remaining slice is deadline/all-voted finalization and a public aggregate tally. Until that is built and verified, the UI and default demo continue to use tested commit-reveal.
+
+## Milestone 6B decision — verified Private ER accounts
+
+- Each voter receives a PDA derived from `private-vote`, voter wallet, and party ID. It contains no choice at initialization and is pre-funded only for cheap ephemeral permission rent.
+- Delegation fails closed to MagicBlock's published devnet TEE validator. On the ER, the PDA creates an ephemeral permission marked private with only the voter granted transaction log, message, and balance visibility.
+- The browser-facing Kit boundary verifies the Intel TDX quote before asking the connected wallet to sign MagicBlock's authentication challenge. Auth tokens are accepted only from an HTTPS base endpoint and never committed or sent to the application server.
+- A devnet smoke test proved authenticated initialization, permission activation, private SELL write, authenticated read, and an unauthorized read returning no account data.
+- `VOTING_MODE=magicblock-per` remains blocked by deployment validation. Publishing a result still needs a deadline/all-voted gate and aggregate tally path; enabling PER before that would strand votes or permit an incomplete result.
 
 ## Milestone 4H decision — Vercel-safe application state
 

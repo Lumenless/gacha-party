@@ -27,6 +27,7 @@ type WalletAuthContextValue = {
   canSignTransactions: boolean;
   connect: (wallet: Wallet) => Promise<void>;
   disconnect: () => Promise<void>;
+  signMessage: (message: Uint8Array) => Promise<Uint8Array>;
   signTransaction: (transaction: Uint8Array) => Promise<Uint8Array>;
 };
 
@@ -174,6 +175,22 @@ export function WalletAuthProvider({ children }: { children: React.ReactNode }) 
     return new Uint8Array(result.signedTransaction);
   }, [activeAccount, activeWallet]);
 
+  const signMessage = useCallback(async (message: Uint8Array) => {
+    if (!activeWallet || !activeAccount || !(SolanaSignMessage in activeWallet.features)) {
+      throw new Error("Reconnect a wallet that supports message signing.");
+    }
+    const feature = activeWallet.features[SolanaSignMessage] as SolanaSignMessageFeature[typeof SolanaSignMessage];
+    const [result] = await feature.signMessage({
+      account: activeAccount,
+      message,
+    });
+    if (!result) throw new Error("The wallet did not return a message signature.");
+    if (result.signedMessage.length !== message.length || result.signedMessage.some((byte, index) => byte !== message[index])) {
+      throw new Error("The wallet signed an unexpected message.");
+    }
+    return new Uint8Array(result.signature);
+  }, [activeAccount, activeWallet]);
+
   const value = useMemo(() => ({
     enabled,
     wallets,
@@ -183,8 +200,9 @@ export function WalletAuthProvider({ children }: { children: React.ReactNode }) 
     canSignTransactions: Boolean(activeWallet && activeAccount && SolanaSignTransaction in activeWallet.features),
     connect,
     disconnect,
+    signMessage,
     signTransaction,
-  }), [activeAccount, activeWallet, connect, disconnect, enabled, error, signTransaction, status, walletAddress, wallets]);
+  }), [activeAccount, activeWallet, connect, disconnect, enabled, error, signMessage, signTransaction, status, walletAddress, wallets]);
 
   return <WalletAuthContext.Provider value={value}>{children}</WalletAuthContext.Provider>;
 }

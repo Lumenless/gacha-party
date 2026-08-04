@@ -16,6 +16,7 @@ export * from './escrowSettled';
 export * from './escrowStatus';
 export * from './openingStarted';
 export * from './playerJoined';
+export * from './privateVoteChoice';
 export * from './reactionSent';
 export * from './readyChanged';
 export * from './roomInitialized';

@@ -1,7 +1,16 @@
 use anchor_lang::prelude::*;
+use anchor_lang::system_program::{transfer, Transfer};
 use anchor_spl::token::{self, Mint, Token, TokenAccount, TransferChecked};
 use ephemeral_rollups_sdk::{
+    access_control::{
+        instructions::CreateEphemeralPermissionCpi,
+        structs::{
+            EphemeralMembersArgs, EphemeralPermission, Member, PERMISSION_SEED, TX_BALANCES_FLAG,
+            TX_LOGS_FLAG, TX_MESSAGE_FLAG,
+        },
+    },
     anchor::{commit, delegate, ephemeral},
+    consts::{EPHEMERAL_VAULT_ID, MAGIC_PROGRAM_ID, PERMISSION_PROGRAM_ID},
     cpi::DelegateConfig,
     ephem::MagicIntentBundleBuilder,
 };
@@ -12,12 +21,15 @@ pub const ROOM_SEED: &[u8] = b"party-room";
 pub const ESCROW_SEED: &[u8] = b"party-escrow";
 pub const ESCROW_VAULT_SEED: &[u8] = b"escrow-vault";
 pub const CONTRIBUTION_SEED: &[u8] = b"contribution";
+pub const PRIVATE_VOTE_SEED: &[u8] = b"private-vote";
 pub const MAX_PLAYERS: usize = 4;
 pub const ROOM_VERSION: u8 = 2;
 pub const OPENING_LEAD_SECONDS: i64 = 4;
 pub const ESCROW_VERSION: u8 = 2;
 pub const CONTRIBUTION_VERSION: u8 = 1;
+pub const PRIVATE_VOTE_VERSION: u8 = 1;
 pub const USDC_DECIMALS: u8 = 6;
+pub const MAX_PRIVATE_VOTE_WINDOW_SECONDS: i64 = 10 * 60;
 
 #[ephemeral]
 #[program]
@@ -120,6 +132,90 @@ pub mod gacha_party_room {
             revision: room.revision,
         });
         Ok(())
+    }
+
+    /// Base-layer instruction: creates one voter-scoped account and pre-funds its
+    /// TEE-only ephemeral permission rent. No vote choice is supplied here.
+    pub fn initialize_private_vote(
+        ctx: Context<InitializePrivateVote>,
+        party_id: [u8; 8],
+        reveal_after: i64,
+    ) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        PrivateVote::validate_reveal_after(now, reveal_after)?;
+        transfer(
+            CpiContext::new(
+                ctx.accounts.system_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.voter.to_account_info(),
+                    to: ctx.accounts.private_vote.to_account_info(),
+                },
+            ),
+            ephemeral_rollups_sdk::ephemeral_accounts::rent(EphemeralPermission::size_of(1) as u32),
+        )?;
+
+        let private_vote = &mut ctx.accounts.private_vote;
+        private_vote.version = PRIVATE_VOTE_VERSION;
+        private_vote.bump = ctx.bumps.private_vote;
+        private_vote.party_id = party_id;
+        private_vote.voter = ctx.accounts.voter.key();
+        private_vote.choice = PrivateVoteChoice::Uncast;
+        private_vote.reveal_after = reveal_after;
+        private_vote.cast_at = 0;
+        Ok(())
+    }
+
+    /// Base-layer instruction: delegates only to MagicBlock's devnet TEE validator.
+    pub fn delegate_private_vote(
+        ctx: Context<DelegatePrivateVote>,
+        party_id: [u8; 8],
+    ) -> Result<()> {
+        let voter = ctx.accounts.voter.key();
+        ctx.accounts.delegate_private_vote(
+            &ctx.accounts.voter,
+            &[PRIVATE_VOTE_SEED, voter.as_ref(), party_id.as_ref()],
+            DelegateConfig {
+                validator: Some(ctx.accounts.validator.key()),
+                ..Default::default()
+            },
+        )?;
+        Ok(())
+    }
+
+    /// TEE instruction: creates the ephemeral permission as private immediately,
+    /// granting transaction visibility only to the voter.
+    pub fn initialize_private_vote_permission(ctx: Context<PrivateVotePermission>) -> Result<()> {
+        if !ctx.accounts.permission.data_is_empty() {
+            return Ok(());
+        }
+        let voter = ctx.accounts.private_vote.voter;
+        let party_id = ctx.accounts.private_vote.party_id;
+        let bump = [ctx.accounts.private_vote.bump];
+        let signer_seeds = [PRIVATE_VOTE_SEED, voter.as_ref(), party_id.as_ref(), &bump];
+        CreateEphemeralPermissionCpi {
+            payer: ctx.accounts.private_vote.to_account_info(),
+            permissioned_account: ctx.accounts.private_vote.to_account_info(),
+            permission: ctx.accounts.permission.to_account_info(),
+            vault: ctx.accounts.ephemeral_vault.to_account_info(),
+            magic_program: ctx.accounts.magic_program.to_account_info(),
+            permission_program: ctx.accounts.permission_program.to_account_info(),
+            args: EphemeralMembersArgs {
+                is_private: true,
+                members: vec![Member {
+                    flags: TX_LOGS_FLAG | TX_MESSAGE_FLAG | TX_BALANCES_FLAG,
+                    pubkey: voter,
+                }],
+            },
+        }
+        .invoke_signed(&[&signer_seeds])?;
+        Ok(())
+    }
+
+    /// TEE instruction: records a choice only after the permission exists and the
+    /// authenticated voter signs. Choice values are 1 = KEEP and 2 = SELL.
+    pub fn cast_private_vote(ctx: Context<CastPrivateVote>, choice: u8) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        ctx.accounts.private_vote.cast(choice, now)
     }
 
     /// Base-layer instruction: creates an immutable participant-scoped token escrow.
@@ -444,6 +540,89 @@ pub struct MutateRoom<'info> {
 }
 
 #[derive(Accounts)]
+#[instruction(party_id: [u8; 8])]
+pub struct InitializePrivateVote<'info> {
+    #[account(
+        init,
+        payer = voter,
+        space = 8 + PrivateVote::INIT_SPACE,
+        seeds = [PRIVATE_VOTE_SEED, voter.key().as_ref(), party_id.as_ref()],
+        bump,
+    )]
+    pub private_vote: Account<'info, PrivateVote>,
+    #[account(mut)]
+    pub voter: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[delegate]
+#[derive(Accounts)]
+#[instruction(party_id: [u8; 8])]
+pub struct DelegatePrivateVote<'info> {
+    pub voter: Signer<'info>,
+    /// CHECK: The macro validates the program-derived account before delegation.
+    #[account(
+        mut,
+        del,
+        seeds = [PRIVATE_VOTE_SEED, voter.key().as_ref(), party_id.as_ref()],
+        bump,
+    )]
+    pub private_vote: UncheckedAccount<'info>,
+    /// CHECK: Privacy fails closed to MagicBlock's published devnet TEE validator.
+    #[account(address = pubkey!("MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo"))]
+    pub validator: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+pub struct PrivateVotePermission<'info> {
+    pub voter: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [PRIVATE_VOTE_SEED, private_vote.voter.as_ref(), private_vote.party_id.as_ref()],
+        bump = private_vote.bump,
+        has_one = voter @ RoomError::NotPrivateVoter,
+    )]
+    pub private_vote: Account<'info, PrivateVote>,
+    /// CHECK: PDA and owning Permission Program are constrained explicitly.
+    #[account(
+        mut,
+        seeds = [PERMISSION_SEED, private_vote.key().as_ref()],
+        bump,
+        seeds::program = PERMISSION_PROGRAM_ID,
+    )]
+    pub permission: UncheckedAccount<'info>,
+    /// CHECK: Fixed MagicBlock Permission Program.
+    #[account(address = PERMISSION_PROGRAM_ID)]
+    pub permission_program: UncheckedAccount<'info>,
+    /// CHECK: Fixed MagicBlock ephemeral rent vault.
+    #[account(mut, address = EPHEMERAL_VAULT_ID)]
+    pub ephemeral_vault: UncheckedAccount<'info>,
+    /// CHECK: Fixed MagicBlock program.
+    #[account(address = MAGIC_PROGRAM_ID)]
+    pub magic_program: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+pub struct CastPrivateVote<'info> {
+    pub voter: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [PRIVATE_VOTE_SEED, private_vote.voter.as_ref(), private_vote.party_id.as_ref()],
+        bump = private_vote.bump,
+        has_one = voter @ RoomError::NotPrivateVoter,
+    )]
+    pub private_vote: Account<'info, PrivateVote>,
+    /// CHECK: Its PDA proves that the permission corresponds to this vote account.
+    #[account(
+        seeds = [PERMISSION_SEED, private_vote.key().as_ref()],
+        bump,
+        seeds::program = PERMISSION_PROGRAM_ID,
+        owner = PERMISSION_PROGRAM_ID @ RoomError::PrivatePermissionRequired,
+    )]
+    pub permission: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
 #[instruction(
     room_id: [u8; 8],
     funding_target: u64,
@@ -749,6 +928,57 @@ pub struct ContributionReceipt {
     pub amount: u64,
 }
 
+#[account]
+#[derive(InitSpace, Debug, PartialEq)]
+pub struct PrivateVote {
+    pub version: u8,
+    pub bump: u8,
+    pub party_id: [u8; 8],
+    pub voter: Pubkey,
+    pub choice: PrivateVoteChoice,
+    pub reveal_after: i64,
+    pub cast_at: i64,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, InitSpace, PartialEq, Eq)]
+pub enum PrivateVoteChoice {
+    Uncast,
+    Keep,
+    Sell,
+}
+
+impl PrivateVote {
+    fn validate_reveal_after(now: i64, reveal_after: i64) -> Result<()> {
+        let maximum = now
+            .checked_add(MAX_PRIVATE_VOTE_WINDOW_SECONDS)
+            .ok_or(RoomError::TimestampOverflow)?;
+        require!(
+            reveal_after > now && reveal_after <= maximum,
+            RoomError::InvalidPrivateVoteDeadline
+        );
+        Ok(())
+    }
+
+    fn cast(&mut self, choice: u8, now: i64) -> Result<()> {
+        let next = match choice {
+            1 => PrivateVoteChoice::Keep,
+            2 => PrivateVoteChoice::Sell,
+            _ => return err!(RoomError::InvalidPrivateVoteChoice),
+        };
+        if self.choice == next {
+            return Ok(());
+        }
+        require!(
+            self.choice == PrivateVoteChoice::Uncast,
+            RoomError::PrivateVoteAlreadyCast
+        );
+        require!(now <= self.reveal_after, RoomError::PrivateVoteClosed);
+        self.choice = next;
+        self.cast_at = now;
+        Ok(())
+    }
+}
+
 impl RoomState {
     fn participant_index(&self, player: Pubkey) -> Option<usize> {
         self.participants[..self.participant_count as usize]
@@ -950,6 +1180,18 @@ pub enum RoomError {
     EveryoneMustBeReady,
     #[msg("The opening timestamp overflowed.")]
     TimestampOverflow,
+    #[msg("The private vote deadline must be in the next ten minutes.")]
+    InvalidPrivateVoteDeadline,
+    #[msg("Private vote choices must be KEEP or SELL.")]
+    InvalidPrivateVoteChoice,
+    #[msg("Only the private vote owner can perform this action.")]
+    NotPrivateVoter,
+    #[msg("Create the TEE permission before casting a private vote.")]
+    PrivatePermissionRequired,
+    #[msg("This private vote already contains a different choice.")]
+    PrivateVoteAlreadyCast,
+    #[msg("The private voting deadline has passed.")]
+    PrivateVoteClosed,
 }
 
 #[error_code]
@@ -1075,6 +1317,29 @@ mod tests {
         assert!(state.start_opening(host, 107).is_err());
         assert!(state.set_player_ready(host, false, 107).is_err());
         assert!(state.join(Pubkey::new_unique(), 107).is_err());
+    }
+
+    #[test]
+    fn private_vote_deadline_and_choice_are_fail_closed() {
+        assert!(PrivateVote::validate_reveal_after(100, 100).is_err());
+        assert!(PrivateVote::validate_reveal_after(100, 101).is_ok());
+        assert!(PrivateVote::validate_reveal_after(100, 701).is_err());
+
+        let mut vote = PrivateVote {
+            version: PRIVATE_VOTE_VERSION,
+            bump: 1,
+            party_id: *b"ROOM0001",
+            voter: Pubkey::new_unique(),
+            choice: PrivateVoteChoice::Uncast,
+            reveal_after: 200,
+            cast_at: 0,
+        };
+        assert!(vote.cast(0, 150).is_err());
+        vote.cast(2, 150).unwrap();
+        assert_eq!(vote.choice, PrivateVoteChoice::Sell);
+        assert_eq!(vote.cast_at, 150);
+        assert!(vote.cast(2, 151).is_ok());
+        assert!(vote.cast(1, 151).is_err());
     }
 
     #[test]

@@ -17,6 +17,17 @@ Each room is a PDA derived from `party-room`, the host wallet, and an eight-byte
 
 The room PDA is never interpreted as proof of funding.
 
+## Private vote accounts
+
+Each private vote is a voter-scoped PDA derived from `private-vote`, voter wallet, and party ID. It is separate from the public room and base-layer escrow.
+
+- `initialize_private_vote`: creates an uncast account with a bounded deadline and pre-funds only its ephemeral-permission rent.
+- `delegate_private_vote`: delegates exclusively to MagicBlock's published devnet TEE validator.
+- `initialize_private_vote_permission`: creates an ER-only permission marked private with the voter as its sole external member.
+- `cast_private_vote`: writes KEEP or SELL inside the authenticated TEE, requires the voter signature and permission account, and rejects changes and late votes.
+
+The deployed instructions do not yet reveal or tally. Production remains on commit-reveal until a deadline/all-voted finalizer can publish only the aggregate outcome.
+
 ## Base-layer escrow
 
 The escrow PDA is derived from `party-escrow`, the host wallet, and the same eight-byte room identifier. Its immutable roster is independent from the delegated room so token custody never depends on deserializing an account currently owned by MagicBlock's delegation program.
@@ -45,6 +56,7 @@ MagicBlock’s current quickstart uses Anchor 1.0.2, but SDK 0.16.2 explicitly s
 pnpm test:program
 pnpm build:program
 pnpm smoke:escrow:localnet
+pnpm smoke:private-vote:devnet
 ```
 
 `anchor build` writes the deployable `.so`, IDL, and generated TypeScript type under the ignored `target/` directory. The deployment keypair is also ignored and must be managed as a deployment secret; only the public program address is stored in source.
@@ -70,3 +82,5 @@ The Milestone 4E escrow upgrade retained the same address. Upgrade signature: [`
 The Milestone 5 operator lifecycle upgrade deployed on 2026-08-04 with signature [`4ieM4NrA2pgnSecxowFMQofKssmMrB7cYMD2dcbzvktJ89N9DM3Cqii8K3nQiHN4WCrUvcAcKN7HKCVZcvEp5yfZ`](https://explorer.solana.com/tx/4ieM4NrA2pgnSecxowFMQofKssmMrB7cYMD2dcbzvktJ89N9DM3Cqii8K3nQiHN4WCrUvcAcKN7HKCVZcvEp5yfZ?cluster=devnet). The post-upgrade MagicBlock smoke completed initialize, delegated ready update, and undelegation for room `CeYXfJJy2EsY19uRbqVmAp6gY5ej8pqMSnHu63jhzGBU` (party ID `01add1c7`).
 
 The room schema v2 opening upgrade deployed on 2026-08-04 with signature [`5JZD8KEZ7nJQLmrXwAQ7vtqzU2QE3ZUBm5aFKHdaueoBXWdbhmmS6PAEDDwyrUfD27RGesnEjCToKnRKhkpWK6RZ`](https://explorer.solana.com/tx/5JZD8KEZ7nJQLmrXwAQ7vtqzU2QE3ZUBm5aFKHdaueoBXWdbhmmS6PAEDDwyrUfD27RGesnEjCToKnRKhkpWK6RZ?cluster=devnet). ProgramData was extended by 16 KiB before the upgrade to fit the larger binary with modest future headroom. The post-upgrade smoke completed initialization/delegation, ER ready, ER opening timestamp, and undelegation for room `Bckr3caR5GimdnKj2Dm8rmo13x4U4w3wrJDs58Dqae6c` (party ID `175d9759`).
+
+The Private ER account upgrade deployed on 2026-08-04; the final permission-validation fix is signature [`5auYTrUPheee62j6M8FWJqXF621kLRGJQ7LaFzetCcsrs7aDbsApsD4vKDxKvsGCenJmkPLFPzBELVGfnQvJbYyx`](https://explorer.solana.com/tx/5auYTrUPheee62j6M8FWJqXF621kLRGJQ7LaFzetCcsrs7aDbsApsD4vKDxKvsGCenJmkPLFPzBELVGfnQvJbYyx?cluster=devnet). The verified TDX/authenticated smoke used private vote `ALh5zchQEHM4gdbA1ZTJYtieFhC1ZUEHkNi8rzczJem8` (party ID `8aa3b8f4`) and confirmed that an unauthenticated TEE request received no account data.

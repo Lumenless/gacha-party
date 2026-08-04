@@ -8,4 +8,5 @@
 
 export * from './contributionReceipt';
 export * from './escrowState';
+export * from './privateVote';
 export * from './roomState';

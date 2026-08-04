@@ -7,28 +7,33 @@
  */
 
 import { containsBytes, fixEncoderSize, getBytesEncoder, type Address, type ReadonlyUint8Array } from '@solana/kit';
-import { type ParsedCommitRoomInstruction, type ParsedDelegateRoomInstruction, type ParsedDepositContributionInstruction, type ParsedInitializeEscrowInstruction, type ParsedInitializeRoomInstruction, type ParsedJoinRoomInstruction, type ParsedLockEscrowInstruction, type ParsedMarkPurchasedInstruction, type ParsedMarkSettledInstruction, type ParsedProcessUndelegationInstruction, type ParsedReactInstruction, type ParsedRefundContributionInstruction, type ParsedReleaseToOperatorInstruction, type ParsedSetReadyInstruction, type ParsedStartOpeningInstruction, type ParsedUndelegateRoomInstruction } from '../instructions';
+import { type ParsedCastPrivateVoteInstruction, type ParsedCommitRoomInstruction, type ParsedDelegatePrivateVoteInstruction, type ParsedDelegateRoomInstruction, type ParsedDepositContributionInstruction, type ParsedInitializeEscrowInstruction, type ParsedInitializePrivateVoteInstruction, type ParsedInitializePrivateVotePermissionInstruction, type ParsedInitializeRoomInstruction, type ParsedJoinRoomInstruction, type ParsedLockEscrowInstruction, type ParsedMarkPurchasedInstruction, type ParsedMarkSettledInstruction, type ParsedProcessUndelegationInstruction, type ParsedReactInstruction, type ParsedRefundContributionInstruction, type ParsedReleaseToOperatorInstruction, type ParsedSetReadyInstruction, type ParsedStartOpeningInstruction, type ParsedUndelegateRoomInstruction } from '../instructions';
 
 export const GACHA_PARTY_ROOM_PROGRAM_ADDRESS = 'BMKHnBM1oq1LyXFYyHq2gUdyugo1N8aGF6wtBnJNd6Nz' as Address<'BMKHnBM1oq1LyXFYyHq2gUdyugo1N8aGF6wtBnJNd6Nz'>;
 
-export enum GachaPartyRoomAccount { ContributionReceipt, EscrowState, RoomState }
+export enum GachaPartyRoomAccount { ContributionReceipt, EscrowState, PrivateVote, RoomState }
 
 export function identifyGachaPartyRoomAccount(account: { data: ReadonlyUint8Array } | ReadonlyUint8Array): GachaPartyRoomAccount {
 const data = 'data' in account ? account.data : account;
 if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([191, 236, 159, 86, 162, 165, 122, 95])), 0)) { return GachaPartyRoomAccount.ContributionReceipt; }
 if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([19, 90, 148, 111, 55, 130, 229, 108])), 0)) { return GachaPartyRoomAccount.EscrowState; }
+if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([120, 63, 166, 8, 200, 218, 168, 132])), 0)) { return GachaPartyRoomAccount.PrivateVote; }
 if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([251, 176, 114, 29, 232, 0, 65, 181])), 0)) { return GachaPartyRoomAccount.RoomState; }
 throw new Error("The provided account could not be identified as a gachaPartyRoom account.")
 }
 
-export enum GachaPartyRoomInstruction { CommitRoom, DelegateRoom, DepositContribution, InitializeEscrow, InitializeRoom, JoinRoom, LockEscrow, MarkPurchased, MarkSettled, ProcessUndelegation, React, RefundContribution, ReleaseToOperator, SetReady, StartOpening, UndelegateRoom }
+export enum GachaPartyRoomInstruction { CastPrivateVote, CommitRoom, DelegatePrivateVote, DelegateRoom, DepositContribution, InitializeEscrow, InitializePrivateVote, InitializePrivateVotePermission, InitializeRoom, JoinRoom, LockEscrow, MarkPurchased, MarkSettled, ProcessUndelegation, React, RefundContribution, ReleaseToOperator, SetReady, StartOpening, UndelegateRoom }
 
 export function identifyGachaPartyRoomInstruction(instruction: { data: ReadonlyUint8Array } | ReadonlyUint8Array): GachaPartyRoomInstruction {
 const data = 'data' in instruction ? instruction.data : instruction;
+if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([125, 42, 59, 73, 246, 134, 233, 133])), 0)) { return GachaPartyRoomInstruction.CastPrivateVote; }
 if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([138, 145, 121, 138, 83, 230, 52, 13])), 0)) { return GachaPartyRoomInstruction.CommitRoom; }
+if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([147, 25, 112, 241, 112, 115, 118, 45])), 0)) { return GachaPartyRoomInstruction.DelegatePrivateVote; }
 if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([39, 6, 122, 70, 65, 76, 166, 26])), 0)) { return GachaPartyRoomInstruction.DelegateRoom; }
 if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([212, 84, 189, 93, 128, 155, 244, 187])), 0)) { return GachaPartyRoomInstruction.DepositContribution; }
 if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([243, 160, 77, 153, 11, 92, 48, 209])), 0)) { return GachaPartyRoomInstruction.InitializeEscrow; }
+if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([245, 7, 178, 129, 222, 146, 137, 10])), 0)) { return GachaPartyRoomInstruction.InitializePrivateVote; }
+if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([100, 117, 116, 96, 127, 153, 211, 208])), 0)) { return GachaPartyRoomInstruction.InitializePrivateVotePermission; }
 if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([216, 42, 137, 161, 61, 72, 154, 238])), 0)) { return GachaPartyRoomInstruction.InitializeRoom; }
 if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([95, 232, 188, 81, 124, 130, 78, 139])), 0)) { return GachaPartyRoomInstruction.JoinRoom; }
 if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([55, 16, 5, 80, 13, 102, 206, 104])), 0)) { return GachaPartyRoomInstruction.LockEscrow; }
@@ -45,10 +50,14 @@ throw new Error("The provided instruction could not be identified as a gachaPart
 }
 
 export type ParsedGachaPartyRoomInstruction<TProgram extends string = 'BMKHnBM1oq1LyXFYyHq2gUdyugo1N8aGF6wtBnJNd6Nz'> =
+| { instructionType: GachaPartyRoomInstruction.CastPrivateVote } & ParsedCastPrivateVoteInstruction<TProgram>
 | { instructionType: GachaPartyRoomInstruction.CommitRoom } & ParsedCommitRoomInstruction<TProgram>
+| { instructionType: GachaPartyRoomInstruction.DelegatePrivateVote } & ParsedDelegatePrivateVoteInstruction<TProgram>
 | { instructionType: GachaPartyRoomInstruction.DelegateRoom } & ParsedDelegateRoomInstruction<TProgram>
 | { instructionType: GachaPartyRoomInstruction.DepositContribution } & ParsedDepositContributionInstruction<TProgram>
 | { instructionType: GachaPartyRoomInstruction.InitializeEscrow } & ParsedInitializeEscrowInstruction<TProgram>
+| { instructionType: GachaPartyRoomInstruction.InitializePrivateVote } & ParsedInitializePrivateVoteInstruction<TProgram>
+| { instructionType: GachaPartyRoomInstruction.InitializePrivateVotePermission } & ParsedInitializePrivateVotePermissionInstruction<TProgram>
 | { instructionType: GachaPartyRoomInstruction.InitializeRoom } & ParsedInitializeRoomInstruction<TProgram>
 | { instructionType: GachaPartyRoomInstruction.JoinRoom } & ParsedJoinRoomInstruction<TProgram>
 | { instructionType: GachaPartyRoomInstruction.LockEscrow } & ParsedLockEscrowInstruction<TProgram>

@@ -10,7 +10,7 @@ describe("server voting adapter selection", () => {
   it("fails closed when PER is selected before its transport is configured", async () => {
     const adapter = createServerVotingAdapter("magicblock-per");
     expect(adapter.privacyModel).toBe("PRIVATE_EPHEMERAL_ROLLUP");
-    await expect(adapter.getTally("party")).rejects.toThrow("Private ER voting is not configured");
+    await expect(adapter.getTally("party")).rejects.toThrow("Private ER tally orchestration is not configured");
   });
 
   it("rejects unknown modes", () => {
