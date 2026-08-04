@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
-import { MockCollectorCryptAdapter } from "@/integrations/collector-crypt/mock";
+import { collectorCryptAdapter } from "@/integrations/collector-crypt/server";
 import { createParty } from "@/server/create-party";
 import { requireRequestWallet, walletModeEnabled } from "@/server/wallet-auth";
 
 export async function POST(request: Request) {
   try {
     const wallet = walletModeEnabled() ? requireRequestWallet(request) : "DEMO_HOST_WALLET";
-    const party = await createParty(await request.json(), new MockCollectorCryptAdapter(), { wallet });
+    const party = await createParty(await request.json(), collectorCryptAdapter(), { wallet });
     return NextResponse.json({ id: party.id }, { status: 201 });
   } catch (error) {
     const message = error instanceof ZodError

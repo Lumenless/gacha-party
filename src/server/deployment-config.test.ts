@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { deploymentConfigIssues } from "./deployment-config";
 
 const programId = "BMKHnBM1oq1LyXFYyHq2gUdyugo1N8aGF6wtBnJNd6Nz";
+const operator = "9ask7bQmGvpJRHzrt83gv7U88b9jfuz7wYd1nC88p3nv";
 const validEnv = {
   NEXT_PUBLIC_APP_URL: "https://gacha.example",
   NEXT_PUBLIC_SOLANA_CLUSTER: "devnet",
@@ -36,5 +37,20 @@ describe("Vercel deployment configuration", () => {
     });
     expect(issues).toContain("VOTING_MODE must remain commit-reveal until PER is complete.");
     expect(issues).toContain("Public and server USDC mint addresses must match.");
+  });
+
+  it("accepts Collector Crypt devnet mode without an attribution key", () => {
+    expect(deploymentConfigIssues({
+      ...validEnv,
+      NEXT_PUBLIC_FUNDS_MODE: "solana",
+      NEXT_PUBLIC_USDC_MINT: "Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr",
+      USDC_MINT: "Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr",
+      NEXT_PUBLIC_GACHA_OPERATOR_ADDRESS: operator,
+      GACHA_OPERATOR_ADDRESS: operator,
+      GACHA_OPERATOR_SECRET_KEY: "server-only-base64",
+      COLLECTOR_CRYPT_MODE: "real",
+      COLLECTOR_CRYPT_API_BASE_URL: "https://dev-gacha.collectorcrypt.com",
+      COLLECTOR_CRYPT_API_KEY: "",
+    })).toEqual([]);
   });
 });

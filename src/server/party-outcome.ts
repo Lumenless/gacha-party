@@ -5,6 +5,7 @@ import type { CollectorCryptAdapter } from "@/integrations/collector-crypt/types
 import type { CardCustodyAdapter, RealtimePartyAdapter, SealedVotingAdapter } from "@/integrations/contracts";
 import { partyRepository } from "./party-repository";
 import { settlementLock } from "./settlement-lock";
+import type { RealSellSettlement } from "./real-settlement";
 
 async function requireParty(partyId: string): Promise<Party> {
   const party = await partyRepository.get(partyId);
@@ -35,6 +36,7 @@ export async function revealPartyCard(
   realtime: RealtimePartyAdapter,
   collectorCrypt: CollectorCryptAdapter,
   now = Date.now(),
+  realOpening?: (party: Party, collectorCrypt: CollectorCryptAdapter) => Promise<Awaited<ReturnType<CollectorCryptAdapter["openPack"]>>>,
 ): Promise<Party> {
   const { wallet } = walletActionSchema.parse(rawInput);
   const party = await requireParty(partyId);
@@ -47,7 +49,9 @@ export async function revealPartyCard(
     throw new Error("The synchronized countdown is still running.");
   }
 
-  const result = await collectorCrypt.openPack(party.id);
+  const result = realOpening
+    ? await realOpening(party, collectorCrypt)
+    : await collectorCrypt.openPack(party.id);
   const revealed = transitionParty(party.status, "REVEALED");
   const voting = transitionParty(revealed, "VOTING");
   return saveAndPublish(
@@ -111,6 +115,8 @@ async function settleDecision(
   tally: { keep: number; sell: number },
   collectorCrypt: CollectorCryptAdapter,
   custody: CardCustodyAdapter,
+  realSell?: (party: Party, collectorCrypt: CollectorCryptAdapter) => Promise<RealSellSettlement>,
+  realKeep?: (party: Party) => Promise<unknown>,
 ): Promise<Party> {
   if (!party.reveal || !party.voting) throw new Error("The reveal is missing.");
   const settling = transitionParty(party.status, "SETTLING");
@@ -118,17 +124,19 @@ async function settleDecision(
   const completedAt = new Date().toISOString();
 
   if (outcome === "SELL") {
-    const buyback = await collectorCrypt.requestBuyback({
-      playerAddress: party.hostWallet,
-      nftAddress: party.reveal.mint,
-      proceedsRecipient: `DemoSettlementVault_${party.id}`,
-    });
+    const realSettlement = realSell ? await realSell(party, collectorCrypt) : null;
+    const buyback = realSettlement ?? await collectorCrypt.requestBuyback({
+        playerAddress: party.hostWallet,
+        nftAddress: party.reveal.mint,
+        proceedsRecipient: `DemoSettlementVault_${party.id}`,
+      });
+    const proceedsBaseUnits = realSettlement?.proceedsBaseUnits ?? buyback.proceedsBaseUnits;
     const shares = calculateSettlement(
       party.participants.map(({ wallet, contributionBaseUnits }) => ({
         wallet,
         amount: BigInt(contributionBaseUnits),
       })),
-      buyback.proceedsBaseUnits,
+      proceedsBaseUnits,
     );
     return {
       ...party,
@@ -138,7 +146,9 @@ async function settleDecision(
         mode: "SELL",
         idempotencyKey,
         completedAt,
-        proceedsBaseUnits: buyback.proceedsBaseUnits.toString(),
+        proceedsBaseUnits: proceedsBaseUnits.toString(),
+        buybackSignature: realSettlement?.buybackSignature,
+        payoutSignature: realSettlement?.payoutSignature,
         shares: shares.map((share) => ({
           wallet: share.wallet,
           displayName: party.participants.find(({ wallet }) => wallet === share.wallet)?.displayName ?? "Player",
@@ -146,12 +156,13 @@ async function settleDecision(
           proceedsBaseUnits: share.proceeds.toString(),
         })),
       },
-      activity: [...party.activity, activity("SETTLED", "SELL won and mock proceeds were split")],
+      activity: [...party.activity, activity("SETTLED", realSettlement ? "SELL won and confirmed devnet USDC was distributed" : "SELL won and mock proceeds were split")],
     };
   }
 
   const vaultAddress = await custody.getRecipientAddress(party.id);
   await custody.recordPartyOwnership(party.id, party.reveal.mint);
+  if (realKeep) await realKeep(party);
   return {
     ...party,
     status: transitionParty(settling, "COMPLETED"),
@@ -169,6 +180,8 @@ export async function revealPartyVote(
   collectorCrypt: CollectorCryptAdapter,
   custody: CardCustodyAdapter,
   now = Date.now(),
+  realSell?: (party: Party, collectorCrypt: CollectorCryptAdapter) => Promise<RealSellSettlement>,
+  realKeep?: (party: Party) => Promise<unknown>,
 ): Promise<Party> {
   const input = voteRevealSchema.parse(rawInput);
   const party = await requireParty(partyId);
@@ -195,10 +208,12 @@ export async function revealPartyVote(
   const tally = await votingAdapter.getTally(partyId);
   const outcome: VoteChoice = tally.sell > tally.keep ? "SELL" : "KEEP";
   const idempotencyKey = `${party.id}:${party.reveal?.mint ?? "missing"}:${outcome}:v1`;
-  if (!await settlementLock.tryAcquire(partyId, idempotencyKey)) return requireParty(partyId);
+  if (!await settlementLock.tryAcquire(partyId, idempotencyKey) && !await settlementLock.tryResume(partyId, idempotencyKey, now)) {
+    throw new Error("Settlement is already processing. Retry shortly.");
+  }
   try {
     const completed = await saveAndPublish(
-      await settleDecision(party, outcome, tally, collectorCrypt, custody),
+      await settleDecision(party, outcome, tally, collectorCrypt, custody, realSell, realKeep),
       realtime,
     );
     await settlementLock.complete(partyId, idempotencyKey);
@@ -218,6 +233,8 @@ export async function expirePartyVote(
   collectorCrypt: CollectorCryptAdapter,
   custody: CardCustodyAdapter,
   now = Date.now(),
+  realSell?: (party: Party, collectorCrypt: CollectorCryptAdapter) => Promise<RealSellSettlement>,
+  realKeep?: (party: Party) => Promise<unknown>,
 ): Promise<Party> {
   const { wallet } = walletActionSchema.parse(rawInput);
   const party = await requireParty(partyId);
@@ -230,10 +247,12 @@ export async function expirePartyVote(
   const tally = await votingAdapter.getTally(partyId);
   const outcome: VoteChoice = tally.sell > tally.keep ? "SELL" : "KEEP";
   const idempotencyKey = `${party.id}:${party.reveal?.mint ?? "missing"}:${outcome}:v1`;
-  if (!await settlementLock.tryAcquire(partyId, idempotencyKey)) return requireParty(partyId);
+  if (!await settlementLock.tryAcquire(partyId, idempotencyKey) && !await settlementLock.tryResume(partyId, idempotencyKey, now)) {
+    throw new Error("Settlement is already processing. Retry shortly.");
+  }
   try {
     const completed = await saveAndPublish(
-      await settleDecision(party, outcome, tally, collectorCrypt, custody),
+      await settleDecision(party, outcome, tally, collectorCrypt, custody, realSell, realKeep),
       realtime,
     );
     await settlementLock.complete(partyId, idempotencyKey);

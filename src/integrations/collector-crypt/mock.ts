@@ -67,4 +67,8 @@ export class MockCollectorCryptAdapter implements CollectorCryptAdapter {
       proceedsBaseUnits: parseUsdc("400"),
     };
   }
+
+  async getBuybackResult(): Promise<{ signature: string; proceedsBaseUnits: bigint }> {
+    return { signature: "mock-buyback-signature", proceedsBaseUnits: parseUsdc("400") };
+  }
 }

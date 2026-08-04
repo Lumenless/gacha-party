@@ -26,7 +26,7 @@ Server-Sent Events remain the browser transport, backed by Supabase Postgres Cha
 
 Immediate: full mock vertical slice, deterministic pack data, wallet-standard connection UI, explicit state transitions, exact settlement math, public MagicBlock ER prototype, and PER local/devnet experiments.
 
-Needs credentials or coordination: Collector Crypt partner API key; production purchase/buyback access; decision on a wallet or supported program-controlled vault that can sign returned transactions; funded RPC/deployment accounts; production USDC mint and custody review.
+Needs credentials or coordination: partner attribution key if desired; mainnet purchase/buyback approval; non-custodial vault design; funded RPC/deployment accounts; and production USDC/custody review.
 
 ## Milestones
 
@@ -97,7 +97,7 @@ Contribution amounts, the funding-complete gate, custody, votes, and settlement 
 - Escrow initialization freezes an allowlist of two to four wallets, with the host first. This avoids accepting deposits from an account that merely claims to match delegated room state.
 - Each participant may make one deposit. The program uses `u64` base units, `transfer_checked`, a six-decimal mint constraint, checked addition, and a hard cap at the funding target.
 - Every receipt can be refunded in full by its contributor. There is intentionally no lock, purchase, withdrawal, or settlement instruction yet, so this milestone cannot spend or permanently strand contributed tokens.
-- The mint is deployment/runtime configuration, not a hardcoded address. Circle documents `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU` for Solana devnet; it was independently verified on devnet as a six-decimal classic SPL Token mint on 2026-08-03.
+- The mint is deployment/runtime configuration. Generic escrow tests may use any verified six-decimal SPL mint; Collector Crypt real mode specifically requires `Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr`, verified from its generated devnet transaction on 2026-08-04.
 - A disposable local validator smoke test verified initialize, a 5,000,000-base-unit SPL deposit, receipt/account decoding, full refund, and receipt closure. The local token is never labelled USDC.
 
 MagicBlock's eATA model is the later path if contribution balances themselves must execute on an Ephemeral Rollup. A normal PDA-owned SPL vault is not delegated as though it were an eATA.
@@ -128,3 +128,13 @@ MagicBlock's eATA model is the later path if contribution balances themselves mu
 - Supabase Realtime fans database updates into the existing SSE API. EventSource reconnects when Vercel's bounded streaming invocation ends.
 - RLS is enabled with no browser policies. Only server routes receive the Supabase service-role secret.
 - Settlement locks remain held on uncertain external errors. A future reconciliation worker must resolve the same idempotency key; automatic retries are unsafe.
+
+## Milestone 5 decision — custodial Collector Crypt devnet execution
+
+- Collector Crypt real mode is devnet-only and uses `https://dev-gacha.collectorcrypt.com`. An API key is optional and sent only when configured for partner attribution.
+- The escrow stores one immutable operator and enforces `FUNDING → LOCKED → RELEASED → PURCHASED → SETTLED`. The host authorizes the irreversible lock; the operator authorizes release and all later audit transitions.
+- Collector purchase and settlement stages are persisted in Supabase before external submission. Reusing the same signed Collector transaction is safe, while recent-operation leases reject concurrent serverless attempts.
+- `altPlayerAddress` sends the NFT to the dedicated operator. The UI labels this honestly as a custodial devnet demo.
+- SELL verifies that confirmed buyback proceeds reached the operator USDC account. Proportional payouts use integer base units and deterministic remainder allocation.
+- All participant payout transfers and `mark_settled` share one Solana transaction. A retry after completion fails the terminal marker and atomically rolls back every repeated transfer.
+- Private ER voting remains separate. Commit-reveal is still the accurate operational privacy claim until permissioned per-wallet TEE accounts are deployed.

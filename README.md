@@ -42,9 +42,9 @@ Wallet mode always signs a free login message first. To enable public room trans
 
 Keep `NEXT_PUBLIC_ROOM_STATE_MODE=mock` for the reliable no-wallet demo. MagicBlock mode requires the connected wallet to hold a small amount of devnet SOL for transaction fees and room rent.
 
-## Experimental on-chain funding
+## Devnet Collector Crypt flow
 
-The escrow funding UI is opt-in and intentionally stops before pack opening. Enable it only after independently verifying the chosen six-decimal devnet token mint on your RPC:
+Real mode uses a dedicated custodial devnet operator. Enable it only after upgrading the checked-in program, applying all Supabase migrations, and funding the operator with devnet SOL:
 
 ```bash
 NEXT_PUBLIC_WALLET_MODE=wallet
@@ -52,9 +52,16 @@ NEXT_PUBLIC_FUNDS_MODE=solana
 NEXT_PUBLIC_USDC_MINT=<verified-devnet-mint>
 USDC_MINT=<same-verified-devnet-mint>
 NEXT_PUBLIC_FUNDS_TOKEN_LABEL="USDC"
+NEXT_PUBLIC_GACHA_OPERATOR_ADDRESS=<operator-public-key>
+GACHA_OPERATOR_ADDRESS=<same-operator-public-key>
+GACHA_OPERATOR_SECRET_KEY=<base64-keypair-json>
+COLLECTOR_CRYPT_MODE=real
+COLLECTOR_CRYPT_API_BASE_URL=https://dev-gacha.collectorcrypt.com
 ```
 
-The host freezes the current 2–4 wallet roster, then participants review, simulate, and sign one deposit each. Server funding state is derived from on-chain receipts, not browser callbacks. Refunds remain available and real-mode opening is disabled until escrow locking and cancellation rules are implemented.
+The host freezes the roster, participants sign checked deposits, everyone readies, and the host signs the irreversible lock. The operator then releases the exact target, signs Collector Crypt’s partially signed transaction, receives the NFT, and either keeps it for the party or signs buyback. SELL payouts and the final escrow marker share one atomic transaction, preventing double settlement.
+
+`COLLECTOR_CRYPT_API_KEY` is optional and used only for partner attribution. Never place `GACHA_OPERATOR_SECRET_KEY` in a `NEXT_PUBLIC_` variable or commit it.
 
 ## MagicBlock room program
 

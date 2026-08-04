@@ -8,16 +8,16 @@
 
 import { combineCodec, getAddressDecoder, getAddressEncoder, getStructDecoder, getStructEncoder, getU64Decoder, getU64Encoder, getU8Decoder, getU8Encoder, type Address, type FixedSizeCodec, type FixedSizeDecoder, type FixedSizeEncoder } from '@solana/kit';
 
-export type EscrowInitialized = { escrow: Address; host: Address; mint: Address; fundingTarget: bigint; participantCount: number;  };
+export type EscrowInitialized = { escrow: Address; host: Address; mint: Address; operator: Address; fundingTarget: bigint; participantCount: number;  };
 
-export type EscrowInitializedArgs = { escrow: Address; host: Address; mint: Address; fundingTarget: number | bigint; participantCount: number;  };
+export type EscrowInitializedArgs = { escrow: Address; host: Address; mint: Address; operator: Address; fundingTarget: number | bigint; participantCount: number;  };
 
 export function getEscrowInitializedEncoder(): FixedSizeEncoder<EscrowInitializedArgs> {
-    return getStructEncoder([['escrow', getAddressEncoder()], ['host', getAddressEncoder()], ['mint', getAddressEncoder()], ['fundingTarget', getU64Encoder()], ['participantCount', getU8Encoder()]]);
+    return getStructEncoder([['escrow', getAddressEncoder()], ['host', getAddressEncoder()], ['mint', getAddressEncoder()], ['operator', getAddressEncoder()], ['fundingTarget', getU64Encoder()], ['participantCount', getU8Encoder()]]);
 }
 
 export function getEscrowInitializedDecoder(): FixedSizeDecoder<EscrowInitialized> {
-    return getStructDecoder([['escrow', getAddressDecoder()], ['host', getAddressDecoder()], ['mint', getAddressDecoder()], ['fundingTarget', getU64Decoder()], ['participantCount', getU8Decoder()]]);
+    return getStructDecoder([['escrow', getAddressDecoder()], ['host', getAddressDecoder()], ['mint', getAddressDecoder()], ['operator', getAddressDecoder()], ['fundingTarget', getU64Decoder()], ['participantCount', getU8Decoder()]]);
 }
 
 export function getEscrowInitializedCodec(): FixedSizeCodec<EscrowInitializedArgs, EscrowInitialized> {

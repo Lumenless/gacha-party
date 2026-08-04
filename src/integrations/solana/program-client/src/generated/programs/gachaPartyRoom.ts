@@ -7,7 +7,7 @@
  */
 
 import { containsBytes, fixEncoderSize, getBytesEncoder, type Address, type ReadonlyUint8Array } from '@solana/kit';
-import { type ParsedCommitRoomInstruction, type ParsedDelegateRoomInstruction, type ParsedDepositContributionInstruction, type ParsedInitializeEscrowInstruction, type ParsedInitializeRoomInstruction, type ParsedJoinRoomInstruction, type ParsedProcessUndelegationInstruction, type ParsedReactInstruction, type ParsedRefundContributionInstruction, type ParsedSetReadyInstruction, type ParsedUndelegateRoomInstruction } from '../instructions';
+import { type ParsedCommitRoomInstruction, type ParsedDelegateRoomInstruction, type ParsedDepositContributionInstruction, type ParsedInitializeEscrowInstruction, type ParsedInitializeRoomInstruction, type ParsedJoinRoomInstruction, type ParsedLockEscrowInstruction, type ParsedMarkPurchasedInstruction, type ParsedMarkSettledInstruction, type ParsedProcessUndelegationInstruction, type ParsedReactInstruction, type ParsedRefundContributionInstruction, type ParsedReleaseToOperatorInstruction, type ParsedSetReadyInstruction, type ParsedUndelegateRoomInstruction } from '../instructions';
 
 export const GACHA_PARTY_ROOM_PROGRAM_ADDRESS = 'BMKHnBM1oq1LyXFYyHq2gUdyugo1N8aGF6wtBnJNd6Nz' as Address<'BMKHnBM1oq1LyXFYyHq2gUdyugo1N8aGF6wtBnJNd6Nz'>;
 
@@ -21,7 +21,7 @@ if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Arr
 throw new Error("The provided account could not be identified as a gachaPartyRoom account.")
 }
 
-export enum GachaPartyRoomInstruction { CommitRoom, DelegateRoom, DepositContribution, InitializeEscrow, InitializeRoom, JoinRoom, ProcessUndelegation, React, RefundContribution, SetReady, UndelegateRoom }
+export enum GachaPartyRoomInstruction { CommitRoom, DelegateRoom, DepositContribution, InitializeEscrow, InitializeRoom, JoinRoom, LockEscrow, MarkPurchased, MarkSettled, ProcessUndelegation, React, RefundContribution, ReleaseToOperator, SetReady, UndelegateRoom }
 
 export function identifyGachaPartyRoomInstruction(instruction: { data: ReadonlyUint8Array } | ReadonlyUint8Array): GachaPartyRoomInstruction {
 const data = 'data' in instruction ? instruction.data : instruction;
@@ -31,9 +31,13 @@ if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Arr
 if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([243, 160, 77, 153, 11, 92, 48, 209])), 0)) { return GachaPartyRoomInstruction.InitializeEscrow; }
 if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([216, 42, 137, 161, 61, 72, 154, 238])), 0)) { return GachaPartyRoomInstruction.InitializeRoom; }
 if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([95, 232, 188, 81, 124, 130, 78, 139])), 0)) { return GachaPartyRoomInstruction.JoinRoom; }
+if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([55, 16, 5, 80, 13, 102, 206, 104])), 0)) { return GachaPartyRoomInstruction.LockEscrow; }
+if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([201, 187, 148, 225, 137, 78, 189, 251])), 0)) { return GachaPartyRoomInstruction.MarkPurchased; }
+if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([85, 36, 192, 146, 83, 42, 49, 60])), 0)) { return GachaPartyRoomInstruction.MarkSettled; }
 if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([196, 28, 41, 206, 48, 37, 51, 167])), 0)) { return GachaPartyRoomInstruction.ProcessUndelegation; }
 if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([30, 51, 119, 72, 84, 37, 204, 207])), 0)) { return GachaPartyRoomInstruction.React; }
 if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([110, 148, 182, 9, 237, 155, 222, 1])), 0)) { return GachaPartyRoomInstruction.RefundContribution; }
+if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([137, 177, 152, 116, 206, 154, 127, 80])), 0)) { return GachaPartyRoomInstruction.ReleaseToOperator; }
 if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([105, 78, 7, 162, 181, 167, 186, 43])), 0)) { return GachaPartyRoomInstruction.SetReady; }
 if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([151, 179, 196, 11, 39, 232, 174, 131])), 0)) { return GachaPartyRoomInstruction.UndelegateRoom; }
 throw new Error("The provided instruction could not be identified as a gachaPartyRoom instruction.")
@@ -46,8 +50,12 @@ export type ParsedGachaPartyRoomInstruction<TProgram extends string = 'BMKHnBM1o
 | { instructionType: GachaPartyRoomInstruction.InitializeEscrow } & ParsedInitializeEscrowInstruction<TProgram>
 | { instructionType: GachaPartyRoomInstruction.InitializeRoom } & ParsedInitializeRoomInstruction<TProgram>
 | { instructionType: GachaPartyRoomInstruction.JoinRoom } & ParsedJoinRoomInstruction<TProgram>
+| { instructionType: GachaPartyRoomInstruction.LockEscrow } & ParsedLockEscrowInstruction<TProgram>
+| { instructionType: GachaPartyRoomInstruction.MarkPurchased } & ParsedMarkPurchasedInstruction<TProgram>
+| { instructionType: GachaPartyRoomInstruction.MarkSettled } & ParsedMarkSettledInstruction<TProgram>
 | { instructionType: GachaPartyRoomInstruction.ProcessUndelegation } & ParsedProcessUndelegationInstruction<TProgram>
 | { instructionType: GachaPartyRoomInstruction.React } & ParsedReactInstruction<TProgram>
 | { instructionType: GachaPartyRoomInstruction.RefundContribution } & ParsedRefundContributionInstruction<TProgram>
+| { instructionType: GachaPartyRoomInstruction.ReleaseToOperator } & ParsedReleaseToOperatorInstruction<TProgram>
 | { instructionType: GachaPartyRoomInstruction.SetReady } & ParsedSetReadyInstruction<TProgram>
 | { instructionType: GachaPartyRoomInstruction.UndelegateRoom } & ParsedUndelegateRoomInstruction<TProgram>

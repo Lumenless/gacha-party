@@ -20,6 +20,7 @@ export type OpeningResult = {
   insuredValueBaseUnits: bigint;
 };
 export type BuybackQuote = { memo: string; transactionBase64: string; proceedsBaseUnits: bigint };
+export type BuybackResult = { signature: string; proceedsBaseUnits: bigint };
 
 export interface CollectorCryptAdapter {
   listPacks(): Promise<CollectorPack[]>;
@@ -36,4 +37,5 @@ export interface CollectorCryptAdapter {
     nftAddress: string;
     proceedsRecipient?: string;
   }): Promise<BuybackQuote>;
+  getBuybackResult(memo: string): Promise<BuybackResult | null>;
 }

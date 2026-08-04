@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowRight } from "lucide-react";
+import { useEffect } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { createPartySchema, type CreatePartyInput } from "@/domain/party";
 import { formatUsdc } from "@/domain/money";
@@ -28,7 +29,7 @@ function defaultDeadline() {
   return local.toISOString().slice(0, 16);
 }
 
-export function CreatePartyForm({ packs }: { packs: PackOption[] }) {
+export function CreatePartyForm({ packs, exactPackPrice = false }: { packs: PackOption[]; exactPackPrice?: boolean }) {
   const router = useRouter();
   const walletAuth = useWalletAuth();
   const {
@@ -36,6 +37,7 @@ export function CreatePartyForm({ packs }: { packs: PackOption[] }) {
     handleSubmit,
     formState: { errors, isSubmitting },
     setError,
+    setValue,
     control,
   } = useForm<CreatePartyInput>({
     resolver: zodResolver(createPartySchema),
@@ -50,6 +52,11 @@ export function CreatePartyForm({ packs }: { packs: PackOption[] }) {
   });
 
   const selectedPack = useWatch({ control, name: "packCode" });
+  useEffect(() => {
+    if (!exactPackPrice) return;
+    const pack = packs.find(({ code }) => code === selectedPack);
+    if (pack) setValue("fundingTarget", formatUsdc(BigInt(pack.priceBaseUnits)), { shouldValidate: true });
+  }, [exactPackPrice, packs, selectedPack, setValue]);
 
   async function onSubmit(values: CreatePartyInput) {
     try {
@@ -114,10 +121,11 @@ export function CreatePartyForm({ packs }: { packs: PackOption[] }) {
         <div className="space-y-1.5">
           <label htmlFor="fundingTarget" className="text-sm font-medium">Funding target</label>
           <div className="relative">
-            <Input id="fundingTarget" inputMode="decimal" autoComplete="off" className="pr-16 font-mono tabular-nums" aria-invalid={errors.fundingTarget ? true : undefined} {...register("fundingTarget")} />
+            <Input id="fundingTarget" inputMode="decimal" autoComplete="off" className="pr-16 font-mono tabular-nums" aria-invalid={errors.fundingTarget ? true : undefined} readOnly={exactPackPrice} {...register("fundingTarget")} />
             <span className="pointer-events-none absolute right-3 top-3 text-xs text-muted-foreground">USDC</span>
           </div>
           {errors.fundingTarget && <p className="text-xs text-destructive">Enter a valid funding target.</p>}
+          {exactPackPrice && <p className="text-xs text-muted-foreground">Real mode escrows exactly the live pack price.</p>}
         </div>
       </div>
 

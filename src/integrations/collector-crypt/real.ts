@@ -2,6 +2,7 @@ import { z } from "zod";
 import { parseUsdc } from "@/domain/money";
 import type {
   BuybackQuote,
+  BuybackResult,
   CollectorCryptAdapter,
   CollectorPack,
   OpeningResult,
@@ -9,39 +10,118 @@ import type {
   SubmittedPurchase,
 } from "./types";
 
+const attributeSchema = z.object({
+  trait_type: z.string().optional(),
+  value: z.union([z.string(), z.number()]).optional(),
+}).passthrough();
+
 const machinesSchema = z.object({
-  machines: z.array(
-    z.object({
-      code: z.string(),
-      name: z.string(),
-      shortName: z.string(),
-      image: z.string().url(),
-      price: z.number().nonnegative(),
-      instantBuyback: z.number().int().min(0).max(100),
-      public: z.boolean(),
-    }),
-  ),
+  machines: z.array(z.object({
+    code: z.string().min(1),
+    name: z.string().min(1),
+    shortName: z.string().min(1),
+    image: z.string().optional().default(""),
+    thumbnailUrl: z.string().optional().default(""),
+    price: z.number().nonnegative(),
+    instantBuyback: z.number().int().min(0).max(100),
+    public: z.boolean(),
+    stock: z.record(z.string(), z.number()).optional(),
+  }).passthrough()),
 });
 
+const preparedPurchaseSchema = z.object({
+  memo: z.string().min(1),
+  transaction: z.string().min(1),
+});
+
+const submittedPurchaseSchema = z.object({
+  success: z.literal(true),
+  signature: z.string().min(1),
+  confirmationStatus: z.enum(["confirmed", "finalized", "submitted"]),
+});
+
+const waitingOpeningSchema = z.object({
+  success: z.literal(true),
+  code: z.literal("WAITING_FOR_WEBHOOK"),
+  memo: z.string(),
+});
+
+const openingSchema = z.object({
+  success: z.literal(true),
+  transactionSignature: z.string().min(1),
+  nft_address: z.string().min(1),
+  rarity: z.enum(["Common", "Uncommon", "Rare", "Epic"]),
+  buybackAmount: z.number().int().nonnegative().optional(),
+  insuredValue: z.number().int().nonnegative().optional(),
+  nftWon: z.object({
+    insured_value: z.number().int().nonnegative().optional(),
+    content: z.object({
+      metadata: z.object({
+        name: z.string().min(1),
+        attributes: z.array(attributeSchema).optional().default([]),
+      }).passthrough(),
+      links: z.object({ image: z.string().optional() }).optional(),
+      files: z.array(z.object({ uri: z.string().optional() }).passthrough()).optional(),
+    }).passthrough(),
+  }).passthrough(),
+}).passthrough();
+
+const buybackSchema = z.object({
+  success: z.literal(true),
+  serializedTransaction: z.string().min(1),
+  refundAmount: z.union([z.number().int().nonnegative(), z.string().regex(/^\d+$/)]),
+  memo: z.string().min(1),
+});
+
+const buybackResultSchema = z.union([
+  z.object({ exists: z.literal(false) }).passthrough(),
+  z.object({
+    exists: z.literal(true),
+    transactionSignature: z.string().min(1),
+    buybackAmount: z.union([z.string().regex(/^\d+$/), z.number().int().nonnegative()]),
+    status: z.string(),
+  }).passthrough(),
+]);
+
+export class CollectorCryptOpeningPendingError extends Error {
+  readonly status = 409;
+  constructor() {
+    super("Collector Crypt is confirming the pack purchase. The reveal will retry shortly.");
+  }
+}
+
+type RealCollectorCryptConfig = {
+  apiKey?: string;
+  baseUrl?: string;
+};
+
 export class RealCollectorCryptAdapter implements CollectorCryptAdapter {
-  constructor(
-    private readonly apiKey: string,
-    private readonly baseUrl = "https://gacha.collectorcrypt.com",
-  ) {
-    if (!apiKey) throw new Error("COLLECTOR_CRYPT_API_KEY is required for real mode.");
+  private readonly apiKey?: string;
+  private readonly baseUrl: string;
+
+  constructor(config: RealCollectorCryptConfig = {}) {
+    this.apiKey = config.apiKey?.trim() || undefined;
+    this.baseUrl = (config.baseUrl ?? "https://dev-gacha.collectorcrypt.com").replace(/\/$/, "");
+    const url = new URL(this.baseUrl);
+    if (url.protocol !== "https:") throw new Error("Collector Crypt real mode requires HTTPS.");
+    if (url.origin !== "https://dev-gacha.collectorcrypt.com") {
+      throw new Error("Collector Crypt real mode is restricted to the verified devnet origin.");
+    }
   }
 
   private async request(path: string, init?: RequestInit): Promise<unknown> {
+    const headers = new Headers(init?.headers);
+    headers.set("content-type", "application/json");
+    if (this.apiKey) headers.set("x-api-key", this.apiKey);
     const response = await fetch(`${this.baseUrl}${path}`, {
       ...init,
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": this.apiKey,
-        ...init?.headers,
-      },
+      headers,
       cache: "no-store",
     });
-    if (!response.ok) throw new Error(`Collector Crypt request failed (${response.status}).`);
+    if (!response.ok) {
+      const detail = (await response.text()).slice(0, 300);
+      throw new Error(`Collector Crypt request failed (${response.status})${detail ? `: ${detail}` : "."}`);
+    }
     return response.json();
   }
 
@@ -53,20 +133,114 @@ export class RealCollectorCryptAdapter implements CollectorCryptAdapter {
         code: machine.code,
         name: machine.name,
         shortName: machine.shortName,
-        imageUrl: machine.image,
-        priceBaseUnits: parseUsdc(machine.price.toFixed(6).replace(/\.?0+$/, "")),
+        imageUrl: absoluteAssetUrl(machine.thumbnailUrl || machine.image, this.baseUrl),
+        priceBaseUnits: parseUsdc(decimalUsdc(machine.price)),
         buybackPercent: machine.instantBuyback,
-        isOpen: true,
+        isOpen: !machine.stock || Object.values(machine.stock).some((count) => count > 0),
       }));
   }
 
-  private unavailable(operation: string): never {
-    throw new Error(`${operation} is scaffolded but disabled until custody and signing are approved.`);
+  async preparePurchase(input: {
+    playerAddress: string;
+    packCode: string;
+    cardRecipient?: string;
+  }): Promise<PreparedPurchase> {
+    const data = preparedPurchaseSchema.parse(await this.request("/api/generatePack", {
+      method: "POST",
+      body: JSON.stringify({
+        playerAddress: input.playerAddress,
+        packType: input.packCode,
+        turbo: false,
+        ...(input.cardRecipient ? { altPlayerAddress: input.cardRecipient } : {}),
+      }),
+    }));
+    return { memo: data.memo, transactionBase64: data.transaction };
   }
 
-  async preparePurchase(): Promise<PreparedPurchase> { return this.unavailable("Pack purchase"); }
-  async submitPurchase(): Promise<SubmittedPurchase> { return this.unavailable("Purchase submission"); }
-  async openPack(): Promise<OpeningResult> { return this.unavailable("Pack opening"); }
-  async getOpeningResult(): Promise<OpeningResult | null> { return this.unavailable("Opening status"); }
-  async requestBuyback(): Promise<BuybackQuote> { return this.unavailable("Buyback"); }
+  async submitPurchase(signedTransactionBase64: string): Promise<SubmittedPurchase> {
+    const data = submittedPurchaseSchema.parse(await this.request("/api/submitTransaction", {
+      method: "POST",
+      body: JSON.stringify({ signedTransaction: signedTransactionBase64 }),
+    }));
+    return { signature: data.signature, confirmationStatus: data.confirmationStatus };
+  }
+
+  async openPack(memo: string): Promise<OpeningResult> {
+    const data = await this.request("/api/openPack", {
+      method: "POST",
+      body: JSON.stringify({ memo }),
+    });
+    if (waitingOpeningSchema.safeParse(data).success) throw new CollectorCryptOpeningPendingError();
+    return mapOpening(memo, openingSchema.parse(data), this.baseUrl);
+  }
+
+  async getOpeningResult(memo: string): Promise<OpeningResult | null> {
+    try {
+      return await this.openPack(memo);
+    } catch (error) {
+      if (error instanceof CollectorCryptOpeningPendingError) return null;
+      throw error;
+    }
+  }
+
+  async requestBuyback(input: {
+    playerAddress: string;
+    nftAddress: string;
+    proceedsRecipient?: string;
+  }): Promise<BuybackQuote> {
+    const data = buybackSchema.parse(await this.request("/api/buyback", {
+      method: "POST",
+      body: JSON.stringify({
+        playerAddress: input.playerAddress,
+        nftAddress: input.nftAddress,
+        ...(input.proceedsRecipient ? { altRecipient: input.proceedsRecipient } : {}),
+      }),
+    }));
+    return {
+      memo: data.memo,
+      transactionBase64: data.serializedTransaction,
+      proceedsBaseUnits: BigInt(data.refundAmount),
+    };
+  }
+
+  async getBuybackResult(memo: string): Promise<BuybackResult | null> {
+    const data = buybackResultSchema.parse(await this.request(`/api/buyback/check?memo=${encodeURIComponent(memo)}`));
+    if (!data.exists || data.status !== "complete") return null;
+    return { signature: data.transactionSignature, proceedsBaseUnits: BigInt(data.buybackAmount) };
+  }
+}
+
+function decimalUsdc(value: number): string {
+  if (!Number.isFinite(value) || value < 0) throw new Error("Collector Crypt returned an invalid pack price.");
+  return value.toFixed(6).replace(/\.?0+$/, "");
+}
+
+function absoluteAssetUrl(value: string, baseUrl: string): string {
+  if (!value) return "/packs/spark.svg";
+  return new URL(value, baseUrl).toString();
+}
+
+function mapOpening(memo: string, data: z.infer<typeof openingSchema>, baseUrl: string): OpeningResult {
+  const attributes = data.nftWon.content.metadata.attributes;
+  const grade = attributes.find((item) => /grade/i.test(item.trait_type ?? ""))?.value;
+  const insuredAttribute = attributes.find((item) => /insured.*value/i.test(item.trait_type ?? ""))?.value;
+  const insuredValue = data.nftWon.insured_value ?? data.insuredValue ?? parseInsuredAttribute(insuredAttribute);
+  const image = data.nftWon.content.links?.image ?? data.nftWon.content.files?.find((file) => file.uri)?.uri ?? "";
+  return {
+    memo,
+    mint: data.nft_address,
+    name: data.nftWon.content.metadata.name,
+    imageUrl: absoluteAssetUrl(image, baseUrl),
+    rarity: data.rarity,
+    grade: grade === undefined ? "Ungraded" : String(grade),
+    insuredValueBaseUnits: BigInt(insuredValue ?? 0),
+  };
+}
+
+function parseInsuredAttribute(value: string | number | undefined): number | undefined {
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return value;
+  if (typeof value !== "string") return undefined;
+  const normalized = value.replace(/[^0-9.]/g, "");
+  if (!normalized) return undefined;
+  try { return Number(parseUsdc(normalized)); } catch { return undefined; }
 }

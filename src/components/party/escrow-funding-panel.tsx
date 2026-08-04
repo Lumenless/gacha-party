@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { WalletAuthButton } from "@/components/wallet/wallet-auth-button";
 import type { EscrowIntent, EscrowStatus, EscrowTransactionState } from "@/integrations/solana/use-solana-escrow";
 import type { ContributionReceiptSnapshot, EscrowAccountSnapshot, WalletTokenAccountSnapshot } from "@/integrations/solana/escrow-client";
+import { EscrowStatus as ProgramEscrowStatus } from "@/integrations/solana/program-client/src/generated";
 
 const PROGRAM_ADDRESS = "BMKHnBM1oq1LyXFYyHq2gUdyugo1N8aGF6wtBnJNd6Nz";
 
@@ -40,6 +41,7 @@ export function EscrowFundingPanel({
   onReviewInitialize,
   onReviewDeposit,
   onReviewRefund,
+  onReviewLock,
   onRefresh,
 }: {
   status: EscrowStatus;
@@ -59,8 +61,10 @@ export function EscrowFundingPanel({
   onReviewInitialize: () => void;
   onReviewDeposit: () => void;
   onReviewRefund: () => void;
+  onReviewLock: () => void;
   onRefresh: () => void;
 }) {
+  const fundingOpen = snapshot?.status === ProgramEscrowStatus.Funding;
   if (status === "disabled") return null;
 
   if (status === "unconfigured") {
@@ -166,7 +170,7 @@ export function EscrowFundingPanel({
         </div>
       )}
 
-      {isParticipant && tokenAccount && !receipt && (
+      {isParticipant && tokenAccount && !receipt && fundingOpen && (
         <form onSubmit={(event) => { event.preventDefault(); onReviewDeposit(); }} className="mt-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="flex-1 space-y-1.5">
@@ -182,10 +186,24 @@ export function EscrowFundingPanel({
         </form>
       )}
 
-      {receipt && (
+      {receipt && fundingOpen && (
         <div className="mt-5 flex flex-col justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 p-4 sm:flex-row sm:items-center">
-          <div><p className="font-semibold">Contribution confirmed</p><p className="mt-1 text-xs text-muted-foreground">Refunds remain available because pack-purchase locking is not implemented.</p></div>
+          <div><p className="font-semibold">Contribution confirmed</p><p className="mt-1 text-xs text-muted-foreground">Refunds remain available until the host locks the fully funded escrow.</p></div>
           <Button type="button" variant="secondary" onClick={onReviewRefund}><RotateCcw className="size-4" aria-hidden="true" /> Review refund</Button>
+        </div>
+      )}
+
+      {isHost && fundingOpen && snapshot?.totalContributed === snapshot?.fundingTarget && (
+        <div className="mt-5 flex flex-col justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 p-4 sm:flex-row sm:items-center">
+          <div><p className="font-semibold">Fully funded</p><p className="mt-1 text-xs text-muted-foreground">Locking permanently disables refunds and authorizes the devnet operator purchase.</p></div>
+          <Button type="button" onClick={onReviewLock}>Review lock</Button>
+        </div>
+      )}
+
+      {!fundingOpen && (
+        <div className="mt-5 rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm">
+          <p className="font-semibold">Escrow {snapshot?.status === ProgramEscrowStatus.Locked ? "locked for purchase" : "handed to the devnet operator"}</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">Deposits and refunds are disabled by the on-chain lifecycle.</p>
         </div>
       )}
     </div>
@@ -196,6 +214,7 @@ const intentCopy: Record<EscrowIntent, { eyebrow: string; title: string }> = {
   initialize: { eyebrow: "Escrow activation", title: "Create this funding vault?" },
   deposit: { eyebrow: "Token contribution", title: "Deposit into the party vault?" },
   refund: { eyebrow: "Full refund", title: "Return your contribution?" },
+  lock: { eyebrow: "Purchase authorization", title: "Lock the party escrow?" },
 };
 
 export function EscrowTransactionReview({
@@ -221,7 +240,7 @@ export function EscrowTransactionReview({
   const confirmed = transaction.action === intent && transaction.stage === "confirmed" ? transaction.signature : null;
   const actionError = transaction.action === intent ? transaction.error : null;
   const stageLabel = transaction.stage === "preparing" ? "Preparing…" : transaction.stage === "simulating" ? "Simulating…" : transaction.stage === "signing" ? "Confirm in wallet…" : "Confirming…";
-  const assets = intent === "initialize" ? "None" : `${formatUsdc(amount)} ${tokenLabel}`;
+  const assets = intent === "initialize" ? "None" : intent === "lock" ? "No transfer; refunds disabled" : `${formatUsdc(amount)} ${tokenLabel}`;
 
   return (
     <div className="rounded-xl border border-primary/40 bg-card p-5 sm:p-6" aria-live="polite">

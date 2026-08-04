@@ -16,7 +16,7 @@ Copy the project URL and service-role secret from Supabase project settings. The
 
 For local development, put those same development-project credentials in `.env.local`. A separate development project is preferred; sharing the deployment project is acceptable for the short hackathon window if demo data can be discarded.
 
-The migration creates durable `parties`, `wallet_challenges`, `vote_records`, and `settlement_locks` tables. All have RLS enabled with no browser policies. `parties` is added to Supabase Realtime for cross-instance room updates.
+The migrations create durable party/auth/vote state plus Collector purchase and real-settlement operation records. All have RLS enabled with no browser policies. `parties` is added to Supabase Realtime for cross-instance room updates.
 
 ## 2. Local environment
 
@@ -52,6 +52,7 @@ NEXT_PUBLIC_MAGICBLOCK_TEE_RPC_URL=https://devnet-tee.magicblock.app
 NEXT_PUBLIC_MAGICBLOCK_ROUTER_RPC_URL=https://devnet-router.magicblock.app
 NEXT_PUBLIC_GACHA_PARTY_PROGRAM_ID=BMKHnBM1oq1LyXFYyHq2gUdyugo1N8aGF6wtBnJNd6Nz
 NEXT_PUBLIC_USDC_MINT=
+NEXT_PUBLIC_GACHA_OPERATOR_ADDRESS=
 
 SERVER_STORAGE_MODE=supabase
 SUPABASE_URL=https://<project-ref>.supabase.co
@@ -60,8 +61,11 @@ GACHA_PARTY_PROGRAM_ID=BMKHnBM1oq1LyXFYyHq2gUdyugo1N8aGF6wtBnJNd6Nz
 AUTH_SESSION_SECRET=<at-least-32-random-characters>
 VOTING_MODE=commit-reveal
 USDC_MINT=
-COLLECTOR_CRYPT_API_BASE_URL=https://gacha.collectorcrypt.com
+COLLECTOR_CRYPT_MODE=mock
+COLLECTOR_CRYPT_API_BASE_URL=https://dev-gacha.collectorcrypt.com
 COLLECTOR_CRYPT_API_KEY=
+GACHA_OPERATOR_ADDRESS=
+GACHA_OPERATOR_SECRET_KEY=
 ```
 
 `vercel.json` selects Fluid Compute and runs `pnpm deploy:build`, which rejects missing or inconsistent devnet configuration. `NEXT_PUBLIC_*` values are browser-visible; restrict RPC keys by domain and usage limit.
@@ -81,23 +85,35 @@ Open `https://<domain>/api/health`. A ready deployment returns HTTP 200 with `co
 
 Then use two separate wallets/browsers to create, join, complete mock funding, ready, countdown, reveal, sealed vote, and settlement. Activate the MagicBlock room and confirm transaction links use devnet.
 
-## 5. Optional devnet USDC escrow
+## 5. Enable the real devnet flow
 
-Circle devnet USDC is `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU` and has six decimals. To test deposits/refunds separately:
+Collector Crypt’s generated devnet purchase transaction uses the classic six-decimal SPL mint `Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr`. This was verified directly from an unsigned `generatePack` transaction and the devnet mint account on 2026-08-04:
 
 ```dotenv
 NEXT_PUBLIC_FUNDS_MODE=solana
 NEXT_PUBLIC_FUNDS_TOKEN_LABEL=Devnet USDC
-NEXT_PUBLIC_USDC_MINT=4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU
-USDC_MINT=4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU
+NEXT_PUBLIC_USDC_MINT=Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr
+USDC_MINT=Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr
+NEXT_PUBLIC_GACHA_OPERATOR_ADDRESS=<operator-public-key>
+GACHA_OPERATOR_ADDRESS=<same-operator-public-key>
+GACHA_OPERATOR_SECRET_KEY=<base64-keypair-json>
+COLLECTOR_CRYPT_MODE=real
+COLLECTOR_CRYPT_API_BASE_URL=https://dev-gacha.collectorcrypt.com
 ```
 
-Keep the public flow in mock funding mode until escrow locking, cancellation, purchase authority, and real settlement are implemented.
+The API key may remain empty. Collector Crypt confirmed it is needed only for revenue attribution; the devnet machines endpoint is available without it.
 
-## 6. Intentionally disabled
+Before enabling these values:
 
-- Collector Crypt real purchase/open/buyback requires a partner API key and custody/signing implementation. Routes still use the mock adapter.
+1. Upgrade the devnet program from the repository build.
+2. Run `pnpm dlx supabase db push` to apply the operation tables.
+3. Fund the dedicated operator with devnet SOL.
+4. Give participant wallets Collector Crypt’s supported devnet USDC.
+5. Run one low-value end-to-end party before changing Production.
+
+## 6. Remaining limitation
+
 - MagicBlock PER voting fails closed until private accounts, permissions, TEE attestation, and wallet authorization are complete.
-- Real escrow opening is blocked; only deposits and refunds are currently available.
+- The operator is custodial and devnet-only. Do not reuse this key design for mainnet.
 
 Never add Solana program keypairs, upgrade-authority keys, wallet seed phrases, or Supabase service-role secrets to public variables or Git.

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { deploymentConfigIssues } from "@/server/deployment-config";
 import { getServerStorageMode } from "@/server/storage-mode";
 import { getServerSupabase } from "@/server/supabase";
+import { collectorCryptAdapter, getCollectorCryptMode } from "@/integrations/collector-crypt/server";
 
 export const dynamic = "force-dynamic";
 
@@ -29,12 +30,16 @@ export async function GET() {
   const configIssues = deploymentConfigIssues();
   let database = false;
   let program = false;
+  let collectorCrypt = false;
   try {
     const { error } = await getServerSupabase().from("parties").select("id", { head: true, count: "exact" });
     database = !error;
   } catch { /* reported below */ }
   try { program = await checkProgram(); } catch { /* reported below */ }
-  const ready = configIssues.length === 0 && database && program;
+  if (getCollectorCryptMode() === "real") {
+    try { collectorCrypt = (await collectorCryptAdapter().listPacks()).length > 0; } catch { /* reported below */ }
+  }
+  const ready = configIssues.length === 0 && database && program && (getCollectorCryptMode() !== "real" || collectorCrypt);
   return NextResponse.json({
     ready,
     storage: getServerStorageMode(),
@@ -42,7 +47,7 @@ export async function GET() {
       configuration: configIssues.length === 0,
       database,
       solanaProgram: program,
-      collectorCrypt: Boolean(process.env.COLLECTOR_CRYPT_API_KEY),
+      collectorCrypt,
       privateVoting: false,
       realFunds: process.env.NEXT_PUBLIC_FUNDS_MODE === "solana",
     },

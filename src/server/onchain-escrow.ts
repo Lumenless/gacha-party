@@ -2,6 +2,7 @@ import type { Party } from "@/domain/party";
 import { walletActionSchema } from "@/domain/party";
 import type { RealtimePartyAdapter } from "@/integrations/contracts";
 import { DevnetEscrowClient } from "@/integrations/solana/escrow-client";
+import { EscrowStatus } from "@/integrations/solana/program-client/src/generated";
 import { partyRepository } from "./party-repository";
 import { syncOnchainContributions } from "./party-room";
 
@@ -45,6 +46,9 @@ async function verifiedEscrow(party: Party) {
   if (!escrow) return null;
   if (String(escrow.host) !== party.hostWallet) throw new Error("The escrow host does not match this party.");
   if (String(escrow.mint) !== verifiedMint()) throw new Error("The escrow mint does not match this deployment.");
+  if (String(escrow.operator) !== process.env.GACHA_OPERATOR_ADDRESS?.trim()) {
+    throw new Error("The escrow operator does not match this deployment.");
+  }
   if (escrow.fundingTarget !== BigInt(party.fundingTargetBaseUnits)) {
     throw new Error("The escrow funding target does not match this party.");
   }
@@ -54,6 +58,16 @@ async function verifiedEscrow(party: Party) {
     throw new Error("The escrow roster does not match this party.");
   }
   return { client, escrow, roster };
+}
+
+export async function assertPartyEscrowLocked(partyId: string) {
+  if (!realFundsEnabled()) return;
+  const party = await requireParty(partyId);
+  const verified = await verifiedEscrow(party);
+  if (!verified) throw new Error("The host must initialize the on-chain escrow first.");
+  if (verified.escrow.status !== EscrowStatus.Locked) {
+    throw new Error("The fully funded escrow must be locked before starting the countdown.");
+  }
 }
 
 export async function assertEscrowAllowsJoin(partyId: string) {

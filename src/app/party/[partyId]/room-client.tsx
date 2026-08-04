@@ -29,6 +29,7 @@ import { ChainRoomPanel, ChainTransactionReview } from "@/components/party/chain
 import { EscrowFundingPanel, EscrowTransactionReview } from "@/components/party/escrow-funding-panel";
 import { useMagicBlockRoom, type ChainIntent } from "@/integrations/magicblock/use-magicblock-room";
 import { useSolanaEscrow, type EscrowIntent } from "@/integrations/solana/use-solana-escrow";
+import { EscrowStatus as ProgramEscrowStatus } from "@/integrations/solana/program-client/src/generated";
 
 type DemoIdentity = { wallet: string; displayName: string };
 type PendingAction = "join" | "contribute" | "syncContribution" | "ready" | "start" | "reveal" | "voteCommit" | "voteReveal" | "voteExpire" | null;
@@ -47,6 +48,10 @@ function createDemoIdentity(): DemoIdentity {
 function truncateWallet(wallet: string) {
   if (wallet === "DEMO_HOST_WALLET") return "DemoHost...Wallet";
   return wallet.length > 12 ? `${wallet.slice(0, 6)}...${wallet.slice(-4)}` : wallet;
+}
+
+function explorerTransaction(signature: string) {
+  return `https://explorer.solana.com/tx/${signature}?cluster=devnet`;
 }
 
 function initials(name: string) {
@@ -88,6 +93,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
   const chainRoom = useMagicBlockRoom(party);
   const escrow = useSolanaEscrow(party);
   const fundsTokenLabel = process.env.NEXT_PUBLIC_FUNDS_TOKEN_LABEL?.trim() || "devnet token";
+  const realExecution = party.executionMode === "DEVNET";
 
   useEffect(() => {
     const partyIdentityKey = `${IDENTITY_KEY}:${initialParty.id}`;
@@ -372,7 +378,9 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
       ? await escrow.initialize()
       : escrowIntent === "deposit"
         ? await escrow.deposit(escrowAmount)
-        : await escrow.refund();
+        : escrowIntent === "refund"
+          ? await escrow.refund()
+          : await escrow.lock();
     if (!confirmed) return;
     if (escrowIntent !== "initialize") {
       const synced = await mutate("syncContribution", { wallet: identity.wallet });
@@ -505,7 +513,9 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                 </p>
               )}
             </div>
-            <span className="rounded-full border px-3 py-1.5 text-xs text-muted-foreground">{party.reveal ? "Demo reveal" : "Mock pack"}</span>
+            <span className="rounded-full border px-3 py-1.5 text-xs text-muted-foreground">
+              {realExecution ? (party.reveal ? "Devnet reveal" : "Live devnet pack") : (party.reveal ? "Demo reveal" : "Mock pack")}
+            </span>
           </div>
 
           <div className="mt-6 border-t pt-5">
@@ -572,6 +582,11 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                   setEscrowAmount(escrow.receipt?.amount ?? 0n);
                   escrow.resetTransaction();
                   setEscrowIntent("refund");
+                }}
+                onReviewLock={() => {
+                  setEscrowAmount(target);
+                  escrow.resetTransaction();
+                  setEscrowIntent("lock");
                 }}
                 onRefresh={() => void escrow.refresh()}
               />
@@ -680,9 +695,26 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
 
           {identity && currentParticipant && (party.status === "FUNDED" || party.status === "READY") && escrow.enabled && (
             <div className="rounded-xl border border-primary/30 bg-primary/5 p-5 sm:p-6">
-              <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Target reached on-chain</p>
-              <h2 className="mt-2 text-xl font-semibold">Pack locking comes next</h2>
-              <p className="mt-1 text-sm leading-6 text-muted-foreground">Opening is disabled in real-funds mode until an audited lock and cancellation path prevents refunds during purchase.</p>
+              <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+                <div>
+                  <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Target reached on-chain</p>
+                  <h2 className="mt-2 text-xl font-semibold">Ready for the real pull?</h2>
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                    {escrow.snapshot?.status === ProgramEscrowStatus.Locked
+                      ? "The escrow is locked. The operator will release the exact target and purchase this pack after the countdown."
+                      : "Every player readies first. The host then locks refunds before starting the countdown."}
+                  </p>
+                </div>
+                {!currentParticipant.ready ? (
+                  <Button type="button" onClick={() => void markReady()} loading={pending === "ready"}>
+                    {chainRoom.enabled && !chainRoom.isReady(identity.wallet) ? "Review ready update" : "I’m ready"}
+                  </Button>
+                ) : identity.wallet === party.hostWallet && party.status === "READY" && escrow.snapshot?.status === ProgramEscrowStatus.Locked ? (
+                  <Button type="button" onClick={() => mutate("start", { wallet: identity.wallet })} loading={pending === "start"}>Start real opening</Button>
+                ) : (
+                  <span className="inline-flex min-h-11 items-center gap-2 rounded-md border border-primary/30 bg-primary/10 px-4 text-sm font-semibold text-primary"><Check className="size-4" aria-hidden="true" /> Ready</span>
+                )}
+              </div>
             </div>
           )}
 
@@ -747,7 +779,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                             <span className="grid size-10 place-items-center rounded-full bg-primary/10 text-primary">
                               {choice === "KEEP" ? <Landmark className="size-5" aria-hidden="true" /> : <Coins className="size-5" aria-hidden="true" />}
                             </span>
-                            <span><span className="block font-semibold">{choice === "KEEP" ? "Keep the card" : "Sell to buyback"}</span><span className="mt-1 block text-xs text-muted-foreground">{choice === "KEEP" ? "Hold it in the demo party vault" : "Split mock USDC by contribution"}</span></span>
+                            <span><span className="block font-semibold">{choice === "KEEP" ? "Keep the card" : "Sell to buyback"}</span><span className="mt-1 block text-xs text-muted-foreground">{choice === "KEEP" ? (realExecution ? "Hold it in the devnet operator vault" : "Hold it in the demo party vault") : (realExecution ? "Distribute confirmed devnet USDC" : "Split mock USDC by contribution")}</span></span>
                           </span>
                         </label>
                       ))}
@@ -791,7 +823,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
               {party.settlement.mode === "SELL" && party.settlement.shares && party.settlement.proceedsBaseUnits && (
                 <div className="mt-6">
                   <div className="flex items-baseline justify-between border-b pb-4">
-                    <span className="text-sm text-muted-foreground">Mock buyback proceeds</span>
+                    <span className="text-sm text-muted-foreground">{realExecution ? "Confirmed buyback proceeds" : "Mock buyback proceeds"}</span>
                     <span className="font-mono text-xl font-semibold tabular-nums">{formatUsdc(BigInt(party.settlement.proceedsBaseUnits))} USDC</span>
                   </div>
                   <ul className="divide-y">
@@ -802,6 +834,12 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                       </li>
                     ))}
                   </ul>
+                  {party.settlement.buybackSignature && party.settlement.payoutSignature && (
+                    <div className="mt-3 flex flex-wrap justify-center gap-3 text-xs font-semibold text-primary">
+                      <a href={explorerTransaction(party.settlement.buybackSignature)} target="_blank" rel="noreferrer">View buyback</a>
+                      <a href={explorerTransaction(party.settlement.payoutSignature)} target="_blank" rel="noreferrer">View atomic payout</a>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -813,7 +851,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                 </div>
               )}
 
-              <p className="mt-4 text-center text-xs text-muted-foreground">Simulation complete · No assets moved</p>
+              <p className="mt-4 text-center text-xs text-muted-foreground">{realExecution ? "Custodial devnet demo · View signatures in Solana Explorer" : "Simulation complete · No assets moved"}</p>
             </div>
           )}
         </section>

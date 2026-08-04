@@ -1,8 +1,10 @@
-import { MockCollectorCryptAdapter } from "@/integrations/collector-crypt/mock";
+import { collectorCryptAdapter, getCollectorCryptMode } from "@/integrations/collector-crypt/server";
 import { CreatePartyForm } from "./party-form";
 
+export const dynamic = "force-dynamic";
+
 export default async function NewPartyPage() {
-  const packs = await new MockCollectorCryptAdapter().listPacks();
+  const packs = await collectorCryptAdapter().listPacks();
   const realFunds = process.env.NEXT_PUBLIC_WALLET_MODE === "wallet" && process.env.NEXT_PUBLIC_FUNDS_MODE === "solana";
   return (
     <main className="mx-auto w-full max-w-7xl px-4 py-10 md:px-6 lg:px-8">
@@ -16,11 +18,11 @@ export default async function NewPartyPage() {
           <div className="mt-8 rounded-lg border border-primary/25 bg-primary/5 p-4 text-sm leading-6 text-muted-foreground">
             <strong className="text-primary">{realFunds ? "Devnet funding:" : "Safe demo:"}</strong>{" "}
             {realFunds
-              ? "The host freezes the wallet roster before participants review and sign token deposits. Pack opening stays disabled until escrow locking exists."
+              ? `${getCollectorCryptMode() === "real" ? "Live Collector Crypt packs" : "Mock packs"} with an on-chain escrow, fixed devnet operator, and one-time purchase release.`
               : "USDC contributions remain simulated. Wallet mode only requests a free ownership signature, never a transaction."}
           </div>
         </div>
-        <CreatePartyForm packs={packs.map((pack) => ({ ...pack, priceBaseUnits: pack.priceBaseUnits.toString() }))} />
+        <CreatePartyForm exactPackPrice={realFunds} packs={packs.map((pack) => ({ ...pack, priceBaseUnits: pack.priceBaseUnits.toString() }))} />
       </div>
     </main>
   );

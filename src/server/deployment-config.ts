@@ -1,6 +1,7 @@
 import bs58 from "bs58";
 
 type Env = Record<string, string | undefined>;
+const COLLECTOR_CRYPT_DEVNET_USDC_MINT = "Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr";
 
 function validAddress(value: string | undefined) {
   if (!value) return false;
@@ -43,8 +44,28 @@ export function deploymentConfigIssues(env: Env = process.env): string[] {
     } else if (env.NEXT_PUBLIC_USDC_MINT !== env.USDC_MINT) {
       issues.push("Public and server USDC mint addresses must match.");
     }
+    if (!validAddress(env.NEXT_PUBLIC_GACHA_OPERATOR_ADDRESS) || !validAddress(env.GACHA_OPERATOR_ADDRESS)) {
+      issues.push("Solana funding requires valid public and server operator addresses.");
+    } else if (env.NEXT_PUBLIC_GACHA_OPERATOR_ADDRESS !== env.GACHA_OPERATOR_ADDRESS) {
+      issues.push("Public and server operator addresses must match.");
+    }
   } else if (env.NEXT_PUBLIC_FUNDS_MODE !== "mock") {
     issues.push("NEXT_PUBLIC_FUNDS_MODE must be mock or solana.");
+  }
+  const collectorMode = env.COLLECTOR_CRYPT_MODE ?? "mock";
+  if (collectorMode !== "mock" && collectorMode !== "real") {
+    issues.push("COLLECTOR_CRYPT_MODE must be mock or real.");
+  }
+  if (collectorMode === "real") {
+    if (env.NEXT_PUBLIC_FUNDS_MODE !== "solana") issues.push("Collector Crypt real mode requires Solana funding.");
+    if (!validHttpsUrl(env.COLLECTOR_CRYPT_API_BASE_URL)) issues.push("COLLECTOR_CRYPT_API_BASE_URL must be an HTTPS URL in real mode.");
+    else if (new URL(env.COLLECTOR_CRYPT_API_BASE_URL!).origin !== "https://dev-gacha.collectorcrypt.com") {
+      issues.push("Collector Crypt real mode must use the verified devnet origin.");
+    }
+    if (!env.GACHA_OPERATOR_SECRET_KEY) issues.push("GACHA_OPERATOR_SECRET_KEY is required in Collector Crypt real mode.");
+    if (env.USDC_MINT !== COLLECTOR_CRYPT_DEVNET_USDC_MINT || env.NEXT_PUBLIC_USDC_MINT !== COLLECTOR_CRYPT_DEVNET_USDC_MINT) {
+      issues.push("Collector Crypt real mode requires its verified devnet USDC mint.");
+    }
   }
   return issues;
 }

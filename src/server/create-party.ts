@@ -18,6 +18,9 @@ export async function createParty(
 
   const pack = (await collectorCrypt.listPacks()).find(({ code }) => code === input.packCode);
   if (!pack?.isOpen) throw new Error("That pack is not currently available.");
+  if (process.env.NEXT_PUBLIC_FUNDS_MODE === "solana" && fundingTarget !== pack.priceBaseUnits) {
+    throw new Error("Real-funds parties must escrow the exact live pack price.");
+  }
 
   const party: Party = {
     id: randomUUID().slice(0, 8),
@@ -33,6 +36,7 @@ export async function createParty(
     status: "FUNDING",
     createdAt: new Date().toISOString(),
     revision: 0,
+    executionMode: process.env.COLLECTOR_CRYPT_MODE === "real" && process.env.NEXT_PUBLIC_FUNDS_MODE === "solana" ? "DEVNET" : "MOCK",
     activity: [
       {
         id: randomUUID(),

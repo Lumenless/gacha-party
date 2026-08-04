@@ -101,6 +101,7 @@ export type Party = {
   status: PartyStatus;
   createdAt: string;
   revision: number;
+  executionMode?: "MOCK" | "DEVNET";
   openingStartedAt?: string;
   countdownEndsAt?: string;
   reveal?: {
@@ -129,6 +130,8 @@ export type Party = {
     completedAt: string;
     proceedsBaseUnits?: string;
     vaultAddress?: string;
+    buybackSignature?: string;
+    payoutSignature?: string;
     shares?: Array<{
       wallet: string;
       displayName: string;

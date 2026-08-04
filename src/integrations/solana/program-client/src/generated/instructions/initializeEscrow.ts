@@ -17,16 +17,16 @@ export function getInitializeEscrowDiscriminatorBytes() { return fixEncoderSize(
 export type InitializeEscrowInstruction<TProgram extends string = typeof GACHA_PARTY_ROOM_PROGRAM_ADDRESS, TAccountEscrow extends string | AccountMeta<string> = string, TAccountVault extends string | AccountMeta<string> = string, TAccountMint extends string | AccountMeta<string> = string, TAccountHost extends string | AccountMeta<string> = string, TAccountTokenProgram extends string | AccountMeta<string> = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", TAccountSystemProgram extends string | AccountMeta<string> = "11111111111111111111111111111111", TAccountRent extends string | AccountMeta<string> = "SysvarRent111111111111111111111111111111111", TRemainingAccounts extends readonly AccountMeta<string>[] = []> =
 Instruction<TProgram> & InstructionWithData<ReadonlyUint8Array> & InstructionWithAccounts<[TAccountEscrow extends string ? WritableAccount<TAccountEscrow> : TAccountEscrow, TAccountVault extends string ? WritableAccount<TAccountVault> : TAccountVault, TAccountMint extends string ? ReadonlyAccount<TAccountMint> : TAccountMint, TAccountHost extends string ? WritableSignerAccount<TAccountHost> & AccountSignerMeta<TAccountHost> : TAccountHost, TAccountTokenProgram extends string ? ReadonlyAccount<TAccountTokenProgram> : TAccountTokenProgram, TAccountSystemProgram extends string ? ReadonlyAccount<TAccountSystemProgram> : TAccountSystemProgram, TAccountRent extends string ? ReadonlyAccount<TAccountRent> : TAccountRent, ...TRemainingAccounts]>;
 
-export type InitializeEscrowInstructionData = { discriminator: ReadonlyUint8Array; roomId: ReadonlyUint8Array; fundingTarget: bigint; participantCount: number; participants: Array<Address>;  };
+export type InitializeEscrowInstructionData = { discriminator: ReadonlyUint8Array; roomId: ReadonlyUint8Array; fundingTarget: bigint; participantCount: number; participants: Array<Address>; operator: Address;  };
 
-export type InitializeEscrowInstructionDataArgs = { roomId: ReadonlyUint8Array; fundingTarget: number | bigint; participantCount: number; participants: Array<Address>;  };
+export type InitializeEscrowInstructionDataArgs = { roomId: ReadonlyUint8Array; fundingTarget: number | bigint; participantCount: number; participants: Array<Address>; operator: Address;  };
 
 export function getInitializeEscrowInstructionDataEncoder(): FixedSizeEncoder<InitializeEscrowInstructionDataArgs> {
-    return transformEncoder(getStructEncoder([['discriminator', fixEncoderSize(getBytesEncoder(), 8)], ['roomId', fixEncoderSize(getBytesEncoder(), 8)], ['fundingTarget', getU64Encoder()], ['participantCount', getU8Encoder()], ['participants', getArrayEncoder(getAddressEncoder(), { size: 4 })]]), (value) => ({ ...value, discriminator: INITIALIZE_ESCROW_DISCRIMINATOR }));
+    return transformEncoder(getStructEncoder([['discriminator', fixEncoderSize(getBytesEncoder(), 8)], ['roomId', fixEncoderSize(getBytesEncoder(), 8)], ['fundingTarget', getU64Encoder()], ['participantCount', getU8Encoder()], ['participants', getArrayEncoder(getAddressEncoder(), { size: 4 })], ['operator', getAddressEncoder()]]), (value) => ({ ...value, discriminator: INITIALIZE_ESCROW_DISCRIMINATOR }));
 }
 
 export function getInitializeEscrowInstructionDataDecoder(): FixedSizeDecoder<InitializeEscrowInstructionData> {
-    return getStructDecoder([['discriminator', fixDecoderSize(getBytesDecoder(), 8)], ['roomId', fixDecoderSize(getBytesDecoder(), 8)], ['fundingTarget', getU64Decoder()], ['participantCount', getU8Decoder()], ['participants', getArrayDecoder(getAddressDecoder(), { size: 4 })]]);
+    return getStructDecoder([['discriminator', fixDecoderSize(getBytesDecoder(), 8)], ['roomId', fixDecoderSize(getBytesDecoder(), 8)], ['fundingTarget', getU64Decoder()], ['participantCount', getU8Decoder()], ['participants', getArrayDecoder(getAddressDecoder(), { size: 4 })], ['operator', getAddressDecoder()]]);
 }
 
 export function getInitializeEscrowInstructionDataCodec(): FixedSizeCodec<InitializeEscrowInstructionDataArgs, InitializeEscrowInstructionData> {
@@ -45,6 +45,7 @@ roomId: InitializeEscrowInstructionDataArgs["roomId"];
 fundingTarget: InitializeEscrowInstructionDataArgs["fundingTarget"];
 participantCount: InitializeEscrowInstructionDataArgs["participantCount"];
 participants: InitializeEscrowInstructionDataArgs["participants"];
+operator: InitializeEscrowInstructionDataArgs["operator"];
 }
 
 export async function getInitializeEscrowInstructionAsync<TAccountEscrow extends string, TAccountVault extends string, TAccountMint extends string, TAccountHost extends string, TAccountTokenProgram extends string, TAccountSystemProgram extends string, TAccountRent extends string, TProgramAddress extends Address = typeof GACHA_PARTY_ROOM_PROGRAM_ADDRESS>(input: InitializeEscrowAsyncInput<TAccountEscrow, TAccountVault, TAccountMint, TAccountHost, TAccountTokenProgram, TAccountSystemProgram, TAccountRent>, config?: { programAddress?: TProgramAddress } ): Promise<InitializeEscrowInstruction<TProgramAddress, TAccountEscrow, TAccountVault, TAccountMint, TAccountHost, TAccountTokenProgram, TAccountSystemProgram, TAccountRent>> {
@@ -93,6 +94,7 @@ roomId: InitializeEscrowInstructionDataArgs["roomId"];
 fundingTarget: InitializeEscrowInstructionDataArgs["fundingTarget"];
 participantCount: InitializeEscrowInstructionDataArgs["participantCount"];
 participants: InitializeEscrowInstructionDataArgs["participants"];
+operator: InitializeEscrowInstructionDataArgs["operator"];
 }
 
 export function getInitializeEscrowInstruction<TAccountEscrow extends string, TAccountVault extends string, TAccountMint extends string, TAccountHost extends string, TAccountTokenProgram extends string, TAccountSystemProgram extends string, TAccountRent extends string, TProgramAddress extends Address = typeof GACHA_PARTY_ROOM_PROGRAM_ADDRESS>(input: InitializeEscrowInput<TAccountEscrow, TAccountVault, TAccountMint, TAccountHost, TAccountTokenProgram, TAccountSystemProgram, TAccountRent>, config?: { programAddress?: TProgramAddress } ): InitializeEscrowInstruction<TProgramAddress, TAccountEscrow, TAccountVault, TAccountMint, TAccountHost, TAccountTokenProgram, TAccountSystemProgram, TAccountRent> {

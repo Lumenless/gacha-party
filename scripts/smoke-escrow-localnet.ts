@@ -26,6 +26,7 @@ async function main() {
   const signer = await createKeyPairSignerFromBytes(secretKey);
   const client = await DevnetEscrowClient.create({
     mint,
+    operator: signer.address,
     rpcUrl: process.env.SOLANA_RPC_URL || "http://127.0.0.1:8899",
   });
   const partyId = randomBytes(4).toString("hex");

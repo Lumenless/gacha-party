@@ -22,6 +22,7 @@ import {
   fetchMaybeEscrowState,
   getDepositContributionInstructionAsync,
   getInitializeEscrowInstructionAsync,
+  getLockEscrowInstruction,
   getRefundContributionInstructionAsync,
   type ContributionReceipt,
   type EscrowState,
@@ -34,7 +35,7 @@ const CONTRIBUTION_SEED = new TextEncoder().encode("contribution");
 const EMPTY_ADDRESS = address("11111111111111111111111111111111");
 const U64_MAX = 18_446_744_073_709_551_615n;
 
-export type EscrowAction = "initialize" | "deposit" | "refund";
+export type EscrowAction = "initialize" | "deposit" | "refund" | "lock";
 
 export type PreparedEscrowTransaction = {
   action: EscrowAction;
@@ -48,6 +49,7 @@ export type WalletTokenAccountSnapshot = { address: Address; amount: bigint };
 
 export type DevnetEscrowClientConfig = {
   mint: string;
+  operator?: string;
   rpcUrl?: string;
 };
 
@@ -97,6 +99,7 @@ export class DevnetEscrowClient {
   private constructor(
     private readonly connection: Connection,
     mint: string,
+    readonly operator?: Address,
   ) {
     this.mint = address(mint);
     this.rpc = connection.rpc;
@@ -107,7 +110,11 @@ export class DevnetEscrowClient {
       throw new Error("A verified devnet USDC mint must be configured before enabling real contributions.");
     }
     const rpcUrl = config.rpcUrl || process.env.NEXT_PUBLIC_SOLANA_RPC_URL || SOLANA_DEVNET_URL;
-    return new DevnetEscrowClient(await Connection.create(rpcUrl), config.mint);
+    return new DevnetEscrowClient(
+      await Connection.create(rpcUrl),
+      config.mint,
+      config.operator ? address(config.operator) : undefined,
+    );
   }
 
   async prepareInitialize(
@@ -120,6 +127,7 @@ export class DevnetEscrowClient {
     const hostAddress = address(host);
     const escrowAddress = await findEscrowAddress(host, partyId);
     const roster = normalizeEscrowParticipants(host, participants);
+    if (!this.operator) throw new Error("A verified devnet operator address is required to initialize escrow.");
     const instruction = await getInitializeEscrowInstructionAsync({
       escrow: escrowAddress,
       vault: await findEscrowVaultAddress(escrowAddress),
@@ -129,8 +137,20 @@ export class DevnetEscrowClient {
       fundingTarget,
       participantCount: participants.length,
       participants: roster,
+      operator: this.operator,
     });
     return this.prepare("initialize", escrowAddress, hostAddress, instruction);
+  }
+
+  async prepareLock(host: string, partyId: string): Promise<PreparedEscrowTransaction> {
+    const hostAddress = address(host);
+    const escrowAddress = await findEscrowAddress(host, partyId);
+    const instruction = getLockEscrowInstruction({
+      escrow: escrowAddress,
+      vault: await findEscrowVaultAddress(escrowAddress),
+      host: createNoopSigner(hostAddress),
+    });
+    return this.prepare("lock", escrowAddress, hostAddress, instruction);
   }
 
   async prepareDeposit(

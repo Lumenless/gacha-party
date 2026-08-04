@@ -1,6 +1,6 @@
 # MagicBlock room program
 
-The `gacha-party-room` Anchor program contains two deliberately separate boundaries: a delegatable collaborative room account and a base-layer SPL token escrow. It does not yet contain card custody, purchase authority, or settlement authority.
+The `gacha-party-room` Anchor program contains two deliberately separate boundaries: a delegatable collaborative room account and a base-layer SPL token escrow. Collector Crypt card custody remains with a dedicated devnet operator.
 
 ## State and instructions
 
@@ -20,11 +20,15 @@ The room PDA is never interpreted as proof of funding.
 
 The escrow PDA is derived from `party-escrow`, the host wallet, and the same eight-byte room identifier. Its immutable roster is independent from the delegated room so token custody never depends on deserializing an account currently owned by MagicBlock's delegation program.
 
-- `initialize_escrow`: freezes the 2–4 wallet roster, six-decimal SPL mint, integer funding target, and PDA-controlled token vault.
+- `initialize_escrow`: freezes the 2–4 wallet roster, six-decimal SPL mint, integer funding target, fixed operator, and PDA-controlled token vault.
 - `deposit_contribution`: accepts one checked deposit from an allowed wallet, rejects target overfunding, and creates a wallet-specific receipt PDA.
-- `refund_contribution`: returns the entire recorded amount to its signer and closes the receipt.
+- `refund_contribution`: returns the entire recorded amount while the escrow is in `FUNDING`.
+- `lock_escrow`: host-authorized, fully-funded transition that permanently disables deposits and refunds.
+- `release_to_operator`: operator-authorized, one-time transfer of the exact target to the fixed operator token account.
+- `mark_purchased`: records the confirmed Collector Crypt signature and memo hash.
+- `mark_settled`: final replay guard, executed atomically with proportional participant payouts.
 
-There is no escrow lock or spending instruction in this milestone. Pack purchase and settlement remain disabled until their authority, idempotency, cancellation, and custody rules are implemented and reviewed.
+The lifecycle is `FUNDING → LOCKED → RELEASED → PURCHASED → SETTLED`; instructions reject every out-of-order or repeated transition.
 
 ## Toolchain
 
@@ -61,3 +65,5 @@ pnpm smoke:program:devnet
 The successful 2026-08-03 simulated smoke room was `FJ4mwFtWMZD8QTgdyfbs1RE3qSNuekRbgJqbe8tWoaAe` (party ID `198989b2`).
 
 The Milestone 4E escrow upgrade retained the same address. Upgrade signature: [`2kMFuJtroRM6nrgDJ4LRgZbHiGoXPboRidUpxBQU7zbayo3NXdr7CH8RrWmEVKW2TNtDpuJa4ZYDf8rMEUm6BKNZ`](https://explorer.solana.com/tx/2kMFuJtroRM6nrgDJ4LRgZbHiGoXPboRidUpxBQU7zbayo3NXdr7CH8RrWmEVKW2TNtDpuJa4ZYDf8rMEUm6BKNZ?cluster=devnet). The post-upgrade MagicBlock compatibility smoke completed with room `FZCjm6Siv39mJPNNotDXMTjZSATy1yUvwPc32MPntBPW` (party ID `35c031e6`).
+
+The Milestone 5 operator lifecycle upgrade deployed on 2026-08-04 with signature [`4ieM4NrA2pgnSecxowFMQofKssmMrB7cYMD2dcbzvktJ89N9DM3Cqii8K3nQiHN4WCrUvcAcKN7HKCVZcvEp5yfZ`](https://explorer.solana.com/tx/4ieM4NrA2pgnSecxowFMQofKssmMrB7cYMD2dcbzvktJ89N9DM3Cqii8K3nQiHN4WCrUvcAcKN7HKCVZcvEp5yfZ?cluster=devnet). The post-upgrade MagicBlock smoke completed initialize, delegated ready update, and undelegation for room `CeYXfJJy2EsY19uRbqVmAp6gY5ej8pqMSnHu63jhzGBU` (party ID `01add1c7`).
