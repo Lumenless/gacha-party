@@ -179,14 +179,16 @@ export async function startPartyCountdown(
   rawInput: unknown,
   realtime: RealtimePartyAdapter,
   now = Date.now(),
+  authoritativeCountdownEndsAt?: number,
 ): Promise<Party> {
   const input = walletActionSchema.parse(rawInput);
   const party = await requireParty(partyId);
   if (input.wallet !== party.hostWallet) throw new Error("Only the host can start the opening.");
   if (party.status !== "READY") throw new Error("Everyone must be ready before the opening starts.");
 
-  const openingStartedAt = new Date(now + 500).toISOString();
-  const countdownEndsAt = new Date(now + 3_500).toISOString();
+  const countdownEndMs = authoritativeCountdownEndsAt ?? now + 3_500;
+  const openingStartedAt = new Date(countdownEndMs - 3_000).toISOString();
+  const countdownEndsAt = new Date(countdownEndMs).toISOString();
   return saveAndPublish(
     {
       ...party,

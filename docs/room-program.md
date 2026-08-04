@@ -4,11 +4,12 @@ The `gacha-party-room` Anchor program contains two deliberately separate boundar
 
 ## State and instructions
 
-Each room is a PDA derived from `party-room`, the host wallet, and an eight-byte room identifier. The account stores up to four wallet addresses, a ready bitmask, monotonically increasing revision, and last-activity timestamp.
+Each room is a PDA derived from `party-room`, the host wallet, and an eight-byte room identifier. Schema v2 stores up to four wallet addresses, a ready bitmask, `LOBBY → OPENING` phase, authoritative countdown end timestamp, monotonically increasing revision, and last-activity timestamp.
 
 - `initialize_room`: creates a room with the host as participant zero.
 - `join_room`: rejects duplicate wallets and full rooms.
 - `set_ready`: updates one participant’s ready bit.
+- `start_opening`: host-only, one-shot ER transition after every current participant is ready; freezes membership and readiness and records the shared countdown timestamp.
 - `react`: emits a compact reaction event without growing account storage.
 - `delegate_room`: host-authorized base-layer delegation with an optional explicit ER validator.
 - `commit_room`: host-authorized ER commit to the base layer.
@@ -56,7 +57,7 @@ The program is deployed at [`BMKHnBM1oq1LyXFYyHq2gUdyugo1N8aGF6wtBnJNd6Nz`](http
 
 `MagicRouterRoomClient` prepares unsigned versioned transactions with a Router-selected blockhash. Wallet Standard signs the serialized transaction explicitly, then the client submits and confirms those exact signed bytes through the Magic Router. The app never hands a room transaction to a wallet until a user action requests it.
 
-The reproducible devnet smoke command simulates and submits a combined initialize-and-delegate transaction, decodes the room, applies a ready update on the ER, verifies the updated state, and undelegates it:
+The reproducible devnet smoke command simulates and submits a combined initialize-and-delegate transaction, decodes the room, applies a ready update and opening transition on the ER, verifies the authoritative countdown, and undelegates it:
 
 ```bash
 pnpm smoke:program:devnet
@@ -67,3 +68,5 @@ The successful 2026-08-03 simulated smoke room was `FJ4mwFtWMZD8QTgdyfbs1RE3qSNu
 The Milestone 4E escrow upgrade retained the same address. Upgrade signature: [`2kMFuJtroRM6nrgDJ4LRgZbHiGoXPboRidUpxBQU7zbayo3NXdr7CH8RrWmEVKW2TNtDpuJa4ZYDf8rMEUm6BKNZ`](https://explorer.solana.com/tx/2kMFuJtroRM6nrgDJ4LRgZbHiGoXPboRidUpxBQU7zbayo3NXdr7CH8RrWmEVKW2TNtDpuJa4ZYDf8rMEUm6BKNZ?cluster=devnet). The post-upgrade MagicBlock compatibility smoke completed with room `FZCjm6Siv39mJPNNotDXMTjZSATy1yUvwPc32MPntBPW` (party ID `35c031e6`).
 
 The Milestone 5 operator lifecycle upgrade deployed on 2026-08-04 with signature [`4ieM4NrA2pgnSecxowFMQofKssmMrB7cYMD2dcbzvktJ89N9DM3Cqii8K3nQiHN4WCrUvcAcKN7HKCVZcvEp5yfZ`](https://explorer.solana.com/tx/4ieM4NrA2pgnSecxowFMQofKssmMrB7cYMD2dcbzvktJ89N9DM3Cqii8K3nQiHN4WCrUvcAcKN7HKCVZcvEp5yfZ?cluster=devnet). The post-upgrade MagicBlock smoke completed initialize, delegated ready update, and undelegation for room `CeYXfJJy2EsY19uRbqVmAp6gY5ej8pqMSnHu63jhzGBU` (party ID `01add1c7`).
+
+The room schema v2 opening upgrade deployed on 2026-08-04 with signature [`5JZD8KEZ7nJQLmrXwAQ7vtqzU2QE3ZUBm5aFKHdaueoBXWdbhmmS6PAEDDwyrUfD27RGesnEjCToKnRKhkpWK6RZ`](https://explorer.solana.com/tx/5JZD8KEZ7nJQLmrXwAQ7vtqzU2QE3ZUBm5aFKHdaueoBXWdbhmmS6PAEDDwyrUfD27RGesnEjCToKnRKhkpWK6RZ?cluster=devnet). ProgramData was extended by 16 KiB before the upgrade to fit the larger binary with modest future headroom. The post-upgrade smoke completed initialization/delegation, ER ready, ER opening timestamp, and undelegation for room `Bckr3caR5GimdnKj2Dm8rmo13x4U4w3wrJDs58Dqae6c` (party ID `175d9759`).

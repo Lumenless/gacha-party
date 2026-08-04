@@ -13,7 +13,8 @@ pub const ESCROW_SEED: &[u8] = b"party-escrow";
 pub const ESCROW_VAULT_SEED: &[u8] = b"escrow-vault";
 pub const CONTRIBUTION_SEED: &[u8] = b"contribution";
 pub const MAX_PLAYERS: usize = 4;
-pub const ROOM_VERSION: u8 = 1;
+pub const ROOM_VERSION: u8 = 2;
+pub const OPENING_LEAD_SECONDS: i64 = 4;
 pub const ESCROW_VERSION: u8 = 2;
 pub const CONTRIBUTION_VERSION: u8 = 1;
 pub const USDC_DECIMALS: u8 = 6;
@@ -41,6 +42,8 @@ pub mod gacha_party_room {
         room.max_players = max_players;
         room.participant_count = 1;
         room.ready_mask = 0;
+        room.phase = RoomPhase::Lobby;
+        room.countdown_ends_at = 0;
         room.revision = 1;
         room.last_activity_at = now;
         room.participants = [Pubkey::default(); MAX_PLAYERS];
@@ -81,6 +84,22 @@ pub mod gacha_party_room {
             player,
             ready,
             ready_mask: room.ready_mask,
+            revision: room.revision,
+        });
+        Ok(())
+    }
+
+    /// ER instruction: the host starts one authoritative room countdown after everyone is ready.
+    /// The extra propagation second lets clients render the same final three-second countdown.
+    pub fn start_opening(ctx: Context<MutateRoom>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let room = &mut ctx.accounts.room;
+        let player = ctx.accounts.player.key();
+        room.start_opening(player, now)?;
+
+        emit!(OpeningStarted {
+            room: room.key(),
+            countdown_ends_at: room.countdown_ends_at,
             revision: room.revision,
         });
         Ok(())
@@ -625,9 +644,17 @@ pub struct RoomState {
     pub max_players: u8,
     pub participant_count: u8,
     pub ready_mask: u8,
+    pub phase: RoomPhase,
+    pub countdown_ends_at: i64,
     pub revision: u64,
     pub last_activity_at: i64,
     pub participants: [Pubkey; MAX_PLAYERS],
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, InitSpace, PartialEq, Eq)]
+pub enum RoomPhase {
+    Lobby,
+    Opening,
 }
 
 #[account]
@@ -744,6 +771,7 @@ impl RoomState {
     }
 
     fn join(&mut self, player: Pubkey, now: i64) -> Result<()> {
+        self.require_lobby()?;
         require!(
             self.participant_index(player).is_none(),
             RoomError::AlreadyJoined
@@ -762,6 +790,7 @@ impl RoomState {
     }
 
     fn set_player_ready(&mut self, player: Pubkey, ready: bool, now: i64) -> Result<()> {
+        self.require_lobby()?;
         let index = self.require_participant(player)?;
         let bit = 1u8
             .checked_shl(index as u32)
@@ -771,6 +800,22 @@ impl RoomState {
         } else {
             self.ready_mask & !bit
         };
+        self.touch(now)
+    }
+
+    fn require_lobby(&self) -> Result<()> {
+        require!(self.phase == RoomPhase::Lobby, RoomError::RoomNotInLobby);
+        Ok(())
+    }
+
+    fn start_opening(&mut self, player: Pubkey, now: i64) -> Result<()> {
+        require_keys_eq!(self.host, player, RoomError::HostRequired);
+        self.require_lobby()?;
+        require!(self.everyone_ready(), RoomError::EveryoneMustBeReady);
+        self.countdown_ends_at = now
+            .checked_add(OPENING_LEAD_SECONDS)
+            .ok_or(RoomError::TimestampOverflow)?;
+        self.phase = RoomPhase::Opening;
         self.touch(now)
     }
 
@@ -818,6 +863,13 @@ pub struct ReactionSent {
     pub room: Pubkey,
     pub player: Pubkey,
     pub reaction: u8,
+    pub revision: u64,
+}
+
+#[event]
+pub struct OpeningStarted {
+    pub room: Pubkey,
+    pub countdown_ends_at: i64,
     pub revision: u64,
 }
 
@@ -892,6 +944,12 @@ pub enum RoomError {
     InvalidRoomPda,
     #[msg("Only the room host can commit or undelegate it.")]
     HostRequired,
+    #[msg("The room is no longer accepting membership or ready-state changes.")]
+    RoomNotInLobby,
+    #[msg("Every current room participant must be ready before opening.")]
+    EveryoneMustBeReady,
+    #[msg("The opening timestamp overflowed.")]
+    TimestampOverflow,
 }
 
 #[error_code]
@@ -953,6 +1011,8 @@ mod tests {
             max_players,
             participant_count: 1,
             ready_mask: 0,
+            phase: RoomPhase::Lobby,
+            countdown_ends_at: 0,
             revision: 1,
             last_activity_at: 100,
             participants,
@@ -995,6 +1055,26 @@ mod tests {
             .is_err());
         assert_eq!(state.ready_mask, 0);
         assert_eq!(state.revision, 1);
+    }
+
+    #[test]
+    fn only_ready_host_can_start_opening_once() {
+        let host = Pubkey::new_unique();
+        let player = Pubkey::new_unique();
+        let mut state = room(host, 2);
+        state.join(player, 101).unwrap();
+
+        assert!(state.start_opening(host, 102).is_err());
+        state.set_player_ready(host, true, 103).unwrap();
+        state.set_player_ready(player, true, 104).unwrap();
+        assert!(state.start_opening(player, 105).is_err());
+
+        state.start_opening(host, 106).unwrap();
+        assert_eq!(state.phase, RoomPhase::Opening);
+        assert_eq!(state.countdown_ends_at, 106 + OPENING_LEAD_SECONDS);
+        assert!(state.start_opening(host, 107).is_err());
+        assert!(state.set_player_ready(host, false, 107).is_err());
+        assert!(state.join(Pubkey::new_unique(), 107).is_err());
     }
 
     #[test]

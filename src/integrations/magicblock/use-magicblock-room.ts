@@ -8,11 +8,11 @@ import {
   type PreparedRoomTransaction,
   type RoomAccountSnapshot,
 } from "./router-client";
-import { isChainParticipant, isChainParticipantReady } from "./room-chain-state";
+import { isChainOpening, isChainParticipant, isChainParticipantReady } from "./room-chain-state";
 
 export type ChainRoomStatus = "disabled" | "loading" | "missing" | "active" | "error";
 export type ChainTransactionStage = "idle" | "preparing" | "simulating" | "signing" | "submitting" | "confirmed" | "error";
-export type ChainIntent = "initialize" | "join" | "ready";
+export type ChainIntent = "initialize" | "join" | "ready" | "start";
 
 export type ChainTransactionState = {
   action: ChainIntent | null;
@@ -117,6 +117,11 @@ export function useMagicBlockRoom(party: Pick<Party, "id" | "hostWallet" | "maxP
     return execute("ready", async () => (await roomClient()).prepareReady(player, party.hostWallet, party.id, true));
   }, [execute, party.hostWallet, party.id, snapshot]);
 
+  const start = useCallback(async (host: string) => {
+    if (isChainOpening(snapshot)) return true;
+    return execute("start", async () => (await roomClient()).prepareStart(host, party.id));
+  }, [execute, party.id, snapshot]);
+
   return {
     enabled,
     status,
@@ -127,8 +132,10 @@ export function useMagicBlockRoom(party: Pick<Party, "id" | "hostWallet" | "maxP
     initialize,
     join,
     ready,
+    start,
     resetTransaction: () => setTransaction(idleTransaction),
     isParticipant: (player: string) => isChainParticipant(snapshot, player),
     isReady: (player: string) => isChainParticipantReady(snapshot, player),
+    isOpening: isChainOpening(snapshot),
   };
 }

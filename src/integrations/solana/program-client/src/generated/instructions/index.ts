@@ -20,4 +20,5 @@ export * from './react';
 export * from './refundContribution';
 export * from './releaseToOperator';
 export * from './setReady';
+export * from './startOpening';
 export * from './undelegateRoom';

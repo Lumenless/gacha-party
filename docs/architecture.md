@@ -11,11 +11,11 @@ Gacha Party is one Next.js TypeScript application. UI, HTTP routes, and server-s
 - `src/server`: repositories and application services.
 - `src/app`: mobile-first UI and HTTP routes.
 
-Server-Sent Events remain the browser transport, backed by Supabase Postgres Changes so separate Vercel instances receive the same revisions. MagicBlock ER is the public on-chain room proof for membership and ready state.
+Server-Sent Events remain the browser transport, backed by Supabase Postgres Changes so separate Vercel instances receive the same revisions. MagicBlock ER is the public on-chain room proof for membership, ready state, and the one-shot opening countdown.
 
 ## Integration decisions
 
-- Collector Crypt: use a server-only API key and validate every response. The official Gacha API exposes machines, partially signed purchase transactions, pack opening, buyback, and status. The real adapter remains disabled until a partner key is supplied.
+- Collector Crypt: validate every response from the official Gacha API, which exposes machines, partially signed purchase transactions, pack opening, buyback, and status. The API key is optional and used only for partner attribution.
 - Custody: the API purchase and buyback transactions require an owning wallet signature. A program PDA cannot sign those arbitrary transactions. The mock uses a party vault address; production requires either Collector Crypt support for program-controlled custody/instructions or a deliberately disclosed signing/custody design.
 - MagicBlock: keep durable party state in a Solana PDA, delegate fast-changing room state to an Ephemeral Rollup, and subscribe through Solana-compatible RPC. Use the Router for correct blockhash routing.
 - Private voting: target the current Private ER TEE permission flow. The fallback is commit-reveal with wallet-signed commitments; never label the fallback as private after reveal data is available.
@@ -38,7 +38,7 @@ Needs credentials or coordination: partner attribution key if desired; mainnet p
 ## Primary risks
 
 1. Custody/signing mismatch is the largest risk: pooled funds in a PDA cannot directly sign Collector Crypt's returned transaction.
-2. An API key is mandatory for normal Gacha requests and may require partner approval.
+2. The devnet API needs no key, but its availability and transaction schemas remain external integration risks; a key is only needed for partner revenue attribution.
 3. PER requires TEE authorization and explicit member permissions; it should be isolated to votes first.
 4. ER account delegation and base-layer commits introduce lifecycle and stale-state failure modes.
 5. Settlement must be idempotent and based on confirmed token balances/signatures to prevent double pay or phantom proceeds.
@@ -89,7 +89,14 @@ Contribution amounts, the funding-complete gate, custody, votes, and settlement 
 - Room activation combines PDA creation and delegation in one reviewed signature. Join and ready updates remain separate user-triggered signatures.
 - Before opening the wallet, the UI shows the network, program, asset impact, and fee source, then simulates the exact Router-prepared bytes against their execution endpoint (Solana devnet before delegation; the selected ER after delegation). Magic Router itself does not expose `simulateTransaction`. The signed bytes are submitted unchanged through the Router and tracked through confirmed status with a devnet explorer link.
 - Chain and server updates are deliberately sequenced: on-chain confirmation happens first, then the existing application mutation. Retries inspect the room PDA and skip an already-completed chain step, preventing duplicate join/ready transactions after a server or network failure.
-- The SSE room remains the product-state source for funding, countdown, reveal, and settlement. The MagicBlock PDA currently proves only public wallet membership and ready state.
+- The SSE room remains the product-state source for funding, reveal, and settlement. The MagicBlock PDA proves public wallet membership, ready state, and the authoritative one-shot opening timestamp.
+
+## Milestone 6A decision — ER-authoritative opening
+
+- Room schema v2 adds a `LOBBY → OPENING` phase and immutable countdown end timestamp. Existing disposable v1 demo rooms must be recreated.
+- Only the host can start opening, and the program requires every current participant to be ready. Starting twice, joining after start, or changing readiness after start fails on-chain.
+- The ER records a four-second lead so Router confirmation can propagate before clients render the synchronized final three seconds.
+- The server verifies room version, host, maximum size, exact ordered roster, phase, and timestamp before mirroring `OPENING` to Supabase. Supabase still drives reveal orchestration, while it cannot invent a MagicBlock opening transition.
 
 ## Milestone 4E decision — base-layer token escrow
 

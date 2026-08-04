@@ -127,6 +127,11 @@ const intentCopy: Record<ChainIntent, { eyebrow: string; title: string; detail: 
     title: "Mark your wallet ready?",
     detail: "Updates your ready bit on the Ephemeral Rollup. This does not approve or move tokens.",
   },
+  start: {
+    eyebrow: "Synchronized opening",
+    title: "Start the shared countdown?",
+    detail: "Records a one-shot opening transition and authoritative countdown timestamp on the MagicBlock Ephemeral Rollup.",
+  },
 };
 
 export function ChainTransactionReview({

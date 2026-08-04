@@ -7,21 +7,22 @@
  */
 
 import { assertAccountExists, assertAccountsExist, combineCodec, decodeAccount, fetchEncodedAccount, fetchEncodedAccounts, fixDecoderSize, fixEncoderSize, getAddressDecoder, getAddressEncoder, getArrayDecoder, getArrayEncoder, getBytesDecoder, getBytesEncoder, getI64Decoder, getI64Encoder, getStructDecoder, getStructEncoder, getU64Decoder, getU64Encoder, getU8Decoder, getU8Encoder, transformEncoder, type Account, type Address, type EncodedAccount, type FetchAccountConfig, type FetchAccountsConfig, type FixedSizeCodec, type FixedSizeDecoder, type FixedSizeEncoder, type MaybeAccount, type MaybeEncodedAccount, type ReadonlyUint8Array } from '@solana/kit';
+import { getRoomPhaseDecoder, getRoomPhaseEncoder, type RoomPhase, type RoomPhaseArgs } from '../types';
 
 export const ROOM_STATE_DISCRIMINATOR = new Uint8Array([251, 176, 114, 29, 232, 0, 65, 181]);
 
 export function getRoomStateDiscriminatorBytes() { return fixEncoderSize(getBytesEncoder(), 8).encode(ROOM_STATE_DISCRIMINATOR); }
 
-export type RoomState = { discriminator: ReadonlyUint8Array; version: number; bump: number; roomId: ReadonlyUint8Array; host: Address; maxPlayers: number; participantCount: number; readyMask: number; revision: bigint; lastActivityAt: bigint; participants: Array<Address>;  };
+export type RoomState = { discriminator: ReadonlyUint8Array; version: number; bump: number; roomId: ReadonlyUint8Array; host: Address; maxPlayers: number; participantCount: number; readyMask: number; phase: RoomPhase; countdownEndsAt: bigint; revision: bigint; lastActivityAt: bigint; participants: Array<Address>;  };
 
-export type RoomStateArgs = { version: number; bump: number; roomId: ReadonlyUint8Array; host: Address; maxPlayers: number; participantCount: number; readyMask: number; revision: number | bigint; lastActivityAt: number | bigint; participants: Array<Address>;  };
+export type RoomStateArgs = { version: number; bump: number; roomId: ReadonlyUint8Array; host: Address; maxPlayers: number; participantCount: number; readyMask: number; phase: RoomPhaseArgs; countdownEndsAt: number | bigint; revision: number | bigint; lastActivityAt: number | bigint; participants: Array<Address>;  };
 
 export function getRoomStateEncoder(): FixedSizeEncoder<RoomStateArgs> {
-    return transformEncoder(getStructEncoder([['discriminator', fixEncoderSize(getBytesEncoder(), 8)], ['version', getU8Encoder()], ['bump', getU8Encoder()], ['roomId', fixEncoderSize(getBytesEncoder(), 8)], ['host', getAddressEncoder()], ['maxPlayers', getU8Encoder()], ['participantCount', getU8Encoder()], ['readyMask', getU8Encoder()], ['revision', getU64Encoder()], ['lastActivityAt', getI64Encoder()], ['participants', getArrayEncoder(getAddressEncoder(), { size: 4 })]]), (value) => ({ ...value, discriminator: ROOM_STATE_DISCRIMINATOR }));
+    return transformEncoder(getStructEncoder([['discriminator', fixEncoderSize(getBytesEncoder(), 8)], ['version', getU8Encoder()], ['bump', getU8Encoder()], ['roomId', fixEncoderSize(getBytesEncoder(), 8)], ['host', getAddressEncoder()], ['maxPlayers', getU8Encoder()], ['participantCount', getU8Encoder()], ['readyMask', getU8Encoder()], ['phase', getRoomPhaseEncoder()], ['countdownEndsAt', getI64Encoder()], ['revision', getU64Encoder()], ['lastActivityAt', getI64Encoder()], ['participants', getArrayEncoder(getAddressEncoder(), { size: 4 })]]), (value) => ({ ...value, discriminator: ROOM_STATE_DISCRIMINATOR }));
 }
 
 export function getRoomStateDecoder(): FixedSizeDecoder<RoomState> {
-    return getStructDecoder([['discriminator', fixDecoderSize(getBytesDecoder(), 8)], ['version', getU8Decoder()], ['bump', getU8Decoder()], ['roomId', fixDecoderSize(getBytesDecoder(), 8)], ['host', getAddressDecoder()], ['maxPlayers', getU8Decoder()], ['participantCount', getU8Decoder()], ['readyMask', getU8Decoder()], ['revision', getU64Decoder()], ['lastActivityAt', getI64Decoder()], ['participants', getArrayDecoder(getAddressDecoder(), { size: 4 })]]);
+    return getStructDecoder([['discriminator', fixDecoderSize(getBytesDecoder(), 8)], ['version', getU8Decoder()], ['bump', getU8Decoder()], ['roomId', fixDecoderSize(getBytesDecoder(), 8)], ['host', getAddressDecoder()], ['maxPlayers', getU8Decoder()], ['participantCount', getU8Decoder()], ['readyMask', getU8Decoder()], ['phase', getRoomPhaseDecoder()], ['countdownEndsAt', getI64Decoder()], ['revision', getU64Decoder()], ['lastActivityAt', getI64Decoder()], ['participants', getArrayDecoder(getAddressDecoder(), { size: 4 })]]);
 }
 
 export function getRoomStateCodec(): FixedSizeCodec<RoomStateArgs, RoomState> {
@@ -73,5 +74,5 @@ export async function fetchAllMaybeRoomState(
 }
 
 export function getRoomStateSize(): number {
-  return 197;
+  return 206;
 }

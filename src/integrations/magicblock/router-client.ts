@@ -31,6 +31,7 @@ import {
   getJoinRoomInstruction,
   getReactInstruction,
   getSetReadyInstruction,
+  getStartOpeningInstruction,
   getUndelegateRoomInstruction,
   type RoomState,
 } from "@/integrations/solana/program-client/src/generated";
@@ -41,7 +42,7 @@ export const MAGICBLOCK_DEVNET_ER_URL = "https://devnet-eu.magicblock.app";
 export const MAGICBLOCK_DEVNET_VALIDATOR = address("MEUGGrYPxKk17hCr7wpT6s8dtNokZj5U2L57vjYMS8e");
 export const ROOM_SEED = new TextEncoder().encode("party-room");
 
-export type RoomAction = "initialize" | "join" | "ready" | "react" | "delegate" | "commit" | "undelegate";
+export type RoomAction = "initialize" | "join" | "ready" | "start" | "react" | "delegate" | "commit" | "undelegate";
 
 export type PreparedRoomTransaction = {
   action: RoomAction;
@@ -123,6 +124,15 @@ export class MagicRouterRoomClient {
     }));
   }
 
+  async prepareStart(host: string, partyId: string) {
+    const hostAddress = address(host);
+    const roomAddress = await findRoomAddress(host, partyId);
+    return this.prepare("start", roomAddress, hostAddress, getStartOpeningInstruction({
+      room: roomAddress,
+      player: createNoopSigner(hostAddress),
+    }));
+  }
+
   async prepareReaction(player: string, host: string, partyId: string, reaction: number) {
     if (!Number.isInteger(reaction) || reaction < 0 || reaction > 3) {
       throw new Error("Unknown room reaction.");
@@ -197,7 +207,8 @@ export class MagicRouterRoomClient {
       { encoding: "base64", commitment: "confirmed", sigVerify: false },
     ).send();
     if (simulation.value.err) {
-      throw new Error("Transaction simulation failed before signing. Refresh the room and try again.");
+      const detail = simulation.value.logs?.slice(-4).join(" ") ?? JSON.stringify(simulation.value.err);
+      throw new Error(`Transaction simulation failed before signing. ${detail}`);
     }
     return simulation.value.unitsConsumed ?? null;
   }

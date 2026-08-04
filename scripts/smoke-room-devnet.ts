@@ -12,16 +12,20 @@ import {
   type TransactionWithinSizeLimit,
 } from "@solana/kit";
 import {
+  MAGICBLOCK_DEVNET_ER_URL,
   MagicRouterRoomClient,
   type PreparedRoomTransaction,
 } from "../src/integrations/magicblock/router-client";
+import { RoomPhase } from "../src/integrations/solana/program-client/src/generated";
 
 async function main() {
   const walletPath = process.env.SOLANA_WALLET || resolve(homedir(), ".config/solana/id.json");
   const secretKey = Uint8Array.from(JSON.parse(readFileSync(walletPath, "utf8")) as number[]);
   const signer = await createKeyPairSignerFromBytes(secretKey);
   const client = await MagicRouterRoomClient.create();
+  const erClient = await MagicRouterRoomClient.create(process.env.NEXT_PUBLIC_MAGICBLOCK_ER_RPC_URL || MAGICBLOCK_DEVNET_ER_URL);
   const partyId = randomBytes(4).toString("hex");
+  console.log(`party id: ${partyId}`);
 
   async function signAndSubmit(prepared: PreparedRoomTransaction) {
     await client.simulateTransaction(prepared);
@@ -39,6 +43,10 @@ async function main() {
   if (!initialized || initialized.participantCount !== 1 || initialized.revision !== 1n) {
     throw new Error("Initialized room did not decode to the expected state.");
   }
+  const delegated = await erClient.fetchRoom(signer.address, partyId);
+  console.log(`room: ${initialized.address}`);
+  console.log(`ER host: ${delegated?.host ?? "missing"}`);
+  console.log(`ER participant zero: ${delegated?.participants[0] ?? "missing"}`);
 
   await signAndSubmit(await client.prepareReady(signer.address, signer.address, partyId, true));
   const ready = await client.fetchRoom(signer.address, partyId);
@@ -46,9 +54,14 @@ async function main() {
     throw new Error("Delegated room did not reflect the ready update.");
   }
 
+  await signAndSubmit(await client.prepareStart(signer.address, partyId));
+  const opening = await client.fetchRoom(signer.address, partyId);
+  if (!opening || opening.phase !== RoomPhase.Opening || opening.countdownEndsAt <= 0n || opening.revision !== 3n) {
+    throw new Error("Delegated room did not record the authoritative opening countdown.");
+  }
+  console.log(`countdown ends at: ${opening.countdownEndsAt.toString()}`);
+
   await signAndSubmit(await client.prepareUndelegation(signer.address, partyId));
-  console.log(`room: ${initialized.address}`);
-  console.log(`party id: ${partyId}`);
 }
 
 void main();

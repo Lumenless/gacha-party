@@ -97,6 +97,25 @@ describe("multiplayer room service", () => {
     expect(opening.countdownEndsAt).toBe(new Date(4_500).toISOString());
   });
 
+  it("uses an authoritative MagicBlock countdown timestamp when supplied", async () => {
+    await joinParty("party-1", { wallet: "DemoPlayerWallet0001", displayName: "Alice" }, realtime);
+    await contributeToParty("party-1", { wallet: "DEMO_HOST_WALLET", amount: "25" }, realtime);
+    await contributeToParty("party-1", { wallet: "DemoPlayerWallet0001", amount: "25" }, realtime);
+    await markPartyReady("party-1", { wallet: "DEMO_HOST_WALLET" }, realtime);
+    await markPartyReady("party-1", { wallet: "DemoPlayerWallet0001" }, realtime);
+
+    const chainCountdownEndsAt = 10_000;
+    const opening = await startPartyCountdown(
+      "party-1",
+      { wallet: "DEMO_HOST_WALLET" },
+      realtime,
+      1_000,
+      chainCountdownEndsAt,
+    );
+    expect(opening.openingStartedAt).toBe(new Date(7_000).toISOString());
+    expect(opening.countdownEndsAt).toBe(new Date(chainCountdownEndsAt).toISOString());
+  });
+
   it("idempotently mirrors exact on-chain receipts and handles refunds", async () => {
     await joinParty("party-1", { wallet: "DemoPlayerWallet0001", displayName: "Alice" }, realtime);
     const roster = ["DEMO_HOST_WALLET", "DemoPlayerWallet0001"];

@@ -336,16 +336,33 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
     await mutate("ready", { wallet: identity.wallet });
   }
 
+  async function startOpening() {
+    if (!identity) return;
+    if (chainRoom.enabled && !chainRoom.isOpening) {
+      if (chainRoom.status !== "active") {
+        setError("The MagicBlock room is not active yet.");
+        return;
+      }
+      chainRoom.resetTransaction();
+      setChainIntent("start");
+      return;
+    }
+    await mutate("start", { wallet: identity.wallet });
+  }
+
   async function confirmChainIntent() {
     if (!identity || !chainIntent) return;
     const confirmed = chainIntent === "initialize"
       ? await chainRoom.initialize()
       : chainIntent === "join"
         ? await chainRoom.join(identity.wallet)
-        : await chainRoom.ready(identity.wallet);
+        : chainIntent === "ready"
+          ? await chainRoom.ready(identity.wallet)
+          : await chainRoom.start(identity.wallet);
     if (!confirmed) return;
     if (chainIntent === "join") await finishJoin();
     if (chainIntent === "ready") await mutate("ready", { wallet: identity.wallet });
+    if (chainIntent === "start") await mutate("start", { wallet: identity.wallet });
   }
 
   async function contribute(event: FormEvent) {
@@ -710,7 +727,9 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                     {chainRoom.enabled && !chainRoom.isReady(identity.wallet) ? "Review ready update" : "I’m ready"}
                   </Button>
                 ) : identity.wallet === party.hostWallet && party.status === "READY" && escrow.snapshot?.status === ProgramEscrowStatus.Locked ? (
-                  <Button type="button" onClick={() => mutate("start", { wallet: identity.wallet })} loading={pending === "start"}>Start real opening</Button>
+                  <Button type="button" onClick={() => void startOpening()} loading={pending === "start"}>
+                    {chainRoom.enabled && !chainRoom.isOpening ? "Review opening transaction" : "Start real opening"}
+                  </Button>
                 ) : (
                   <span className="inline-flex min-h-11 items-center gap-2 rounded-md border border-primary/30 bg-primary/10 px-4 text-sm font-semibold text-primary"><Check className="size-4" aria-hidden="true" /> Ready</span>
                 )}
@@ -731,7 +750,9 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                     {chainRoom.enabled && !chainRoom.isReady(identity.wallet) ? "Review ready update" : "I’m ready"}
                   </Button>
                 ) : identity.wallet === party.hostWallet && party.status === "READY" ? (
-                  <Button type="button" onClick={() => mutate("start", { wallet: identity.wallet })} loading={pending === "start"}>Start opening</Button>
+                  <Button type="button" onClick={() => void startOpening()} loading={pending === "start"}>
+                    {chainRoom.enabled && !chainRoom.isOpening ? "Review opening transaction" : "Start opening"}
+                  </Button>
                 ) : (
                   <span className="inline-flex min-h-11 items-center gap-2 rounded-md border border-primary/30 bg-primary/10 px-4 text-sm font-semibold text-primary"><Check className="size-4" aria-hidden="true" /> Ready</span>
                 )}
@@ -742,7 +763,9 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
           {party.status === "OPENING" && (
             <div className="rounded-xl border border-primary/30 bg-primary/5 p-5 text-center">
               <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Synchronized opening</p>
-              <p className="mt-2 text-sm text-muted-foreground">Every connected browser is counting down from the same server timestamp.</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Every connected browser is counting down from the same {chainRoom.enabled ? "MagicBlock ER" : "server"} timestamp.
+              </p>
             </div>
           )}
 
