@@ -15,6 +15,7 @@ import { waitUntilPermissionActive } from "@magicblock-labs/ephemeral-rollups-ki
 import { PrivateVoteChoice } from "../src/integrations/solana/program-client/src/generated";
 import {
   MagicBlockPrivateVoteClient,
+  type PrivateVoteSnapshot,
   type PreparedPrivateVoteTransaction,
 } from "../src/integrations/magicblock/private-vote-client";
 import {
@@ -37,7 +38,7 @@ async function main() {
 
   const client = await MagicBlockPrivateVoteClient.create(session.endpoint);
   const partyId = randomBytes(4).toString("hex");
-  const revealAfter = Math.floor(Date.now() / 1_000) + 300;
+  const revealAfter = Math.floor(Date.now() / 1_000) + 25;
   console.log(`party id: ${partyId}`);
 
   async function signAndSubmit(prepared: PreparedPrivateVoteTransaction) {
@@ -79,6 +80,52 @@ async function main() {
   }
   if (!privacyEnforced) throw new Error("The private vote remained readable without a TEE authorization token.");
   console.log("unauthorized read: rejected");
+
+  let earlyReleaseRejected = false;
+  try {
+    await client.simulate(await client.prepareOpen(signer.address, partyId));
+  } catch {
+    earlyReleaseRejected = true;
+  }
+  if (!earlyReleaseRejected) throw new Error("The program allowed a private vote to open before its deadline.");
+  console.log("early release: rejected");
+
+  while (Math.floor(Date.now() / 1_000) <= revealAfter) {
+    await new Promise((resolveWait) => setTimeout(resolveWait, 500));
+  }
+  await signAndSubmit(await client.prepareOpen(signer.address, partyId));
+
+  let publicTeeVote: PrivateVoteSnapshot | null = null;
+  const publicReadDeadline = Date.now() + 15_000;
+  while (!publicTeeVote && Date.now() < publicReadDeadline) {
+    try {
+      publicTeeVote = await unauthorized.fetchPrivateVote(signer.address, partyId);
+    } catch {
+      // The permission gateway may briefly retain its closed-account cache.
+    }
+    if (!publicTeeVote) await new Promise((resolveWait) => setTimeout(resolveWait, 500));
+  }
+  if (!publicTeeVote || publicTeeVote.choice !== PrivateVoteChoice.Sell) {
+    throw new Error("The expired vote did not become publicly readable after permission cleanup.");
+  }
+  console.log("deadline release: public on TEE");
+
+  await signAndSubmit(await client.prepareUndelegation(signer.address, partyId));
+  let baseVote: PrivateVoteSnapshot | null = null;
+  const baseCommitDeadline = Date.now() + 20_000;
+  while (
+    (!baseVote || baseVote.choice !== PrivateVoteChoice.Sell || baseVote.castAt !== cast.castAt)
+    && Date.now() < baseCommitDeadline
+  ) {
+    baseVote = await client.fetchBasePrivateVote(signer.address, partyId);
+    if (!baseVote || baseVote.choice !== PrivateVoteChoice.Sell || baseVote.castAt !== cast.castAt) {
+      await new Promise((resolveWait) => setTimeout(resolveWait, 500));
+    }
+  }
+  if (!baseVote || baseVote.choice !== PrivateVoteChoice.Sell || baseVote.castAt !== cast.castAt) {
+    throw new Error("The released private vote was not committed intact to Solana devnet.");
+  }
+  console.log("base-layer vote: verified");
 }
 
 void main();

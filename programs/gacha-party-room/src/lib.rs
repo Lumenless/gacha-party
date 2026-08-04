@@ -3,7 +3,7 @@ use anchor_lang::system_program::{transfer, Transfer};
 use anchor_spl::token::{self, Mint, Token, TokenAccount, TransferChecked};
 use ephemeral_rollups_sdk::{
     access_control::{
-        instructions::CreateEphemeralPermissionCpi,
+        instructions::{CloseEphemeralPermissionCpi, CreateEphemeralPermissionCpi},
         structs::{
             EphemeralMembersArgs, EphemeralPermission, Member, PERMISSION_SEED, TX_BALANCES_FLAG,
             TX_LOGS_FLAG, TX_MESSAGE_FLAG,
@@ -216,6 +216,46 @@ pub mod gacha_party_room {
     pub fn cast_private_vote(ctx: Context<CastPrivateVote>, choice: u8) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
         ctx.accounts.private_vote.cast(choice, now)
+    }
+
+    /// TEE instruction: removes the visibility restriction only after the sealed-vote
+    /// deadline. The voter remains the only transaction signer, while the vote PDA
+    /// authorizes closing its own permission and receives the recovered rent.
+    pub fn open_private_vote(ctx: Context<PrivateVotePermission>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        ctx.accounts.private_vote.require_reveal_open(now)?;
+
+        let voter = ctx.accounts.private_vote.voter;
+        let party_id = ctx.accounts.private_vote.party_id;
+        let bump = [ctx.accounts.private_vote.bump];
+        let signer_seeds = [PRIVATE_VOTE_SEED, voter.as_ref(), party_id.as_ref(), &bump];
+        CloseEphemeralPermissionCpi {
+            payer: ctx.accounts.private_vote.to_account_info(),
+            authority: ctx.accounts.private_vote.to_account_info(),
+            permissioned_account: ctx.accounts.private_vote.to_account_info(),
+            permission: ctx.accounts.permission.to_account_info(),
+            vault: ctx.accounts.ephemeral_vault.to_account_info(),
+            magic_program: ctx.accounts.magic_program.to_account_info(),
+            permission_program: ctx.accounts.permission_program.to_account_info(),
+            authority_is_signer: false,
+        }
+        .invoke_signed(&[&signer_seeds])?;
+        Ok(())
+    }
+
+    /// TEE instruction: after the deadline, commits the now-public vote account to
+    /// Solana and returns ownership to this program for an auditable tally.
+    pub fn undelegate_private_vote(ctx: Context<UndelegatePrivateVote>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        ctx.accounts.private_vote.require_reveal_open(now)?;
+        MagicIntentBundleBuilder::new(
+            ctx.accounts.voter.to_account_info(),
+            ctx.accounts.magic_context.to_account_info(),
+            ctx.accounts.magic_program.to_account_info(),
+        )
+        .commit_and_undelegate(&[ctx.accounts.private_vote.to_account_info()])
+        .build_and_invoke()?;
+        Ok(())
     }
 
     /// Base-layer instruction: creates an immutable participant-scoped token escrow.
@@ -622,6 +662,20 @@ pub struct CastPrivateVote<'info> {
     pub permission: UncheckedAccount<'info>,
 }
 
+#[commit]
+#[derive(Accounts)]
+pub struct UndelegatePrivateVote<'info> {
+    #[account(mut)]
+    pub voter: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [PRIVATE_VOTE_SEED, private_vote.voter.as_ref(), private_vote.party_id.as_ref()],
+        bump = private_vote.bump,
+        has_one = voter @ RoomError::NotPrivateVoter,
+    )]
+    pub private_vote: Account<'info, PrivateVote>,
+}
+
 #[derive(Accounts)]
 #[instruction(
     room_id: [u8; 8],
@@ -977,6 +1031,11 @@ impl PrivateVote {
         self.cast_at = now;
         Ok(())
     }
+
+    fn require_reveal_open(&self, now: i64) -> Result<()> {
+        require!(now > self.reveal_after, RoomError::PrivateVoteRevealLocked);
+        Ok(())
+    }
 }
 
 impl RoomState {
@@ -1192,6 +1251,8 @@ pub enum RoomError {
     PrivateVoteAlreadyCast,
     #[msg("The private voting deadline has passed.")]
     PrivateVoteClosed,
+    #[msg("The private vote remains sealed until its reveal deadline.")]
+    PrivateVoteRevealLocked,
 }
 
 #[error_code]
@@ -1340,6 +1401,8 @@ mod tests {
         assert_eq!(vote.cast_at, 150);
         assert!(vote.cast(2, 151).is_ok());
         assert!(vote.cast(1, 151).is_err());
+        assert!(vote.require_reveal_open(200).is_err());
+        assert!(vote.require_reveal_open(201).is_ok());
     }
 
     #[test]

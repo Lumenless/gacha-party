@@ -29,6 +29,8 @@ import {
   getDelegatePrivateVoteInstruction,
   getInitializePrivateVoteInstruction,
   getInitializePrivateVotePermissionInstruction,
+  getOpenPrivateVoteInstruction,
+  getUndelegatePrivateVoteInstruction,
   type PrivateVote,
 } from "@/integrations/solana/program-client/src/generated";
 import { encodeRoomId, MAGICBLOCK_DEVNET_ROUTER_URL, SOLANA_DEVNET_URL } from "./router-client";
@@ -36,7 +38,7 @@ import { encodeRoomId, MAGICBLOCK_DEVNET_ROUTER_URL, SOLANA_DEVNET_URL } from ".
 export const MAGICBLOCK_DEVNET_TEE_VALIDATOR = address("MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo");
 export const PRIVATE_VOTE_SEED = new TextEncoder().encode("private-vote");
 
-export type PrivateVoteAction = "initialize" | "permission" | "cast";
+export type PrivateVoteAction = "initialize" | "permission" | "cast" | "open" | "undelegate";
 export type PreparedPrivateVoteTransaction = {
   action: PrivateVoteAction;
   execution: "base" | "tee";
@@ -113,9 +115,34 @@ export class MagicBlockPrivateVoteClient {
     }));
   }
 
+  async prepareOpen(voter: string, partyId: string) {
+    const voterAddress = address(voter);
+    const privateVote = await findPrivateVoteAddress(voter, partyId);
+    return this.prepare("open", "tee", voterAddress, privateVote, getOpenPrivateVoteInstruction({
+      voter: createNoopSigner(voterAddress),
+      privateVote,
+      permission: await permissionPdaFromAccount(privateVote),
+    }));
+  }
+
+  async prepareUndelegation(voter: string, partyId: string) {
+    const voterAddress = address(voter);
+    const privateVote = await findPrivateVoteAddress(voter, partyId);
+    return this.prepare("undelegate", "tee", voterAddress, privateVote, getUndelegatePrivateVoteInstruction({
+      voter: createNoopSigner(voterAddress),
+      privateVote,
+    }));
+  }
+
   async fetchPrivateVote(voter: string, partyId: string): Promise<PrivateVoteSnapshot | null> {
     const privateVote = await findPrivateVoteAddress(voter, partyId);
     const account = await fetchMaybePrivateVote(this.tee.rpc, privateVote);
+    return account.exists ? { address: privateVote, ...account.data } : null;
+  }
+
+  async fetchBasePrivateVote(voter: string, partyId: string): Promise<PrivateVoteSnapshot | null> {
+    const privateVote = await findPrivateVoteAddress(voter, partyId);
+    const account = await fetchMaybePrivateVote(this.baseSimulation.rpc, privateVote);
     return account.exists ? { address: privateVote, ...account.data } : null;
   }
 

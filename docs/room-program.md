@@ -25,8 +25,10 @@ Each private vote is a voter-scoped PDA derived from `private-vote`, voter walle
 - `delegate_private_vote`: delegates exclusively to MagicBlock's published devnet TEE validator.
 - `initialize_private_vote_permission`: creates an ER-only permission marked private with the voter as its sole external member.
 - `cast_private_vote`: writes KEEP or SELL inside the authenticated TEE, requires the voter signature and permission account, and rejects changes and late votes.
+- `open_private_vote`: after the fixed deadline, closes the permission so the choice becomes readable on the TEE; an early release is rejected on-chain.
+- `undelegate_private_vote`: voter-authorized commit and undelegation of the opened vote to Solana for an auditable tally.
 
-The deployed instructions do not yet reveal or tally. Production remains on commit-reveal until a deadline/all-voted finalizer can publish only the aggregate outcome.
+The safe expiry path requires each available voter to release their own vote; a voter who disappears before release is treated as abstaining. Production remains on commit-reveal until the product adapter submits this lifecycle and tallies only released devnet accounts. An early all-voted shortcut is deliberately omitted because it needs a shared private coordinator, not server access to individual votes.
 
 ## Base-layer escrow
 
@@ -84,3 +86,5 @@ The Milestone 5 operator lifecycle upgrade deployed on 2026-08-04 with signature
 The room schema v2 opening upgrade deployed on 2026-08-04 with signature [`5JZD8KEZ7nJQLmrXwAQ7vtqzU2QE3ZUBm5aFKHdaueoBXWdbhmmS6PAEDDwyrUfD27RGesnEjCToKnRKhkpWK6RZ`](https://explorer.solana.com/tx/5JZD8KEZ7nJQLmrXwAQ7vtqzU2QE3ZUBm5aFKHdaueoBXWdbhmmS6PAEDDwyrUfD27RGesnEjCToKnRKhkpWK6RZ?cluster=devnet). ProgramData was extended by 16 KiB before the upgrade to fit the larger binary with modest future headroom. The post-upgrade smoke completed initialization/delegation, ER ready, ER opening timestamp, and undelegation for room `Bckr3caR5GimdnKj2Dm8rmo13x4U4w3wrJDs58Dqae6c` (party ID `175d9759`).
 
 The Private ER account upgrade deployed on 2026-08-04; the final permission-validation fix is signature [`5auYTrUPheee62j6M8FWJqXF621kLRGJQ7LaFzetCcsrs7aDbsApsD4vKDxKvsGCenJmkPLFPzBELVGfnQvJbYyx`](https://explorer.solana.com/tx/5auYTrUPheee62j6M8FWJqXF621kLRGJQ7LaFzetCcsrs7aDbsApsD4vKDxKvsGCenJmkPLFPzBELVGfnQvJbYyx?cluster=devnet). The verified TDX/authenticated smoke used private vote `ALh5zchQEHM4gdbA1ZTJYtieFhC1ZUEHkNi8rzczJem8` (party ID `8aa3b8f4`) and confirmed that an unauthenticated TEE request received no account data.
+
+The deadline-release upgrade deployed on 2026-08-04 with signature [`5sLd4ghH2v21wBHDKk2Bw686aoVE47j2M8Nw2dm2mzxEtY187RSmExBygrB3xWVaYKXmp9s5PkicyrcMk81ncfU4`](https://explorer.solana.com/tx/5sLd4ghH2v21wBHDKk2Bw686aoVE47j2M8Nw2dm2mzxEtY187RSmExBygrB3xWVaYKXmp9s5PkicyrcMk81ncfU4?cluster=devnet). The end-to-end proof used vote `35KkruNuqbURduCmgsaYNgYzf2nQjMtVcGTq6yFYwwX5` (party ID `01a105be`): an unauthenticated read and an early release were rejected, the vote became public only after expiry, and undelegation committed the exact SELL choice and cast timestamp to devnet.
