@@ -45,6 +45,7 @@ NEXT_PUBLIC_SOLANA_CLUSTER=devnet
 NEXT_PUBLIC_SOLANA_RPC_URL=https://<your-devnet-rpc>
 NEXT_PUBLIC_WALLET_MODE=wallet
 NEXT_PUBLIC_ROOM_STATE_MODE=magicblock
+NEXT_PUBLIC_VOTING_MODE=commit-reveal
 NEXT_PUBLIC_FUNDS_MODE=mock
 NEXT_PUBLIC_FUNDS_TOKEN_LABEL=Mock USDC
 NEXT_PUBLIC_MAGICBLOCK_ER_RPC_URL=https://devnet-eu.magicblock.app
@@ -69,6 +70,15 @@ GACHA_OPERATOR_SECRET_KEY=
 ```
 
 `vercel.json` selects Fluid Compute and runs `pnpm deploy:build`, which rejects missing or inconsistent devnet configuration. `NEXT_PUBLIC_*` values are browser-visible; restrict RPC keys by domain and usage limit.
+
+For the verified Private ER flow, change both voting variables in the same deployment:
+
+```dotenv
+NEXT_PUBLIC_VOTING_MODE=magicblock-per
+VOTING_MODE=magicblock-per
+```
+
+This mode requires wallet mode, Supabase, devnet SOL in every participating wallet, and the configured MagicBlock TEE endpoint. Each voter signs an authentication message plus account, permission, cast, release, and undelegation transactions. Choices stay unreadable until the fixed deadline; a wallet that does not return to release its account abstains.
 
 Deploy:
 

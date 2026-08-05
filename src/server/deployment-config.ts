@@ -32,7 +32,15 @@ export function deploymentConfigIssues(env: Env = process.env): string[] {
   if (env.NEXT_PUBLIC_SOLANA_CLUSTER !== "devnet") issues.push("NEXT_PUBLIC_SOLANA_CLUSTER must be devnet.");
   if (env.NEXT_PUBLIC_WALLET_MODE !== "wallet") issues.push("NEXT_PUBLIC_WALLET_MODE must be wallet.");
   if (env.NEXT_PUBLIC_ROOM_STATE_MODE !== "magicblock") issues.push("NEXT_PUBLIC_ROOM_STATE_MODE must be magicblock.");
-  if ((env.VOTING_MODE ?? "commit-reveal") !== "commit-reveal") issues.push("VOTING_MODE must remain commit-reveal until PER is complete.");
+  const votingMode = env.VOTING_MODE ?? "commit-reveal";
+  const publicVotingMode = env.NEXT_PUBLIC_VOTING_MODE ?? "commit-reveal";
+  if (!(["commit-reveal", "magicblock-per"] as const).includes(votingMode as "commit-reveal" | "magicblock-per")) {
+    issues.push("VOTING_MODE must be commit-reveal or magicblock-per.");
+  }
+  if (publicVotingMode !== votingMode) issues.push("Public and server voting modes must match.");
+  if (votingMode === "magicblock-per" && env.NEXT_PUBLIC_WALLET_MODE !== "wallet") {
+    issues.push("MagicBlock private voting requires wallet mode.");
+  }
   if (!validAddress(env.NEXT_PUBLIC_GACHA_PARTY_PROGRAM_ID)) issues.push("NEXT_PUBLIC_GACHA_PARTY_PROGRAM_ID is invalid.");
   if (!validAddress(env.GACHA_PARTY_PROGRAM_ID)) issues.push("GACHA_PARTY_PROGRAM_ID is invalid.");
   if (env.NEXT_PUBLIC_GACHA_PARTY_PROGRAM_ID !== env.GACHA_PARTY_PROGRAM_ID) {

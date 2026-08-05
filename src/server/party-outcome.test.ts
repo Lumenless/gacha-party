@@ -3,7 +3,7 @@ import { parseUsdc } from "@/domain/money";
 import type { Party, VoteChoice } from "@/domain/party";
 import { MockCardCustodyAdapter } from "@/integrations/card-custody/mock";
 import { MockCollectorCryptAdapter } from "@/integrations/collector-crypt/mock";
-import type { RealtimePartyAdapter } from "@/integrations/contracts";
+import type { RealtimePartyAdapter, SealedVotingAdapter } from "@/integrations/contracts";
 import { CommitRevealVotingAdapter, createVoteCommitment } from "@/integrations/voting/commit-reveal";
 import { partyRepository } from "./party-repository";
 import { settlementLock } from "./settlement-lock";
@@ -16,6 +16,14 @@ const realtime: RealtimePartyAdapter = {
 const collector = new MockCollectorCryptAdapter();
 const custody = new MockCardCustodyAdapter();
 const voting = new CommitRevealVotingAdapter();
+const privateVoting: SealedVotingAdapter = {
+  privacyModel: "PRIVATE_EPHEMERAL_ROLLUP",
+  commit: (...args) => voting.commit(...args),
+  reveal: (...args) => voting.reveal(...args),
+  getCommitCount: (...args) => voting.getCommitCount(...args),
+  getRevealCount: (...args) => voting.getRevealCount(...args),
+  getTally: (...args) => voting.getTally(...args),
+};
 
 function openingParty(): Party {
   return {
@@ -123,5 +131,32 @@ describe("reveal, sealed voting and settlement", () => {
     const completed = await revealPartyVote("outcome-party", { wallet: "DemoPlayerWallet0001", vote: "SELL", nonce: "alice-nonce-00000" }, realtime, voting, collector, custody, 4_100);
     expect(completed.voting?.result?.outcome).toBe("KEEP");
     expect(completed.settlement).toMatchObject({ mode: "KEEP", vaultAddress: "DemoPartyVault_outcome-party" });
+  });
+
+  it("does not accept a Private ER release before the on-chain deadline", async () => {
+    await revealPartyCard("outcome-party", { wallet: "DEMO_HOST_WALLET" }, realtime, collector, 2_000);
+    await commitPartyVote(
+      "outcome-party",
+      { wallet: "DEMO_HOST_WALLET", commitment: createVoteCommitment("outcome-party", "DEMO_HOST_WALLET", "KEEP", "host-nonce-000000") },
+      realtime,
+      privateVoting,
+      3_000,
+    );
+    await commitPartyVote(
+      "outcome-party",
+      { wallet: "DemoPlayerWallet0001", commitment: createVoteCommitment("outcome-party", "DemoPlayerWallet0001", "SELL", "alice-nonce-00000") },
+      realtime,
+      privateVoting,
+      3_100,
+    );
+    await expect(revealPartyVote(
+      "outcome-party",
+      { wallet: "DEMO_HOST_WALLET", vote: "KEEP", nonce: "host-nonce-000000" },
+      realtime,
+      privateVoting,
+      collector,
+      custody,
+      4_000,
+    )).rejects.toThrow("remain sealed until the on-chain deadline");
   });
 });

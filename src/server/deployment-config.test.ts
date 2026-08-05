@@ -20,6 +20,7 @@ const validEnv = {
   SUPABASE_SERVICE_ROLE_KEY: "server-secret",
   AUTH_SESSION_SECRET: "a".repeat(32),
   VOTING_MODE: "commit-reveal",
+  NEXT_PUBLIC_VOTING_MODE: "commit-reveal",
 };
 
 describe("Vercel deployment configuration", () => {
@@ -27,16 +28,24 @@ describe("Vercel deployment configuration", () => {
     expect(deploymentConfigIssues(validEnv)).toEqual([]);
   });
 
-  it("rejects mismatched financial mints and unfinished PER", () => {
+  it("accepts the completed PER boundary and rejects mismatched financial mints", () => {
     const issues = deploymentConfigIssues({
       ...validEnv,
       VOTING_MODE: "magicblock-per",
+      NEXT_PUBLIC_VOTING_MODE: "magicblock-per",
       NEXT_PUBLIC_FUNDS_MODE: "solana",
       NEXT_PUBLIC_USDC_MINT: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
       USDC_MINT: programId,
     });
-    expect(issues).toContain("VOTING_MODE must remain commit-reveal until PER is complete.");
+    expect(issues).not.toContain("Public and server voting modes must match.");
     expect(issues).toContain("Public and server USDC mint addresses must match.");
+  });
+
+  it("rejects client and server voting mode drift", () => {
+    expect(deploymentConfigIssues({
+      ...validEnv,
+      VOTING_MODE: "magicblock-per",
+    })).toContain("Public and server voting modes must match.");
   });
 
   it("accepts Collector Crypt devnet mode without an attribution key", () => {

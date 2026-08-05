@@ -4,10 +4,9 @@ import type { SealedVotingAdapter } from "@/integrations/contracts";
 /**
  * Transport boundary between party outcome orchestration and the PER client.
  *
- * The program and Kit client now create one permissioned vote account per voter,
- * verify TEE attestation, and authenticate the wallet. This adapter remains
- * fail-closed until deadline/all-voted reveal and aggregate tally orchestration
- * publish only the result back to public party state.
+ * The browser owns private account writes and deadline release. The server-side
+ * transport may register participation, but it must derive and verify the released
+ * program-owned devnet account before accepting any choice into the public tally.
  */
 export interface PrivateVoteTransport {
   commit(partyId: string, wallet: string, commitment: string): Promise<void>;
@@ -25,7 +24,7 @@ export class MagicBlockPrivateVotingAdapter implements SealedVotingAdapter {
   private requireTransport(): PrivateVoteTransport {
     if (!this.transport) {
       throw new Error(
-        "Private ER tally orchestration is not configured. Use commit-reveal until the verified private accounts can publish an aggregate result without an early reveal.",
+        "Private ER tally orchestration is not configured.",
       );
     }
     return this.transport;

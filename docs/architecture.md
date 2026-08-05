@@ -121,11 +121,11 @@ MagicBlock's eATA model is the later path if contribution balances themselves mu
 
 ## Milestone 4G1 decision — private voting boundary
 
-- `VOTING_MODE=commit-reveal` remains the only operational mode. The product calls it a sealed vote, not a private vote: commitments hide choices during collection, then choices and nonces are revealed for tallying.
-- `VOTING_MODE=magicblock-per` now selects a separate adapter and fails closed. It cannot silently fall back to server memory or make a privacy claim without a configured PER transport.
+- `VOTING_MODE=commit-reveal` remains the low-friction fallback. The product calls it a sealed vote: commitments hide choices during collection, then choices and nonces are revealed for tallying.
+- `NEXT_PUBLIC_VOTING_MODE=magicblock-per` plus matching `VOTING_MODE=magicblock-per` enables the verified Private ER lifecycle. Deployment validation rejects client/server mode drift and PER without wallet mode.
 - The PER design uses one delegated vote account per wallet. A single account permissioned to every participant would allow every member to read every choice because current Permission Program access grants reads.
 - The permission, delegation, attestation, wallet authentication, sealed cast, deadline opening, and base-layer commit boundaries are implemented and verified on devnet.
-- The remaining product slice is browser transaction orchestration plus a server adapter that accepts only released devnet accounts when tallying. Until that is built and verified, the UI and default demo continue to use tested commit-reveal.
+- Browser transaction orchestration now resumes the voter account lifecycle step by step. The server stores participation receipts but accepts a choice only from the derived, program-owned account after it returns to devnet.
 
 ## Milestone 6B decision — verified Private ER accounts
 
@@ -134,7 +134,7 @@ MagicBlock's eATA model is the later path if contribution balances themselves mu
 - The browser-facing Kit boundary verifies the Intel TDX quote before asking the connected wallet to sign MagicBlock's authentication challenge. Auth tokens are accepted only from an HTTPS base endpoint and never committed or sent to the application server.
 - A devnet smoke test proved authenticated initialization, permission activation, private SELL write, authenticated read, an unauthorized read returning no account data, rejection of early permission cleanup, deadline-gated public release, and an intact commit back to Solana.
 - Expiry is voter-driven: available wallets release after the deadline and unavailable wallets abstain. This avoids granting the host or application server early read access. A future shared private coordinator may add an all-voted shortcut.
-- `VOTING_MODE=magicblock-per` remains blocked by deployment validation until the room UI and tally adapter execute and verify this lifecycle end to end.
+- PER stays opt-in because it requires several wallet prompts and a fixed deadline. Commit-reveal remains the default demo mode; neither mode silently falls back to the other.
 
 ## Milestone 4H decision — Vercel-safe application state
 

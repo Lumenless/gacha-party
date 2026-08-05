@@ -48,7 +48,7 @@ export async function GET() {
       database,
       solanaProgram: program,
       collectorCrypt,
-      privateVoting: false,
+      privateVoting: process.env.VOTING_MODE === "magicblock-per",
       realFunds: process.env.NEXT_PUBLIC_FUNDS_MODE === "solana",
     },
     issues: configIssues,

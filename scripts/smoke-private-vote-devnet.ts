@@ -22,6 +22,7 @@ import {
   createVerifiedTeeSession,
   MAGICBLOCK_DEVNET_TEE_URL,
 } from "../src/integrations/magicblock/tee-session";
+import { SolanaReleasedPrivateVoteReader } from "../src/integrations/voting/released-private-vote";
 
 async function main() {
   const walletPath = process.env.SOLANA_WALLET || resolve(homedir(), ".config/solana/id.json");
@@ -126,6 +127,12 @@ async function main() {
     throw new Error("The released private vote was not committed intact to Solana devnet.");
   }
   console.log("base-layer vote: verified");
+
+  const serverVote = await new SolanaReleasedPrivateVoteReader().read(partyId, signer.address);
+  if (!serverVote || serverVote.choice !== "SELL" || serverVote.castAt !== cast.castAt) {
+    throw new Error("The server tally reader did not accept the released program-owned vote.");
+  }
+  console.log("server tally boundary: verified");
 }
 
 void main();

@@ -7,6 +7,14 @@ import { partyRepository } from "./party-repository";
 import { settlementLock } from "./settlement-lock";
 import type { RealSellSettlement } from "./real-settlement";
 
+const COMMIT_REVEAL_WINDOW_MS = 20_000;
+const PRIVATE_ER_WINDOW_MS = 30_000;
+const PRIVATE_ER_RELEASE_GRACE_MS = 30_000;
+
+function privateErVotingEnabled() {
+  return process.env.VOTING_MODE === "magicblock-per";
+}
+
 async function requireParty(partyId: string): Promise<Party> {
   const party = await partyRepository.get(partyId);
   if (!party) throw new Error("Party not found.");
@@ -69,7 +77,7 @@ export async function revealPartyCard(
       },
       voting: {
         phase: "COMMIT",
-        deadline: new Date(now + 20_000).toISOString(),
+        deadline: new Date(now + (privateErVotingEnabled() ? PRIVATE_ER_WINDOW_MS : COMMIT_REVEAL_WINDOW_MS)).toISOString(),
         commitCount: 0,
         revealCount: 0,
       },
@@ -189,6 +197,9 @@ export async function revealPartyVote(
   if (party.status === "COMPLETED") return party;
   if (party.status !== "VOTING" || !party.voting) throw new Error("Voting is not open.");
   const deadlinePassed = now >= new Date(party.voting.deadline).getTime();
+  if (votingAdapter.privacyModel === "PRIVATE_EPHEMERAL_ROLLUP" && !deadlinePassed) {
+    throw new Error("Private ER votes remain sealed until the on-chain deadline.");
+  }
   if (party.voting.phase === "COMMIT" && !deadlinePassed) {
     throw new Error("Votes stay sealed until everyone votes or the deadline passes.");
   }
@@ -241,7 +252,10 @@ export async function expirePartyVote(
   requireParticipant(party, wallet);
   if (party.status === "COMPLETED") return party;
   if (party.status !== "VOTING" || !party.voting) throw new Error("Voting is not open.");
-  if (now < new Date(party.voting.deadline).getTime() + 2_000) {
+  const gracePeriod = votingAdapter.privacyModel === "PRIVATE_EPHEMERAL_ROLLUP"
+    ? PRIVATE_ER_RELEASE_GRACE_MS
+    : 2_000;
+  if (now < new Date(party.voting.deadline).getTime() + gracePeriod) {
     throw new Error("The reveal grace period is still running.");
   }
   const tally = await votingAdapter.getTally(partyId);

@@ -42,6 +42,17 @@ Wallet mode always signs a free login message first. To enable public room trans
 
 Keep `NEXT_PUBLIC_ROOM_STATE_MODE=mock` for the reliable no-wallet demo. MagicBlock mode requires the connected wallet to hold a small amount of devnet SOL for transaction fees and room rent.
 
+## Private ER voting
+
+Verified MagicBlock Private ER voting is opt-in:
+
+```bash
+NEXT_PUBLIC_VOTING_MODE=magicblock-per
+VOTING_MODE=magicblock-per
+```
+
+Both variables must match. The browser verifies the TDX-backed TEE, authenticates with a wallet message, creates a voter-scoped account, activates wallet-only permissioning, and casts inside the TEE. At the deadline, the voter releases and undelegates the account. The server derives that PDA and accepts the choice only when the account is owned by the deployed program on Solana devnet. Offline voters abstain; the host and server never receive early permission to read individual choices.
+
 ## Devnet Collector Crypt flow
 
 Real mode uses a dedicated custodial devnet operator. Enable it only after upgrading the checked-in program, applying all Supabase migrations, and funding the operator with devnet SOL:
@@ -73,4 +84,5 @@ To exercise initialize, delegate, ER ready update, and undelegate with the confi
 
 ```bash
 pnpm smoke:program:devnet
+pnpm smoke:private-vote:devnet
 ```

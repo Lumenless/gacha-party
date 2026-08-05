@@ -28,6 +28,7 @@ import { useWalletAuth } from "@/components/wallet/wallet-auth-provider";
 import { ChainRoomPanel, ChainTransactionReview } from "@/components/party/chain-room-panel";
 import { EscrowFundingPanel, EscrowTransactionReview } from "@/components/party/escrow-funding-panel";
 import { useMagicBlockRoom, type ChainIntent } from "@/integrations/magicblock/use-magicblock-room";
+import { useMagicBlockPrivateVote } from "@/integrations/magicblock/use-magicblock-private-vote";
 import { useSolanaEscrow, type EscrowIntent } from "@/integrations/solana/use-solana-escrow";
 import { EscrowStatus as ProgramEscrowStatus } from "@/integrations/solana/program-client/src/generated";
 
@@ -91,6 +92,13 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
   const voteExpireRequested = useRef(false);
   const escrowSyncRequested = useRef<string | null>(null);
   const chainRoom = useMagicBlockRoom(party);
+  const privateVote = useMagicBlockPrivateVote(party.id);
+  const {
+    enabled: privateVotingEnabled,
+    transaction: privateVoteTransaction,
+    seal: sealPrivateVote,
+    release: releasePrivateVote,
+  } = privateVote;
   const escrow = useSolanaEscrow(party);
   const fundsTokenLabel = process.env.NEXT_PUBLIC_FUNDS_TOKEN_LABEL?.trim() || "devnet token";
   const realExecution = party.executionMode === "DEVNET";
@@ -262,30 +270,42 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
       !identity ||
       !voteSecret ||
       voteRevealRequested.current ||
-      (party.voting.phase === "COMMIT" && votingSeconds > 0)
+      (privateVotingEnabled
+        ? votingSeconds > 0
+        : party.voting.phase === "COMMIT" && votingSeconds > 0)
     ) return;
     const timer = window.setTimeout(() => {
       voteRevealRequested.current = true;
-      void mutate("voteReveal", {
-        wallet: identity.wallet,
-        vote: voteSecret.vote,
-        nonce: voteSecret.nonce,
-      }).then((ok) => {
-        if (!ok) voteRevealRequested.current = false;
-      });
+      const release = privateVotingEnabled
+        ? releasePrivateVote(voteSecret.vote)
+        : Promise.resolve();
+      void release
+        .then(() => mutate("voteReveal", {
+          wallet: identity.wallet,
+          vote: voteSecret.vote,
+          nonce: voteSecret.nonce,
+        }))
+        .then((ok) => {
+          if (!ok) voteRevealRequested.current = false;
+        })
+        .catch((cause) => {
+          setError(cause instanceof Error ? cause.message : "The private vote could not be released.");
+          voteRevealRequested.current = false;
+        });
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [identity, mutate, party.status, party.voting, voteSecret, votingSeconds]);
+  }, [identity, mutate, party.status, party.voting, privateVotingEnabled, releasePrivateVote, voteSecret, votingSeconds]);
 
   useEffect(() => {
     if (
       party.status !== "VOTING" ||
       !party.voting ||
       !identity ||
-      voteSecret ||
+      (!privateVotingEnabled && voteSecret) ||
+      (privateVotingEnabled && voteSecret && privateVoteTransaction.stage !== "released") ||
       voteExpireRequested.current ||
       !clock ||
-      clock < new Date(party.voting.deadline).getTime() + 2_000
+      clock < new Date(party.voting.deadline).getTime() + (privateVotingEnabled ? 30_000 : 2_000)
     ) return;
     const timer = window.setTimeout(() => {
       voteExpireRequested.current = true;
@@ -294,7 +314,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
       });
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [clock, identity, mutate, party.status, party.voting, voteSecret]);
+  }, [clock, identity, mutate, party.status, party.voting, privateVoteTransaction.stage, privateVotingEnabled, voteSecret]);
 
   async function finishJoin() {
     if (!identity) return;
@@ -411,10 +431,18 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
     const nonce = randomHex(24);
     const secret = { vote: selectedVote, nonce };
     const commitment = await voteCommitment(party.id, identity.wallet, selectedVote, nonce);
+    if (privateVotingEnabled) {
+      try {
+        await sealPrivateVote(selectedVote, party.voting!.deadline);
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "The private vote could not be sealed.");
+        return;
+      }
+    }
     sessionStorage.setItem(`gacha-party-vote:${party.id}:${identity.wallet}`, JSON.stringify(secret));
     setVoteSecret(secret);
     const committed = await mutate("voteCommit", { wallet: identity.wallet, commitment });
-    if (!committed) {
+    if (!committed && !privateVotingEnabled) {
       setVoteSecret(null);
       sessionStorage.removeItem(`gacha-party-vote:${party.id}:${identity.wallet}`);
     }
@@ -778,7 +806,11 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                     <p className="font-mono text-xs uppercase tracking-[0.18em]">Sealed decision</p>
                   </div>
                   <h2 className="mt-3 text-xl font-semibold">Keep it or sell it?</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">Commitments hide choices during voting. Choices are revealed for the final tally.</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {privateVotingEnabled
+                      ? "Your choice is written to a wallet-only MagicBlock TEE account, then released to devnet after the shared deadline."
+                      : "Commitments hide choices during voting. Choices are revealed for the final tally."}
+                  </p>
                 </div>
                 <span className="font-mono text-sm text-primary tabular-nums">{votingSeconds}s</span>
               </div>
@@ -808,9 +840,19 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                       ))}
                     </div>
                   </fieldset>
-                  <Button type="submit" className="mt-4 w-full sm:w-auto" disabled={!selectedVote} loading={pending === "voteCommit"}>
+                  <Button
+                    type="submit"
+                    className="mt-4 w-full sm:w-auto"
+                    disabled={!selectedVote || (privateVotingEnabled && !walletAuth.canSignTransactions)}
+                    loading={pending === "voteCommit" || ["authenticating", "initializing", "permissioning", "casting"].includes(privateVoteTransaction.stage)}
+                  >
                     <LockKeyhole className="size-4" aria-hidden="true" /> Seal my vote
                   </Button>
+                  {privateVotingEnabled && (
+                    <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                      Wallet flow: verify TEE integrity, create the voter account, activate private access, then cast. No tokens move.
+                    </p>
+                  )}
                 </>
               ) : (
                 <div className="mt-5 flex items-center gap-3 rounded-lg bg-primary/5 p-4 text-sm">
@@ -818,17 +860,25 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                   <div>
                     <p className="font-semibold">Vote sealed</p>
                     <p className="text-xs text-muted-foreground">
-                      {party.voting.phase === "COMMIT"
-                        ? `Waiting for ${party.participants.length - party.voting.commitCount} more vote${party.participants.length - party.voting.commitCount === 1 ? "" : "s"}.`
+                      {privateVotingEnabled && privateVoteTransaction.stage !== "released"
+                        ? votingSeconds > 0
+                          ? `Private in the verified TEE. Release opens in ${votingSeconds}s.`
+                          : ["opening", "undelegating"].includes(privateVoteTransaction.stage) ? "Releasing the expired vote to devnet…" : "Ready to release on devnet."
+                        : party.voting.phase === "COMMIT"
+                          ? `Waiting for ${party.participants.length - party.voting.commitCount} more vote${party.participants.length - party.voting.commitCount === 1 ? "" : "s"}.`
                         : pending === "voteReveal" ? "Unsealing votes…" : "Everyone voted. Unsealing now…"}
                     </p>
                   </div>
                 </div>
               )}
 
+              {privateVoteTransaction.error && (
+                <p role="alert" className="mt-4 text-sm text-destructive">{privateVoteTransaction.error}</p>
+              )}
+
               <div className="mt-4 flex items-center justify-between border-t pt-4 text-xs text-muted-foreground">
                 <span>{party.voting.commitCount} / {party.participants.length} votes sealed</span>
-                <span>{party.voting.revealCount} revealed</span>
+                <span>{party.voting.revealCount} {privateVotingEnabled ? "released on devnet" : "revealed"}</span>
               </div>
             </form>
           )}
