@@ -74,6 +74,18 @@ The host freezes the roster, participants sign checked deposits, everyone readie
 
 `COLLECTOR_CRYPT_API_KEY` is optional and used only for partner attribution. Never place `GACHA_OPERATOR_SECRET_KEY` in a `NEXT_PUBLIC_` variable or commit it.
 
+Verify inventory, API access, operator balances, and configuration without creating a purchase:
+
+```bash
+pnpm check:collector:devnet
+```
+
+Optionally prepare and strictly validate an unsigned transaction (it is never signed or submitted):
+
+```bash
+pnpm check:collector:devnet -- --prepare pokemon_50
+```
+
 ## MagicBlock room program
 
 The Anchor program under `programs/gacha-party-room` implements a compact collaborative room PDA plus a separate base-layer SPL token escrow with participant allowlisting, checked deposits, receipts, and refunds. It contains no simulated financial state. See [docs/room-program.md](docs/room-program.md).

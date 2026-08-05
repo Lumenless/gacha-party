@@ -150,6 +150,7 @@ MagicBlock's eATA model is the later path if contribution balances themselves mu
 - Collector Crypt real mode is devnet-only and uses `https://dev-gacha.collectorcrypt.com`. An API key is optional and sent only when configured for partner attribution.
 - The escrow stores one immutable operator and enforces `FUNDING → LOCKED → RELEASED → PURCHASED → SETTLED`. The host authorizes the irreversible lock; the operator authorizes release and all later audit transitions.
 - Collector purchase and settlement stages are persisted in Supabase before external submission. Reusing the same signed Collector transaction is safe, while recent-operation leases reject concurrent serverless attempts.
+- Before the operator signs a purchase, the app verifies Collector Crypt's server signature plus an exact memo, pack price, six-decimal devnet USDC mint, operator source ATA, fee payer, and program allowlist. Any changed or extra instruction fails closed.
 - `altPlayerAddress` sends the NFT to the dedicated operator. The UI labels this honestly as a custodial devnet demo.
 - SELL verifies that confirmed buyback proceeds reached the operator USDC account. Proportional payouts use integer base units and deterministic remainder allocation.
 - All participant payout transfers and `mark_settled` share one Solana transaction. A retry after completion fails the terminal marker and atomically rolls back every repeated transfer.

@@ -20,6 +20,7 @@
     "generate:program-client": "tsx scripts/generate-program-client.ts",
     "smoke:program:devnet": "tsx scripts/smoke-room-devnet.ts",
     "smoke:private-vote:devnet": "tsx scripts/smoke-private-vote-devnet.ts",
+    "check:collector:devnet": "tsx scripts/check-collector-crypt-devnet.ts",
     "smoke:escrow:localnet": "tsx scripts/smoke-escrow-localnet.ts"
   },
   "dependencies": {

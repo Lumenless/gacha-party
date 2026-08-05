@@ -1,7 +1,11 @@
 import type { Party } from "@/domain/party";
 import { CollectorCryptOpeningPendingError } from "@/integrations/collector-crypt/real";
 import type { CollectorCryptAdapter, OpeningResult } from "@/integrations/collector-crypt/types";
-import { signCollectorCryptTransaction, getGachaOperatorSigner } from "./gacha-operator";
+import {
+  signCollectorCryptTransaction,
+  getGachaOperatorSigner,
+  validateCollectorCryptPurchaseTransaction,
+} from "./gacha-operator";
 import {
   createCollectorOperation,
   updateCollectorOperation,
@@ -52,7 +56,13 @@ export async function executeRealCollectorOpening(
     }
 
     if (!operation.purchaseSignature) {
-      const signed = await signCollectorCryptTransaction(required(operation.preparedTransaction, "prepared transaction"));
+      const preparedTransaction = required(operation.preparedTransaction, "prepared transaction");
+      await validateCollectorCryptPurchaseTransaction(preparedTransaction, {
+        memo: required(operation.memo, "purchase memo"),
+        mint: required(process.env.USDC_MINT ?? null, "devnet USDC mint"),
+        amountBaseUnits: pack.priceBaseUnits,
+      });
+      const signed = await signCollectorCryptTransaction(preparedTransaction);
       const submitted = await collectorCrypt.submitPurchase(signed);
       operation = await updateCollectorOperation(party.id, {
         status: "SUBMITTED",

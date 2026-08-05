@@ -11,6 +11,7 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const isDevnetLive = process.env.COLLECTOR_CRYPT_MODE === "real" && process.env.NEXT_PUBLIC_FUNDS_MODE === "solana";
   return (
     <html lang="en">
       <body className="noise antialiased">
@@ -31,6 +32,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             ) : (
               <span className="rounded-full border border-primary/35 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary">Mock mode</span>
             )}
+            {isDevnetLive ? (
+              <span className="rounded-full border border-primary/35 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary">Collector devnet</span>
+            ) : null}
             <span className="hidden rounded-full border px-3 py-1.5 text-xs text-muted-foreground sm:inline-flex">
               Devnet
             </span>

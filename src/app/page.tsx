@@ -9,6 +9,8 @@ const steps = [
 ];
 
 export default function LandingPage() {
+  const realCollector = process.env.COLLECTOR_CRYPT_MODE === "real";
+  const realFunds = process.env.NEXT_PUBLIC_FUNDS_MODE === "solana";
   return (
     <main>
       <section className="mx-auto grid min-h-[calc(100vh-4.5rem)] max-w-7xl items-center gap-12 px-4 py-12 md:grid-cols-[1.05fr_.95fr] md:px-6 lg:px-8">
@@ -36,7 +38,11 @@ export default function LandingPage() {
               See how it works
             </a>
           </div>
-          <p className="mt-4 text-xs text-muted-foreground">Mock mode is active. No funds move in this build.</p>
+          <p className="mt-4 text-xs text-muted-foreground">
+            {realCollector && realFunds
+              ? "Collector Crypt devnet is active. Transactions use devnet tokens only."
+              : "Demo mode is active. No funds move in this build."}
+          </p>
         </div>
 
         <div className="relative mx-auto w-full max-w-md py-8">

@@ -5,24 +5,30 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("RealCollectorCryptAdapter", () => {
   it("lists devnet machines without requiring an attribution key", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      machines: [{
-        code: "pokemon_50",
-        name: "Elite Pokémon Gacha Pack",
-        shortName: "PKMN 50",
-        image: "",
-        thumbnailUrl: "/pokemon_50.png",
-        price: 50,
-        instantBuyback: 85,
-        public: true,
-        stock: { common: 1, uncommon: 0, rare: 0, epic: 0 },
-      }],
-    }), { status: 200 }));
+    const fetchMock = vi.fn().mockImplementation(async (url: string) => new Response(JSON.stringify(
+      url.endsWith("/api/status")
+        ? { machineStatus: "running", gachas: [{ code: "pokemon_50", status: "open", isOpen: true }] }
+        : {
+            machines: [{
+              code: "pokemon_50",
+              name: "Elite Pokémon Gacha Pack",
+              shortName: "PKMN 50",
+              image: "",
+              thumbnailUrl: "/pokemon_50.png",
+              price: 50,
+              instantBuyback: 85,
+              public: true,
+              stock: { common: 1, uncommon: 0, rare: 0, epic: 0 },
+            }],
+          },
+    ), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
     const [pack] = await new RealCollectorCryptAdapter().listPacks();
     expect(pack.priceBaseUnits).toBe(50_000_000n);
     expect(pack.imageUrl).toBe("https://dev-gacha.collectorcrypt.com/pokemon_50.png");
+    expect(pack.isOpen).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     const headers = new Headers(fetchMock.mock.calls[0][1].headers);
     expect(headers.has("x-api-key")).toBe(false);
   });

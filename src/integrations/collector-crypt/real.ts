@@ -29,6 +29,15 @@ const machinesSchema = z.object({
   }).passthrough()),
 });
 
+const machineStatusSchema = z.object({
+  machineStatus: z.enum(["running", "stopped"]),
+  gachas: z.array(z.object({
+    code: z.string().min(1),
+    status: z.enum(["open", "closed"]),
+    isOpen: z.boolean().nullable().optional(),
+  }).passthrough()),
+}).passthrough();
+
 const preparedPurchaseSchema = z.object({
   memo: z.string().min(1),
   transaction: z.string().min(1),
@@ -126,7 +135,11 @@ export class RealCollectorCryptAdapter implements CollectorCryptAdapter {
   }
 
   async listPacks(): Promise<CollectorPack[]> {
-    const data = machinesSchema.parse(await this.request("/api/machines"));
+    const [data, status] = await Promise.all([
+      this.request("/api/machines").then((value) => machinesSchema.parse(value)),
+      this.request("/api/status").then((value) => machineStatusSchema.parse(value)),
+    ]);
+    const statusByCode = new Map(status.gachas.map((machine) => [machine.code, machine]));
     return data.machines
       .filter((machine) => machine.public)
       .map((machine) => ({
@@ -136,7 +149,10 @@ export class RealCollectorCryptAdapter implements CollectorCryptAdapter {
         imageUrl: absoluteAssetUrl(machine.thumbnailUrl || machine.image, this.baseUrl),
         priceBaseUnits: parseUsdc(decimalUsdc(machine.price)),
         buybackPercent: machine.instantBuyback,
-        isOpen: !machine.stock || Object.values(machine.stock).some((count) => count > 0),
+        isOpen: status.machineStatus === "running" &&
+          statusByCode.get(machine.code)?.status === "open" &&
+          statusByCode.get(machine.code)?.isOpen !== false &&
+          (!machine.stock || Object.values(machine.stock).some((count) => count > 0)),
       }));
   }
 

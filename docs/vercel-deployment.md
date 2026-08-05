@@ -121,6 +121,8 @@ Before enabling these values:
 4. Give participant wallets Collector Crypt’s supported devnet USDC.
 5. Run one low-value end-to-end party before changing Production.
 
+Run `pnpm check:collector:devnet` locally with the same environment first. It only reads inventory and balances. `pnpm check:collector:devnet -- --prepare pokemon_50` additionally asks Collector Crypt for an unsigned purchase and validates every payment-critical field, but never signs or submits it.
+
 ## 6. Remaining limitation
 
 - MagicBlock PER voting fails closed until private accounts, permissions, TEE attestation, and wallet authorization are complete.

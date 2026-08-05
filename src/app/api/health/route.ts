@@ -27,6 +27,9 @@ async function checkProgram(): Promise<boolean> {
 }
 
 export async function GET() {
+  const collectorMode = getCollectorCryptMode();
+  const fundsMode = process.env.NEXT_PUBLIC_FUNDS_MODE === "solana" ? "solana" : "mock";
+  const votingMode = process.env.VOTING_MODE === "magicblock-per" ? "magicblock-per" : "commit-reveal";
   const configIssues = deploymentConfigIssues();
   let database = false;
   let program = false;
@@ -36,20 +39,22 @@ export async function GET() {
     database = !error;
   } catch { /* reported below */ }
   try { program = await checkProgram(); } catch { /* reported below */ }
-  if (getCollectorCryptMode() === "real") {
+  if (collectorMode === "real") {
     try { collectorCrypt = (await collectorCryptAdapter().listPacks()).length > 0; } catch { /* reported below */ }
   }
-  const ready = configIssues.length === 0 && database && program && (getCollectorCryptMode() !== "real" || collectorCrypt);
+  const ready = configIssues.length === 0 && database && program && (collectorMode !== "real" || collectorCrypt);
   return NextResponse.json({
     ready,
     storage: getServerStorageMode(),
+    modes: { collectorCrypt: collectorMode, funds: fundsMode, voting: votingMode },
     checks: {
       configuration: configIssues.length === 0,
       database,
       solanaProgram: program,
-      collectorCrypt,
-      privateVoting: process.env.VOTING_MODE === "magicblock-per",
-      realFunds: process.env.NEXT_PUBLIC_FUNDS_MODE === "solana",
+      collectorCrypt: collectorMode === "mock" || collectorCrypt,
+      collectorCryptApi: collectorMode === "real" ? collectorCrypt : null,
+      privateVoting: votingMode === "magicblock-per",
+      realFunds: fundsMode === "solana",
     },
     issues: configIssues,
   }, { status: ready ? 200 : 503 });
