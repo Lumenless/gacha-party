@@ -97,7 +97,7 @@ export function CreatePartyForm({ packs, exactPackPrice = false }: { packs: Pack
       let roomRoute = partyId;
       if (activationRequired) {
         if (!walletAuth.walletAddress || !walletAuth.canSignTransactions) {
-          throw new Error("Reconnect the host wallet to activate the MagicBlock room.");
+          throw new Error("Connect the host wallet to activate the MagicBlock room.");
         }
         await activateMagicBlockRoom({
           hostWallet: walletAuth.walletAddress,
@@ -285,7 +285,7 @@ export function CreatePartyForm({ packs, exactPackPrice = false }: { packs: Pack
               className="mt-4 w-full active:translate-y-px"
               loading={isSubmitting}
               disabled={!selectedPack || (activationRequired && !walletAuth.canSignTransactions)}
-              title={activationRequired && !walletAuth.canSignTransactions ? "Reconnect the host wallet from the header to enable signing." : undefined}
+              title={activationRequired && !walletAuth.canSignTransactions ? "Connect the host wallet from the header to enable signing." : undefined}
             >
               {pendingLabel ?? (activationStage === "error" && createdPartyId ? "Retry activation" : activationRequired ? "Create & activate" : "Create room")}
               {!isSubmitting && (activationRequired ? <WalletCards className="size-4" aria-hidden="true" /> : <ArrowRight className="size-4" aria-hidden="true" />)}

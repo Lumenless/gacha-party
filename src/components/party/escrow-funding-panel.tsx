@@ -1,8 +1,9 @@
 "use client";
 
-import { AlertTriangle, ExternalLink, Landmark, RefreshCw, RotateCcw, ShieldCheck, WalletCards } from "lucide-react";
+import { AlertTriangle, ExternalLink, Landmark, RefreshCw, RotateCcw, ShieldCheck } from "lucide-react";
 import { formatUsdc } from "@/domain/money";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { WalletAuthButton } from "@/components/wallet/wallet-auth-button";
 import type { EscrowIntent, EscrowStatus, EscrowTransactionState } from "@/integrations/solana/use-solana-escrow";
@@ -175,8 +176,8 @@ export function EscrowFundingPanel({
 
       {isParticipant && tokenAccount && !receipt && fundingOpen && !deadlinePassed && (
         <form onSubmit={(event) => { event.preventDefault(); onReviewDeposit(); }} className="mt-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            <div className="flex-1 space-y-1.5">
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+            <div className="min-w-0 space-y-1.5">
               <label htmlFor="onchain-contribution" className="text-sm font-medium">Contribution amount</label>
               <div className="relative">
                 <Input id="onchain-contribution" value={contribution} onChange={(event) => onContributionChange(event.target.value)} inputMode="decimal" autoComplete="off" placeholder={formatUsdc(remaining)} className="pr-24 font-mono tabular-nums" aria-describedby="onchain-contribution-help" required />
@@ -184,7 +185,7 @@ export function EscrowFundingPanel({
               </div>
               <p id="onchain-contribution-help" className="text-xs text-muted-foreground">Up to {formatUsdc(remaining)} {tokenLabel} remains. You can deposit once.</p>
             </div>
-            <Button type="submit"><WalletCards className="size-4" aria-hidden="true" /> Review deposit</Button>
+            <Button type="submit" className="w-full sm:mt-7 sm:w-auto">Deposit</Button>
           </div>
         </form>
       )}
@@ -266,6 +267,7 @@ export function EscrowTransactionReview({
   onConfirm,
   onRecover,
   onCancel,
+  presentation = "card",
 }: {
   intent: EscrowIntent;
   transaction: EscrowTransactionState;
@@ -276,6 +278,7 @@ export function EscrowTransactionReview({
   onConfirm: () => void;
   onRecover: () => void;
   onCancel: () => void;
+  presentation?: "card" | "dialog";
 }) {
   const pending = transaction.action === intent && ["preparing", "simulating", "signing", "submitting", "confirming", "recovering"].includes(transaction.stage);
   const confirmed = transaction.action === intent && transaction.stage === "confirmed" ? transaction.signature : null;
@@ -283,9 +286,10 @@ export function EscrowTransactionReview({
   const actionError = transaction.action === intent ? transaction.error : null;
   const stageLabel = transaction.stage === "preparing" ? "Preparing…" : transaction.stage === "simulating" ? "Simulating…" : transaction.stage === "signing" ? "Confirm in wallet…" : transaction.stage === "submitting" ? "Submitting…" : transaction.stage === "recovering" ? "Checking status…" : "Confirming…";
   const assets = intent === "initialize" || intent === "cancel" ? "None" : intent === "lock" ? "No transfer; refunds disabled" : `${formatUsdc(amount)} ${tokenLabel}`;
+  const confirmLabel = intent === "deposit" ? `Deposit ${formatUsdc(amount)} ${tokenLabel}` : "Confirm and sign";
 
-  return (
-    <div className="rounded-xl border border-primary/40 bg-card p-5 sm:p-6" aria-live="polite">
+  const review = (
+    <div className={presentation === "card" ? "rounded-xl border border-primary/40 bg-card p-5 sm:p-6" : ""} aria-live="polite">
       <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">{intentCopy[intent].eyebrow}</p>
       <h2 className="mt-2 text-xl font-semibold">{intentCopy[intent].title}</h2>
       <p className="mt-2 text-sm leading-6 text-muted-foreground">The exact transaction will be simulated before your wallet opens. A signature is never requested automatically.</p>
@@ -303,9 +307,24 @@ export function EscrowTransactionReview({
         {submitted && !confirmed ? (
           <Button type="button" onClick={onRecover} loading={pending}>Check transaction status</Button>
         ) : canSignTransactions ? (
-          <Button type="button" onClick={onConfirm} loading={pending} disabled={Boolean(confirmed)}>{pending ? stageLabel : confirmed ? "Confirmed" : "Confirm and sign"}</Button>
+          <Button type="button" onClick={onConfirm} loading={pending} disabled={Boolean(confirmed)}>{pending ? stageLabel : confirmed ? "Confirmed" : confirmLabel}</Button>
         ) : <WalletAuthButton />}
       </div>
     </div>
   );
+
+  if (presentation === "dialog") {
+    return (
+      <Dialog
+        open
+        ariaLabel={intentCopy[intent].title}
+        dismissible={!pending && !Boolean(submitted && !confirmed)}
+        onClose={onCancel}
+      >
+        {review}
+      </Dialog>
+    );
+  }
+
+  return review;
 }

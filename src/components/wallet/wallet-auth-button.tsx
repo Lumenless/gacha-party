@@ -10,7 +10,7 @@ function truncate(address: string) {
 }
 
 export function WalletAuthButton({ compact = false }: { compact?: boolean }) {
-  const { wallets, walletAddress, canSignTransactions, status, error, connect, disconnect } = useWalletAuth();
+  const { wallets, walletAddress, status, error, connect, disconnect } = useWalletAuth();
   const [open, setOpen] = useState(false);
 
   if (walletAddress) {
@@ -18,7 +18,6 @@ export function WalletAuthButton({ compact = false }: { compact?: boolean }) {
       <div className="relative">
         <Button type="button" variant="secondary" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
           <span className="size-2 rounded-full bg-primary" aria-hidden="true" />
-          {!canSignTransactions && <span>Reconnect</span>}
           <span className="font-mono">{truncate(walletAddress)}</span>
           <ChevronDown className="size-4" aria-hidden="true" />
         </Button>
@@ -26,23 +25,8 @@ export function WalletAuthButton({ compact = false }: { compact?: boolean }) {
           <div className="absolute right-0 z-50 mt-2 w-64 rounded-lg border bg-card p-2 shadow-2xl">
             <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
               <ShieldCheck className="size-4 text-primary" aria-hidden="true" />
-              {canSignTransactions ? "Verified · Transactions enabled" : "Verified session"}
+              Verified · Transactions enabled
             </div>
-            {!canSignTransactions && (
-              <div className="mb-2 border-b pb-2">
-                <p className="px-3 pb-2 text-xs leading-5 text-muted-foreground">Reconnect the same wallet before signing a room transaction.</p>
-                {wallets.map((wallet) => (
-                  <button
-                    key={wallet.name}
-                    type="button"
-                    onClick={() => { setOpen(false); void connect(wallet); }}
-                    className="flex min-h-11 w-full items-center justify-between rounded-md px-3 text-left text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    Enable {wallet.name}<WalletCards className="size-4 text-muted-foreground" aria-hidden="true" />
-                  </button>
-                ))}
-              </div>
-            )}
             <button type="button" onClick={() => void disconnect()} className="min-h-11 w-full rounded-md px-3 text-left text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
               Disconnect wallet
             </button>

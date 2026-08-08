@@ -680,6 +680,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                   mint={escrow.mint}
                   tokenLabel={fundsTokenLabel}
                   canSignTransactions={walletAuth.canSignTransactions}
+                  presentation={escrowIntent === "deposit" ? "dialog" : "card"}
                   onConfirm={() => void confirmEscrowIntent()}
                   onRecover={() => void escrow.recoverPending()}
                   onCancel={() => {

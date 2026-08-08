@@ -6,8 +6,10 @@ import { getWallets } from "@wallet-standard/app";
 import {
   StandardConnect,
   StandardDisconnect,
+  StandardEvents,
   type StandardConnectFeature,
   type StandardDisconnectFeature,
+  type StandardEventsFeature,
 } from "@wallet-standard/features";
 import {
   SolanaSignMessage,
@@ -15,6 +17,7 @@ import {
   type SolanaSignMessageFeature,
   type SolanaSignTransactionFeature,
 } from "@solana/wallet-standard-features";
+import { isLiveWalletConnection } from "./wallet-connection";
 
 type WalletStatus = "idle" | "connecting" | "signing" | "authenticated" | "error";
 
@@ -41,15 +44,16 @@ function toBase64(bytes: Uint8Array) {
 }
 
 function supportsAuthentication(wallet: Wallet): wallet is Wallet & {
-  features: StandardConnectFeature & SolanaSignMessageFeature & Partial<StandardDisconnectFeature>;
+  features: StandardConnectFeature & SolanaSignMessageFeature & SolanaSignTransactionFeature & Partial<StandardDisconnectFeature>;
 } {
-  return StandardConnect in wallet.features && SolanaSignMessage in wallet.features;
+  return StandardConnect in wallet.features && SolanaSignMessage in wallet.features && SolanaSignTransaction in wallet.features;
 }
 
 function solanaAccount(accounts: readonly WalletAccount[]) {
   return accounts.find((account) =>
     account.chains.some((chain) => chain.startsWith("solana:")) &&
-    account.features.includes(SolanaSignMessage),
+    account.features.includes(SolanaSignMessage) &&
+    account.features.includes(SolanaSignTransaction),
   );
 }
 
@@ -70,21 +74,34 @@ export function WalletAuthProvider({ children }: { children: React.ReactNode }) 
     const offRegister = registry.on("register", refresh);
     const offUnregister = registry.on("unregister", refresh);
 
-    void fetch("/api/auth/session", { cache: "no-store" })
-      .then((response) => response.json() as Promise<{ wallet: string | null }>)
-      .then((session) => {
-        if (session.wallet) {
-          setWalletAddress(session.wallet);
-          setStatus("authenticated");
-        }
-      })
-      .catch(() => undefined);
+    // A server cookie cannot sign. Expire any remembered session until a live
+    // Wallet Standard account reconnects and proves ownership again.
+    void fetch("/api/auth/session", { method: "DELETE" }).catch(() => undefined);
 
     return () => {
       offRegister();
       offUnregister();
     };
   }, [enabled]);
+
+  useEffect(() => {
+    if (!activeWallet || !(StandardEvents in activeWallet.features)) return;
+    const events = activeWallet.features[StandardEvents] as StandardEventsFeature[typeof StandardEvents];
+    return events.on("change", ({ accounts }) => {
+      if (!accounts) return;
+      const current = accounts.find((account) => account.address === activeAccount?.address) ?? null;
+      if (isLiveWalletConnection(activeWallet, current)) {
+        setActiveAccount(current);
+        return;
+      }
+      setActiveWallet(null);
+      setActiveAccount(null);
+      setWalletAddress(null);
+      setError(null);
+      setStatus("idle");
+      void fetch("/api/auth/session", { method: "DELETE" }).catch(() => undefined);
+    });
+  }, [activeAccount?.address, activeWallet]);
 
   const connect = useCallback(async (wallet: Wallet) => {
     if (!supportsAuthentication(wallet)) {
@@ -97,7 +114,10 @@ export function WalletAuthProvider({ children }: { children: React.ReactNode }) 
     try {
       const connected = await wallet.features[StandardConnect].connect();
       const account = solanaAccount(connected.accounts);
-      if (!account) throw new Error("Choose a Solana account that supports message signing.");
+      if (!account) throw new Error("Choose a Solana account that supports message and transaction signing.");
+      if (!isLiveWalletConnection(wallet, account)) {
+        throw new Error("This wallet cannot sign versioned Solana transactions.");
+      }
 
       setStatus("signing");
       const challengeResponse = await fetch("/api/auth/challenge", {
@@ -126,7 +146,7 @@ export function WalletAuthProvider({ children }: { children: React.ReactNode }) 
         }),
       });
       const session = await verifyResponse.json() as { wallet?: string; error?: string };
-      if (!verifyResponse.ok || !session.wallet) {
+      if (!verifyResponse.ok || !session.wallet || session.wallet !== account.address) {
         throw new Error(session.error ?? "The wallet signature could not be verified.");
       }
 
@@ -157,7 +177,7 @@ export function WalletAuthProvider({ children }: { children: React.ReactNode }) 
 
   const signTransaction = useCallback(async (transaction: Uint8Array) => {
     if (!activeWallet || !activeAccount || !(SolanaSignTransaction in activeWallet.features)) {
-      throw new Error("Reconnect a wallet that supports transaction signing.");
+      throw new Error("Connect a wallet that supports transaction signing.");
     }
     if (!activeAccount.features.includes(SolanaSignTransaction)) {
       throw new Error("The selected Solana account cannot sign transactions.");
@@ -177,7 +197,7 @@ export function WalletAuthProvider({ children }: { children: React.ReactNode }) 
 
   const signMessage = useCallback(async (message: Uint8Array) => {
     if (!activeWallet || !activeAccount || !(SolanaSignMessage in activeWallet.features)) {
-      throw new Error("Reconnect a wallet that supports message signing.");
+      throw new Error("Connect a wallet that supports message signing.");
     }
     const feature = activeWallet.features[SolanaSignMessage] as SolanaSignMessageFeature[typeof SolanaSignMessage];
     const [result] = await feature.signMessage({
@@ -197,7 +217,7 @@ export function WalletAuthProvider({ children }: { children: React.ReactNode }) 
     walletAddress,
     status,
     error,
-    canSignTransactions: Boolean(activeWallet && activeAccount && SolanaSignTransaction in activeWallet.features),
+    canSignTransactions: isLiveWalletConnection(activeWallet, activeAccount),
     connect,
     disconnect,
     signMessage,

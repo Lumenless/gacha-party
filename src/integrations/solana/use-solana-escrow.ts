@@ -111,7 +111,7 @@ export function useSolanaEscrow(party: Pick<Party, "id" | "hostWallet" | "fundin
     let submittedSignature: string | null = null;
     try {
       if (!configured) throw new Error("Real funding is not configured for this deployment.");
-      if (!wallet.canSignTransactions) throw new Error("Reconnect your wallet to enable transaction signing.");
+      if (!wallet.canSignTransactions) throw new Error("Connect your wallet to enable transaction signing.");
       if (wallet.walletAddress) {
         const pending = parsePendingEscrowTransaction(localStorage.getItem(
           pendingEscrowTransactionKey(party.id, wallet.walletAddress),

@@ -89,7 +89,7 @@ export function useMagicBlockRoom(party: Pick<Party, "id" | "hostWallet" | "maxP
     let submittedSignature: string | null = null;
     try {
       if (!wallet.canSignTransactions) {
-        throw new Error("Reconnect your wallet to enable transaction signing.");
+        throw new Error("Connect your wallet to enable transaction signing.");
       }
       if (wallet.walletAddress) {
         const pending = parsePendingRoomTransaction(localStorage.getItem(

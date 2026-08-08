@@ -63,7 +63,7 @@ Mock settlement uses one deterministic idempotency key per party, mint, outcome,
 ## Milestone 4A decision — verified wallet sessions
 
 - Mock identity remains the default (`NEXT_PUBLIC_WALLET_MODE=mock`) so the two-browser demo works without extensions or funds.
-- Wallet mode discovers injected wallets through Wallet Standard and requires `solana:signMessage`; it does not request a transaction.
+- Wallet mode discovers injected wallets through Wallet Standard and requires message signing plus v0 transaction signing. A remembered server cookie without a live signing account is treated as disconnected and expired; the address, party list, and wallet-only actions appear only after fresh ownership verification. Connecting still requests only the free authentication message, not a transaction.
 - The server issues a five-minute, one-time challenge and verifies the Ed25519 signature against the base58 Solana address.
 - Successful verification creates a signed, 12-hour, HttpOnly, SameSite=Lax session cookie. In wallet mode every mutating party route replaces the submitted wallet field with the session wallet.
 - `AUTH_SESSION_SECRET` is mandatory in production and recommended locally. The development fallback is random per process, so sessions reset when the server restarts if it is omitted.
