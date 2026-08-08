@@ -26,6 +26,19 @@ class PartyRepository {
     return data ? data.state as Party : null;
   }
 
+  async getByRoomAddress(roomAddress: string): Promise<Party | null> {
+    if (getServerStorageMode() === "memory") {
+      return [...memoryStore.values()].find((party) => party.roomAddress === roomAddress) ?? null;
+    }
+    const { data, error } = await getServerSupabase()
+      .from("parties")
+      .select("state")
+      .eq("state->>roomAddress", roomAddress)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? data.state as Party : null;
+  }
+
   async save(party: Party, expectedRevision?: number): Promise<void> {
     if (getServerStorageMode() === "memory") {
       const current = memoryStore.get(party.id);

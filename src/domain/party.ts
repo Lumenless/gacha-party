@@ -89,6 +89,7 @@ export type PartyActivity = {
 
 export type Party = {
   id: string;
+  roomAddress?: string;
   name: string;
   hostWallet: string;
   packCode: string;

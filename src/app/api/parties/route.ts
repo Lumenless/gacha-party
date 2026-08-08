@@ -8,7 +8,7 @@ export async function POST(request: Request) {
   try {
     const wallet = walletModeEnabled() ? requireRequestWallet(request) : "DEMO_HOST_WALLET";
     const party = await createParty(await request.json(), collectorCryptAdapter(), { wallet });
-    return NextResponse.json({ id: party.id }, { status: 201 });
+    return NextResponse.json({ id: party.id, roomAddress: party.roomAddress }, { status: 201 });
   } catch (error) {
     const message = error instanceof ZodError
       ? error.issues[0]?.message ?? "Check the party details."

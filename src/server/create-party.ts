@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { parseUsdc } from "@/domain/money";
 import { createPartySchema, type Party } from "@/domain/party";
 import type { CollectorCryptAdapter } from "@/integrations/collector-crypt/types";
+import { findRoomAddress } from "@/integrations/magicblock/router-client";
 import { partyRepository } from "./party-repository";
 
 export async function createParty(
@@ -22,8 +23,13 @@ export async function createParty(
     throw new Error("Real-funds parties must escrow the exact live pack price.");
   }
 
+  const id = randomUUID().slice(0, 8);
+  const roomAddress = process.env.NEXT_PUBLIC_ROOM_STATE_MODE === "magicblock"
+    ? String(await findRoomAddress(identity.wallet, id))
+    : undefined;
   const party: Party = {
-    id: randomUUID().slice(0, 8),
+    id,
+    roomAddress,
     name: input.name,
     hostWallet: identity.wallet,
     packCode: pack.code,

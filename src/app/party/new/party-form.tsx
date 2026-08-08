@@ -17,6 +17,7 @@ import {
   roomActivationError,
   type RoomActivationStage,
 } from "@/integrations/magicblock/activate-room";
+import { findRoomAddress } from "@/integrations/magicblock/router-client";
 
 type PackOption = {
   code: string;
@@ -29,7 +30,7 @@ type PackOption = {
 };
 
 function defaultDeadline() {
-  const date = new Date(Date.now() + 30 * 60 * 1000);
+  const date = new Date(Date.now() + 24 * 60 * 60 * 1000);
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   return local.toISOString().slice(0, 16);
 }
@@ -87,12 +88,13 @@ export function CreatePartyForm({ packs, exactPackPrice = false }: { packs: Pack
           headers: { "content-type": "application/json" },
           body: JSON.stringify(values),
         });
-        const result = (await response.json()) as { id?: string; error?: string };
+        const result = (await response.json()) as { id?: string; roomAddress?: string; error?: string };
         if (!response.ok || !result.id) throw new Error(result.error ?? "Party creation failed.");
         partyId = result.id;
         setCreatedPartyId(partyId);
       }
 
+      let roomRoute = partyId;
       if (activationRequired) {
         if (!walletAuth.walletAddress || !walletAuth.canSignTransactions) {
           throw new Error("Reconnect the host wallet to activate the MagicBlock room.");
@@ -104,8 +106,9 @@ export function CreatePartyForm({ packs, exactPackPrice = false }: { packs: Pack
           signTransaction: walletAuth.signTransaction,
           onStage: setActivationStage,
         });
+        roomRoute = String(await findRoomAddress(walletAuth.walletAddress, partyId));
       }
-      router.push(`/party/${partyId}?host=1`);
+      router.push(`/party/${roomRoute}?host=1`);
     } catch (error) {
       const message = partyId
         ? roomActivationError(error)

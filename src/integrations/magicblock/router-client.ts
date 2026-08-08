@@ -14,6 +14,7 @@ import {
   setTransactionMessageFeePayer,
   type Address,
   type Instruction,
+  type ReadonlyUint8Array,
   type Signature,
 } from "@solana/kit";
 import {
@@ -24,6 +25,7 @@ import {
 } from "@magicblock-labs/ephemeral-rollups-kit";
 import {
   GACHA_PARTY_ROOM_PROGRAM_ADDRESS,
+  ROOM_STATE_DISCRIMINATOR,
   fetchMaybeRoomState,
   getCommitRoomInstruction,
   getDelegateRoomInstruction,
@@ -56,6 +58,17 @@ export function encodeRoomId(partyId: string): Uint8Array {
   const encoded = new TextEncoder().encode(partyId);
   if (encoded.length !== 8) throw new Error("Party IDs must encode to exactly 8 bytes.");
   return encoded;
+}
+
+export function decodeRoomId(roomId: ReadonlyUint8Array): string {
+  if (roomId.length !== 8) throw new Error("On-chain room IDs must contain exactly 8 bytes.");
+  const decoded = new TextDecoder("utf-8", { fatal: true }).decode(roomId);
+  if (!/^[a-f0-9]{8}$/.test(decoded)) throw new Error("The on-chain room ID is invalid.");
+  return decoded;
+}
+
+function bytesEqual(left: ReadonlyUint8Array, right: ReadonlyUint8Array) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 export async function findRoomAddress(host: string, partyId: string): Promise<Address> {
@@ -182,8 +195,18 @@ export class MagicRouterRoomClient {
 
   async fetchRoom(host: string, partyId: string): Promise<RoomAccountSnapshot | null> {
     const roomAddress = await findRoomAddress(host, partyId);
+    return this.fetchRoomAtAddress(roomAddress);
+  }
+
+  async fetchRoomAtAddress(value: string | Address): Promise<RoomAccountSnapshot | null> {
+    const roomAddress = address(value);
     const account = await fetchMaybeRoomState(this.connection.rpc, roomAddress);
-    return account.exists ? { address: roomAddress, ...account.data } : null;
+    if (
+      !account.exists ||
+      account.programAddress !== GACHA_PARTY_ROOM_PROGRAM_ADDRESS ||
+      !bytesEqual(account.data.discriminator, ROOM_STATE_DISCRIMINATOR)
+    ) return null;
+    return { address: roomAddress, ...account.data };
   }
 
   async submitSignedTransaction(signedTransaction: Uint8Array): Promise<Signature> {

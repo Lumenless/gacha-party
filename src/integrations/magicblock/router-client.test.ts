@@ -1,13 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { encodeRoomId, findRoomAddress } from "./router-client";
+import { decodeRoomId, encodeRoomId, findRoomAddress } from "./router-client";
 
 describe("Magic Router room addressing", () => {
   it("encodes the app's eight-character party IDs without padding", () => {
     expect(Array.from(encodeRoomId("a1b2c3d4"))).toEqual(Array.from(new TextEncoder().encode("a1b2c3d4")));
+    expect(decodeRoomId(encodeRoomId("a1b2c3d4"))).toBe("a1b2c3d4");
   });
 
   it("rejects IDs that cannot match the program's fixed seed", () => {
     expect(() => encodeRoomId("short")).toThrow("exactly 8 bytes");
+    expect(() => decodeRoomId(new TextEncoder().encode("INVALID!"))).toThrow("invalid");
   });
 
   it("derives a stable room PDA", async () => {

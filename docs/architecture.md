@@ -89,6 +89,7 @@ Contribution amounts, the funding-complete gate, custody, votes, and settlement 
 - Room activation combines PDA creation and delegation in one reviewed signature. Join and ready updates remain separate user-triggered signatures.
 - Before opening the wallet, the UI shows the network, program, asset impact, and fee source, then simulates the exact Router-prepared bytes against their execution endpoint (Solana devnet before delegation; the selected ER after delegation). Magic Router itself does not expose `simulateTransaction`. The signed bytes are submitted unchanged through the Router and tracked through confirmed status with a devnet explorer link.
 - Chain and server updates are deliberately sequenced: on-chain confirmation happens first, then the existing application mutation. Retries inspect the room PDA and skip an already-completed chain step, preventing duplicate join/ready transactions after a server or network failure.
+- Shareable room URLs use the MagicBlock social-room PDA as their canonical identifier. The server decodes the PDA's stored eight-byte room ID, verifies its host and derivation, and then loads product state from Supabase; legacy short-ID links redirect to the canonical on-chain URL.
 - The SSE room remains the product-state source for funding, reveal, and settlement. The MagicBlock PDA proves public wallet membership, ready state, and the authoritative one-shot opening timestamp.
 
 ## Milestone 6A decision — ER-authoritative opening
