@@ -11,7 +11,7 @@ let nextToastId = 0;
 
 function ErrorToast({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: number) => void }) {
   useEffect(() => {
-    const timer = window.setTimeout(() => onDismiss(toast.id), 6_000);
+    const timer = window.setTimeout(() => onDismiss(toast.id), 10_000);
     return () => window.clearTimeout(timer);
   }, [onDismiss, toast.id]);
 

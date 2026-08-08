@@ -51,7 +51,7 @@ function transactionError(cause: unknown) {
   if (/insufficient.*(fund|balance)|custom program error: 0x1784/i.test(message)) {
     return "This wallet does not have enough tokens or devnet SOL for the contribution and account rent.";
   }
-  if (/already in use|already initialized/i.test(message)) return "This on-chain record already exists. Refresh the escrow state.";
+  if (/already in use|already initialized/i.test(message)) return "This onchain record already exists. Refresh the escrow state.";
   return message;
 }
 
@@ -181,7 +181,7 @@ export function useSolanaEscrow(party: Pick<Party, "id" | "hostWallet" | "fundin
       const failed = /failed after submission/i.test(cause instanceof Error ? cause.message : "");
       const expiredWithoutState = Date.now() - pending.submittedAt >= PENDING_TRANSACTION_EXPIRY_MS;
       const message = expiredWithoutState
-        ? "The submitted transaction was not found on-chain after its blockhash expired. It is safe to review and sign a fresh transaction."
+        ? "The submitted transaction was not found onchain after its blockhash expired. It is safe to review and sign a fresh transaction."
         : transactionError(cause);
       if (failed || expiredWithoutState) localStorage.removeItem(key);
       setTransaction({ action: pending.action, stage: "error", signature: pending.signature, error: message });

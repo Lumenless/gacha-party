@@ -127,7 +127,7 @@ describe("multiplayer room service", () => {
     expect(opening.countdownEndsAt).toBe(new Date(chainCountdownEndsAt).toISOString());
   });
 
-  it("idempotently mirrors exact on-chain receipts and handles refunds", async () => {
+  it("idempotently mirrors exact onchain receipts and handles refunds", async () => {
     await joinParty("party-1", { wallet: "DemoPlayerWallet0001", displayName: "Alice" }, realtime);
     const roster = ["DEMO_HOST_WALLET", "DemoPlayerWallet0001"];
     const funded = await syncOnchainContributions(
@@ -171,7 +171,7 @@ describe("multiplayer room service", () => {
     expect(refunded.participants[0]?.contributionBaseUnits).toBe("0");
   });
 
-  it("rejects an on-chain mirror whose receipts do not equal the escrow total", async () => {
+  it("rejects an onchain mirror whose receipts do not equal the escrow total", async () => {
     await joinParty("party-1", { wallet: "DemoPlayerWallet0001", displayName: "Alice" }, realtime);
     await expect(syncOnchainContributions(
       "party-1",
@@ -183,7 +183,24 @@ describe("multiplayer room service", () => {
     )).rejects.toThrow("receipts do not match");
   });
 
-  it("mirrors on-chain cancellation and keeps later refund reconciliation idempotent", async () => {
+  it("repairs a timezone-shifted party deadline while mirroring onchain receipts", async () => {
+    const canonicalDeadline = new Date(Date.now() + 30_000).toISOString();
+    const reconciled = await syncOnchainContributions(
+      "party-1",
+      new Map([["DEMO_HOST_WALLET", parseUsdc("10")]]),
+      parseUsdc("10"),
+      parseUsdc("50"),
+      ["DEMO_HOST_WALLET"],
+      realtime,
+      false,
+      canonicalDeadline,
+    );
+
+    expect(reconciled.fundingDeadline).toBe(canonicalDeadline);
+    expect(reconciled.participants[0]?.contributionBaseUnits).toBe(parseUsdc("10").toString());
+  });
+
+  it("mirrors onchain cancellation and keeps later refund reconciliation idempotent", async () => {
     await joinParty("party-1", { wallet: "DemoPlayerWallet0001", displayName: "Alice" }, realtime);
     const roster = ["DEMO_HOST_WALLET", "DemoPlayerWallet0001"];
     const expired = await syncOnchainContributions(

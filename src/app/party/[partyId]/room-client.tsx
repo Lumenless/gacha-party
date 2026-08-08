@@ -195,21 +195,27 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
   const currentParticipant = identity
     ? party.participants.find(({ wallet }) => wallet === identity.wallet)
     : undefined;
-  const funded = useMemo(
+  const mirroredFunded = useMemo(
     () => party.participants.reduce((sum, item) => sum + BigInt(item.contributionBaseUnits), 0n),
     [party.participants],
   );
+  const funded = escrow.enabled && escrow.snapshot && escrow.rosterMatchesParty
+    ? escrow.snapshot.totalContributed
+    : mirroredFunded;
   const target = BigInt(party.fundingTargetBaseUnits);
   const remaining = target - funded;
   const percentHundredths = target === 0n ? 0n : (funded * 10_000n) / target;
   const percent = Number(percentHundredths) / 100;
+  const effectiveFundingDeadline = escrow.enabled && escrow.snapshot
+    ? new Date(Number(escrow.snapshot.fundingDeadline) * 1_000)
+    : new Date(party.fundingDeadline);
   const deadline = new Intl.DateTimeFormat("en", {
     hour: "2-digit",
     minute: "2-digit",
     month: "short",
     day: "numeric",
-  }).format(new Date(party.fundingDeadline));
-  const deadlinePassed = clock > new Date(party.fundingDeadline).getTime();
+  }).format(effectiveFundingDeadline);
+  const deadlinePassed = clock > effectiveFundingDeadline.getTime();
   const countdownMilliseconds = party.countdownEndsAt && clock
     ? new Date(party.countdownEndsAt).getTime() - clock
     : 3_000;
@@ -255,8 +261,9 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
     const receiptAmount = escrow.receipt?.amount ?? 0n;
     const mirrorAmount = BigInt(currentParticipant.contributionBaseUnits);
     const statusMismatch = escrow.snapshot.status === ProgramEscrowStatus.Cancelled && party.status !== "EXPIRED";
-    const syncKey = `${escrow.snapshot.status}:${party.status}:${escrow.snapshot.totalContributed}:${funded}:${receiptAmount}:${mirrorAmount}`;
-    if ((statusMismatch || receiptAmount !== mirrorAmount || escrow.snapshot.totalContributed !== funded) && escrowSyncRequested.current !== syncKey) {
+    const partyDeadlineSeconds = BigInt(Math.floor(new Date(party.fundingDeadline).getTime() / 1_000));
+    const syncKey = `${escrow.snapshot.status}:${party.status}:${escrow.snapshot.totalContributed}:${mirroredFunded}:${receiptAmount}:${mirrorAmount}:${escrow.snapshot.fundingDeadline}:${partyDeadlineSeconds}`;
+    if ((statusMismatch || receiptAmount !== mirrorAmount || escrow.snapshot.totalContributed !== mirroredFunded || escrow.snapshot.fundingDeadline !== partyDeadlineSeconds) && escrowSyncRequested.current !== syncKey) {
       escrowSyncRequested.current = syncKey;
     } else {
       return;
@@ -267,7 +274,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
       });
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [currentParticipant, escrow.enabled, escrow.receipt, escrow.snapshot, escrow.status, funded, identity, mutate, party.status]);
+  }, [currentParticipant, escrow.enabled, escrow.receipt, escrow.snapshot, escrow.status, identity, mirroredFunded, mutate, party.fundingDeadline, party.status]);
 
   useEffect(() => {
     if (
@@ -622,7 +629,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
             <div className="mt-4 flex flex-wrap gap-4 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1.5"><Clock3 className="size-4" aria-hidden="true" /> Ends {deadline}</span>
               <span className="inline-flex items-center gap-1.5"><ShieldCheck className="size-4" aria-hidden="true" /> Simple majority</span>
-              <span className="inline-flex items-center gap-1.5"><Sparkles className="size-4" aria-hidden="true" /> {escrow.enabled ? `On-chain ${fundsTokenLabel}` : "Mock USDC only"}</span>
+              <span className="inline-flex items-center gap-1.5"><Sparkles className="size-4" aria-hidden="true" /> {escrow.enabled ? `Onchain ${fundsTokenLabel}` : "Mock USDC only"}</span>
             </div>
           </div>
 
@@ -703,7 +710,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                 loading={pending === "join"}
                 disabled={chainRoom.enabled && chainRoom.status !== "active"}
               >
-                {chainRoom.enabled && !chainRoom.isParticipant(identity.wallet) ? "Review on-chain join" : `Join with ${walletAuth.enabled ? "wallet" : "demo wallet"}`}
+                {chainRoom.enabled && !chainRoom.isParticipant(identity.wallet) ? "Review onchain join" : `Join with ${walletAuth.enabled ? "wallet" : "demo wallet"}`}
               </Button>
             </form>
           )}
@@ -727,7 +734,9 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
             </div>
             <ul className="mt-4 space-y-2">
               {party.participants.map((participant) => {
-                const contributed = BigInt(participant.contributionBaseUnits);
+                const contributed = escrow.enabled && escrow.status === "active" && participant.wallet === identity?.wallet
+                  ? escrow.receipt?.amount ?? 0n
+                  : BigInt(participant.contributionBaseUnits);
                 const share = funded > 0n ? Number((contributed * 10_000n) / funded) / 100 : 0;
                 return (
                   <li key={participant.wallet} className="flex min-h-16 items-center justify-between gap-3 rounded-lg bg-muted/60 px-3">
@@ -776,7 +785,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
             <div className="rounded-xl border border-primary/30 bg-primary/5 p-5 sm:p-6">
               <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
                 <div>
-                  <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Target reached on-chain</p>
+                  <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Target reached onchain</p>
                   <h2 className="mt-2 text-xl font-semibold">Ready for the real pull?</h2>
                   <p className="mt-1 text-sm leading-6 text-muted-foreground">
                     {escrow.snapshot?.status === ProgramEscrowStatus.Locked

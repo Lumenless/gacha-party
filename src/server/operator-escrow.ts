@@ -43,9 +43,6 @@ export async function registerPartyEscrowParticipant(party: Party, participant: 
   if (escrow.fundingTarget !== BigInt(party.fundingTargetBaseUnits) || escrow.maxPlayers !== party.maxPlayers) {
     throw new Error("The escrow funding configuration does not match this party.");
   }
-  if (escrow.fundingDeadline !== BigInt(Math.floor(new Date(party.fundingDeadline).getTime() / 1_000))) {
-    throw new Error("The escrow funding deadline does not match this party.");
-  }
   const roster = escrow.participants.slice(0, escrow.participantCount).map(String);
   const partyRoster = party.participants.map(({ wallet }) => wallet);
   const expectedRegisteredRoster = [...partyRoster, participant];

@@ -88,7 +88,7 @@ export function EscrowFundingPanel({
   }
 
   if (status === "loading") {
-    return <div className="h-40 animate-pulse rounded-xl border bg-card" aria-label="Loading on-chain escrow" />;
+    return <div className="h-40 animate-pulse rounded-xl border bg-card" aria-label="Loading onchain escrow" />;
   }
 
   if (status === "error") {
@@ -142,7 +142,7 @@ export function EscrowFundingPanel({
         <div className="flex gap-3">
           <span className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/15 text-primary"><ShieldCheck className="size-5" aria-hidden="true" /></span>
           <div>
-            <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">On-chain escrow active</p>
+            <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Onchain escrow active</p>
             <h2 className="mt-1 font-semibold">Deposits are verified from receipts</h2>
             <p className="mt-1 text-sm text-muted-foreground">{snapshot?.participantCount ?? 0} registered wallet{snapshot?.participantCount === 1 ? "" : "s"} · Solana devnet</p>
           </div>
@@ -242,7 +242,7 @@ export function EscrowFundingPanel({
       {!fundingOpen && !cancelled && (
         <div className="mt-5 rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm">
           <p className="font-semibold">Escrow {snapshot?.status === ProgramEscrowStatus.Locked ? "locked for purchase" : "handed to the devnet operator"}</p>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">Deposits and refunds are disabled by the on-chain lifecycle.</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">Deposits and refunds are disabled by the onchain lifecycle.</p>
         </div>
       )}
     </div>

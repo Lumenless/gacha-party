@@ -25,7 +25,7 @@ Each private vote is a voter-scoped PDA derived from `private-vote`, voter walle
 - `delegate_private_vote`: delegates exclusively to MagicBlock's published devnet TEE validator.
 - `initialize_private_vote_permission`: creates an ER-only permission marked private with the voter as its sole external member.
 - `cast_private_vote`: writes KEEP or SELL inside the authenticated TEE, requires the voter signature and permission account, and rejects changes and late votes.
-- `open_private_vote`: after the fixed deadline, closes the permission so the choice becomes readable on the TEE; an early release is rejected on-chain.
+- `open_private_vote`: after the fixed deadline, closes the permission so the choice becomes readable on the TEE; an early release is rejected onchain.
 - `undelegate_private_vote`: voter-authorized commit and undelegation of the opened vote to Solana for an auditable tally.
 
 The safe expiry path requires each available voter to release their own vote; a voter who disappears before release is treated as abstaining. Production remains on commit-reveal until the product adapter submits this lifecycle and tallies only released devnet accounts. An early all-voted shortcut is deliberately omitted because it needs a shared private coordinator, not server access to individual votes.

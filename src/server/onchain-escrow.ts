@@ -59,9 +59,6 @@ async function verifiedEscrow(party: Party) {
   if (escrow.fundingTarget !== BigInt(party.fundingTargetBaseUnits)) {
     throw new Error("The escrow funding target does not match this party.");
   }
-  if (escrow.fundingDeadline !== BigInt(Math.floor(new Date(party.fundingDeadline).getTime() / 1_000))) {
-    throw new Error("The escrow funding deadline does not match this party.");
-  }
   if (escrow.maxPlayers !== party.maxPlayers) throw new Error("The escrow player limit does not match this party.");
   const roster = escrow.participants.slice(0, escrow.participantCount).map(String);
   const partyRoster = party.participants.map(({ wallet }) => wallet);
@@ -75,7 +72,7 @@ export async function assertPartyEscrowLocked(partyId: string) {
   if (!realFundsEnabled()) return;
   const party = await requireParty(partyId);
   const verified = await verifiedEscrow(party);
-  if (!verified) throw new Error("The host must initialize the on-chain escrow first.");
+  if (!verified) throw new Error("The host must initialize the onchain escrow first.");
   if (verified.escrow.status !== EscrowStatus.Locked) {
     throw new Error("The fully funded escrow must be locked before starting the countdown.");
   }
@@ -99,14 +96,14 @@ export async function syncVerifiedOnchainContributions(
   rawInput: unknown,
   realtime: RealtimePartyAdapter,
 ) {
-  if (!realFundsEnabled()) throw new Error("Real on-chain funding is not enabled.");
+  if (!realFundsEnabled()) throw new Error("Real onchain funding is not enabled.");
   const input = walletActionSchema.parse(rawInput);
   const party = await requireParty(partyId);
   if (!party.participants.some(({ wallet }) => wallet === input.wallet)) {
     throw new Error("Only an escrow participant can synchronize funding.");
   }
   const verified = await verifiedEscrow(party);
-  if (!verified) throw new Error("The host must initialize the on-chain escrow first.");
+  if (!verified) throw new Error("The host must initialize the onchain escrow first.");
 
   const receipts = await Promise.all(verified.roster.map(async (wallet) => ({
     wallet,
@@ -132,5 +129,6 @@ export async function syncVerifiedOnchainContributions(
     verified.roster,
     realtime,
     verified.escrow.status === EscrowStatus.Cancelled,
+    new Date(Number(verified.escrow.fundingDeadline) * 1_000).toISOString(),
   );
 }

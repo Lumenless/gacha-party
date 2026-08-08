@@ -133,7 +133,7 @@ describe("reveal, sealed voting and settlement", () => {
     expect(completed.settlement).toMatchObject({ mode: "KEEP", vaultAddress: "DemoPartyVault_outcome-party" });
   });
 
-  it("does not accept a Private ER release before the on-chain deadline", async () => {
+  it("does not accept a Private ER release before the onchain deadline", async () => {
     await revealPartyCard("outcome-party", { wallet: "DEMO_HOST_WALLET" }, realtime, collector, 2_000);
     await commitPartyVote(
       "outcome-party",
@@ -157,6 +157,6 @@ describe("reveal, sealed voting and settlement", () => {
       collector,
       custody,
       4_000,
-    )).rejects.toThrow("remain sealed until the on-chain deadline");
+    )).rejects.toThrow("remain sealed until the onchain deadline");
   });
 });

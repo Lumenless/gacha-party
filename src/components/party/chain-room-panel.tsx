@@ -68,7 +68,7 @@ export function ChainRoomPanel({
               <p className="mt-1 max-w-xl text-xs leading-5 text-muted-foreground">
                 {isHost
                   ? "Create the public room PDA and delegate it to the Ephemeral Rollup in one devnet transaction."
-                  : "The host must activate the on-chain room before other wallets can join it."}
+                  : "The host must activate the onchain room before other wallets can join it."}
               </p>
             </div>
           </div>
@@ -92,7 +92,7 @@ export function ChainRoomPanel({
           <div>
             <p className="text-sm font-semibold">MagicBlock room active</p>
             <p className="mt-1 font-mono text-xs text-muted-foreground">
-              Revision {snapshot?.revision.toString()} · {snapshot?.participantCount ?? 0} on-chain
+              Revision {snapshot?.revision.toString()} · {snapshot?.participantCount ?? 0} onchain
             </p>
           </div>
         </div>
@@ -118,7 +118,7 @@ const intentCopy: Record<ChainIntent, { eyebrow: string; title: string; detail: 
     detail: "Creates one public room account and delegates its social state to the MagicBlock Ephemeral Rollup.",
   },
   join: {
-    eyebrow: "On-chain membership",
+    eyebrow: "Onchain membership",
     title: "Join this MagicBlock room?",
     detail: "Adds your wallet to the public participant list. Your display name and contribution remain off-chain.",
   },

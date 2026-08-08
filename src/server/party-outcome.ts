@@ -198,7 +198,7 @@ export async function revealPartyVote(
   if (party.status !== "VOTING" || !party.voting) throw new Error("Voting is not open.");
   const deadlinePassed = now >= new Date(party.voting.deadline).getTime();
   if (votingAdapter.privacyModel === "PRIVATE_EPHEMERAL_ROLLUP" && !deadlinePassed) {
-    throw new Error("Private ER votes remain sealed until the on-chain deadline.");
+    throw new Error("Private ER votes remain sealed until the onchain deadline.");
   }
   if (party.voting.phase === "COMMIT" && !deadlinePassed) {
     throw new Error("Votes stay sealed until everyone votes or the deadline passes.");

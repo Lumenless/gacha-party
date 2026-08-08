@@ -82,12 +82,18 @@ export function CreatePartyForm({ packs, exactPackPrice = false }: { packs: Pack
     clearErrors("root");
     let partyId = createdPartyId;
     try {
+      // `datetime-local` has no timezone. Resolve it once in the browser and
+      // send the same absolute instant to Vercel and the Solana program.
+      const canonicalValues = {
+        ...values,
+        fundingDeadline: new Date(values.fundingDeadline).toISOString(),
+      };
       if (!partyId) {
         setActivationStage("creating");
         const response = await fetch("/api/parties", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(values),
+          body: JSON.stringify(canonicalValues),
         });
         const result = (await response.json()) as { id?: string; roomAddress?: string; error?: string };
         if (!response.ok || !result.id) throw new Error(result.error ?? "Party creation failed.");
@@ -103,9 +109,9 @@ export function CreatePartyForm({ packs, exactPackPrice = false }: { packs: Pack
         await activateMagicBlockRoom({
           hostWallet: walletAuth.walletAddress,
           partyId,
-          maxPlayers: values.maxPlayers,
-          fundingTargetBaseUnits: parseUsdc(values.fundingTarget).toString(),
-          fundingDeadline: values.fundingDeadline,
+          maxPlayers: canonicalValues.maxPlayers,
+          fundingTargetBaseUnits: parseUsdc(canonicalValues.fundingTarget).toString(),
+          fundingDeadline: canonicalValues.fundingDeadline,
           signTransaction: walletAuth.signTransaction,
           onStage: setActivationStage,
         });

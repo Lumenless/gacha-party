@@ -61,9 +61,9 @@ export function encodeRoomId(partyId: string): Uint8Array {
 }
 
 export function decodeRoomId(roomId: ReadonlyUint8Array): string {
-  if (roomId.length !== 8) throw new Error("On-chain room IDs must contain exactly 8 bytes.");
+  if (roomId.length !== 8) throw new Error("Onchain room IDs must contain exactly 8 bytes.");
   const decoded = new TextDecoder("utf-8", { fatal: true }).decode(roomId);
-  if (!/^[a-f0-9]{8}$/.test(decoded)) throw new Error("The on-chain room ID is invalid.");
+  if (!/^[a-f0-9]{8}$/.test(decoded)) throw new Error("The onchain room ID is invalid.");
   return decoded;
 }
 

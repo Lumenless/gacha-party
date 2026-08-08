@@ -11,7 +11,7 @@ Gacha Party is one Next.js TypeScript application. UI, HTTP routes, and server-s
 - `src/server`: repositories and application services.
 - `src/app`: mobile-first UI and HTTP routes.
 
-Server-Sent Events remain the browser transport, backed by Supabase Postgres Changes so separate Vercel instances receive the same revisions. MagicBlock ER is the public on-chain room proof for membership, ready state, and the one-shot opening countdown.
+Server-Sent Events remain the browser transport, backed by Supabase Postgres Changes so separate Vercel instances receive the same revisions. MagicBlock ER is the public onchain room proof for membership, ready state, and the one-shot opening countdown.
 
 ## Integration decisions
 
@@ -71,9 +71,9 @@ Mock settlement uses one deterministic idempotency key per party, mint, outcome,
 
 ## Milestone 4B decision — public ER room state
 
-The first on-chain account is a compact social room PDA, not a financial ledger. It stores participants, ready state, activity revision, and timestamps, with events for reactions. MagicBlock SDK hooks delegate, commit, and undelegate that PDA. The host controls lifecycle operations; each collaborative update requires the relevant participant signature.
+The first onchain account is a compact social room PDA, not a financial ledger. It stores participants, ready state, activity revision, and timestamps, with events for reactions. MagicBlock SDK hooks delegate, commit, and undelegate that PDA. The host controls lifecycle operations; each collaborative update requires the relevant participant signature.
 
-Contribution amounts, the funding-complete gate, custody, votes, and settlement are intentionally absent. Adding mock balances to an on-chain account would create a false financial source of truth. Devnet escrow will supply that proof in the next financial milestone, while Private ER remains isolated to the later voting adapter.
+Contribution amounts, the funding-complete gate, custody, votes, and settlement are intentionally absent. Adding mock balances to an onchain account would create a false financial source of truth. Devnet escrow will supply that proof in the next financial milestone, while Private ER remains isolated to the later voting adapter.
 
 ## Milestone 4C decision — Router transactions
 
@@ -83,20 +83,20 @@ Contribution amounts, the funding-complete gate, custody, votes, and settlement 
 - A transaction is prepared only for an explicit room action. Wallet authentication remains a separate free message signature.
 - The devnet smoke test covers initialize, account decoding, delegation, an ER ready update, and undelegation. No USDC, Collector Crypt, vote, or custody state enters this program.
 
-## Milestone 4D decision — optional on-chain room UI
+## Milestone 4D decision — optional onchain room UI
 
 - `NEXT_PUBLIC_ROOM_STATE_MODE=mock` remains the default. Setting it to `magicblock` only takes effect with verified wallet mode, preventing demo identities from being treated as Solana addresses.
 - Room activation combines PDA creation and delegation in one reviewed signature. Join and ready updates remain separate user-triggered signatures.
 - Before opening the wallet, the UI shows the network, program, asset impact, and fee source, then simulates the exact Router-prepared bytes against their execution endpoint (Solana devnet before delegation; the selected ER after delegation). Magic Router itself does not expose `simulateTransaction`. The signed bytes are submitted unchanged through the Router and tracked through confirmed status with a devnet explorer link.
-- Chain and server updates are deliberately sequenced: on-chain confirmation happens first, then the existing application mutation. Retries inspect the room PDA and skip an already-completed chain step, preventing duplicate join/ready transactions after a server or network failure.
-- Shareable room URLs use the MagicBlock social-room PDA as their canonical identifier. The server decodes the PDA's stored eight-byte room ID, verifies its host and derivation, and then loads product state from Supabase; legacy short-ID links redirect to the canonical on-chain URL.
+- Chain and server updates are deliberately sequenced: onchain confirmation happens first, then the existing application mutation. Retries inspect the room PDA and skip an already-completed chain step, preventing duplicate join/ready transactions after a server or network failure.
+- Shareable room URLs use the MagicBlock social-room PDA as their canonical identifier. The server decodes the PDA's stored eight-byte room ID, verifies its host and derivation, and then loads product state from Supabase; legacy short-ID links redirect to the canonical onchain URL.
 - The home-page party list is wallet-session authenticated and returns summaries only. Membership is queried from Supabase's JSONB participant roster; ongoing rooms sort first, followed by completed and cancelled/expired rooms, newest activity first within each group.
 - The SSE room remains the product-state source for funding, reveal, and settlement. The MagicBlock PDA proves public wallet membership, ready state, and the authoritative one-shot opening timestamp.
 
 ## Milestone 6A decision — ER-authoritative opening
 
 - Room schema v2 adds a `LOBBY → OPENING` phase and immutable countdown end timestamp. Existing disposable v1 demo rooms must be recreated.
-- Only the host can start opening, and the program requires every current participant to be ready. Starting twice, joining after start, or changing readiness after start fails on-chain.
+- Only the host can start opening, and the program requires every current participant to be ready. Starting twice, joining after start, or changing readiness after start fails onchain.
 - The ER records a four-second lead so Router confirmation can propagate before clients render the synchronized final three seconds.
 - The server verifies room version, host, maximum size, exact ordered roster, phase, and timestamp before mirroring `OPENING` to Supabase. Supabase still drives reveal orchestration, while it cannot invent a MagicBlock opening transition.
 
@@ -122,7 +122,8 @@ MagicBlock's eATA model is the later path if contribution balances themselves mu
 - The client derives the classic SPL associated token account through `@solana-program/token`, reads its balance, and refuses to prepare deposits above the wallet balance or remaining target.
 - Every action shows devnet, exact asset impact, mint, program, and fee source before signing. The exact transaction is simulated, explicitly signed through Wallet Standard, submitted, and confirmed before product state changes.
 - The server reads every participant receipt and the escrow total directly from devnet. It mirrors exact amounts idempotently only when the host, mint, target, roster, receipt relationships, and summed total all match.
-- Connected participants automatically retry this proof synchronization when an on-chain receipt and SSE funding state diverge. This covers a confirmed transaction followed by an interrupted HTTP request.
+- Connected participants automatically retry this proof synchronization when an onchain receipt and SSE funding state diverge. This covers a confirmed transaction followed by an interrupted HTTP request.
+- The browser resolves `datetime-local` to one ISO instant before party creation, and that exact value initializes both Supabase state and escrow. For early v4 parties created before this normalization, the derived escrow's immutable deadline is adopted during receipt reconciliation only after host, PDA, program version, mint, operator, target, player limit, roster, receipt ownership, and summed vault accounting all verify.
 - Existing escrow v2/v3 accounts cannot be decoded as v4 and must be replaced with newly created demo parties after the devnet program upgrade. Room PDA derivation is unchanged.
 - Escrow v4 is deployed on devnet under explicit hackathon release authorization and passed the combined MagicBlock/escrow smoke. Independent review remains required before mainnet or production-value funds.
 

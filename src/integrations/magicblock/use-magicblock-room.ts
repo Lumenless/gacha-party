@@ -151,7 +151,7 @@ export function useMagicBlockRoom(party: Pick<Party, "id" | "hostWallet" | "maxP
     } catch (cause) {
       const expiredWithoutState = Date.now() - pending.submittedAt >= PENDING_TRANSACTION_EXPIRY_MS;
       const message = expiredWithoutState
-        ? "The room transaction was not found on-chain after its blockhash expired. It is safe to review and sign a fresh transaction."
+        ? "The room transaction was not found onchain after its blockhash expired. It is safe to review and sign a fresh transaction."
         : transactionError(cause);
       if (expiredWithoutState) localStorage.removeItem(key);
       setTransaction({ action: pending.action, stage: "error", signature: pending.signature, error: message });

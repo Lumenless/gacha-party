@@ -69,12 +69,12 @@ export async function executeRealSellSettlement(
   const { connection, client, operator } = await context();
   try {
     const escrow = await client.fetchEscrow(party.hostWallet, party.id);
-    if (!escrow || escrow.status !== EscrowStatus.Purchased) throw new Error("The on-chain escrow is not ready for settlement.");
+    if (!escrow || escrow.status !== EscrowStatus.Purchased) throw new Error("The onchain escrow is not ready for settlement.");
     if (String(escrow.operator) !== operator.address) throw new Error("The settlement operator does not match the escrow.");
     const roster = escrow.participants.slice(0, escrow.participantCount).map(String);
     const partyRoster = party.participants.map(({ wallet }) => wallet);
     if (roster.length !== partyRoster.length || roster.some((wallet, index) => wallet !== partyRoster[index])) {
-      throw new Error("The settlement roster does not match the on-chain escrow.");
+      throw new Error("The settlement roster does not match the onchain escrow.");
     }
     if (!operation.preparedBuyback || !operation.proceedsBaseUnits || !operation.operatorBalanceBefore) {
       const tokenAccount = await client.fetchWalletTokenAccount(operator.address);
