@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, ChevronDown, ShieldCheck, WalletCards } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 import { useWalletAuth } from "./wallet-auth-provider";
 
 function truncate(address: string) {
@@ -11,7 +12,12 @@ function truncate(address: string) {
 
 export function WalletAuthButton({ compact = false }: { compact?: boolean }) {
   const { wallets, walletAddress, status, error, connect, disconnect } = useWalletAuth();
+  const { error: showError } = useToast();
   const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (error) showError(error);
+  }, [error, showError]);
 
   if (walletAddress) {
     return (
@@ -59,7 +65,6 @@ export function WalletAuthButton({ compact = false }: { compact?: boolean }) {
           )) : (
             <p className="rounded-md bg-muted px-3 py-3 text-xs leading-5 text-muted-foreground">No compatible wallet was detected. Install or unlock Phantom, Solflare, or Backpack, then reload.</p>
           )}
-          {error && <p role="alert" className="mt-2 px-2 text-xs text-destructive">{error}</p>}
         </div>
       )}
     </div>

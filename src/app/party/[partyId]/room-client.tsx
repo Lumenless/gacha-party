@@ -23,6 +23,7 @@ import { formatUsdc, parseUsdc } from "@/domain/money";
 import type { Party, VoteChoice } from "@/domain/party";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/components/ui/toast";
 import { WalletAuthButton } from "@/components/wallet/wallet-auth-button";
 import { useWalletAuth } from "@/components/wallet/wallet-auth-provider";
 import { ChainRoomPanel, ChainTransactionReview } from "@/components/party/chain-room-panel";
@@ -73,12 +74,12 @@ async function voteCommitment(partyId: string, wallet: string, vote: VoteChoice,
 
 export function RoomClient({ initialParty }: { initialParty: Party }) {
   const walletAuth = useWalletAuth();
+  const { error: showError } = useToast();
   const [party, setParty] = useState(initialParty);
   const [identity, setIdentity] = useState<DemoIdentity | null>(null);
   const [displayName, setDisplayName] = useState("");
   const [contribution, setContribution] = useState("");
   const [pending, setPending] = useState<PendingAction>(null);
-  const [error, setError] = useState<string | null>(null);
   const [liveState, setLiveState] = useState<LiveState>("connecting");
   const [copied, setCopied] = useState(false);
   const [clock, setClock] = useState(0);
@@ -102,6 +103,11 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
   const escrow = useSolanaEscrow(party);
   const fundsTokenLabel = process.env.NEXT_PUBLIC_FUNDS_TOKEN_LABEL?.trim() || "devnet token";
   const realExecution = party.executionMode === "DEVNET";
+
+  useEffect(() => {
+    const transactionError = escrow.transaction.error || chainRoom.transaction.error || privateVoteTransaction.error;
+    if (transactionError) showError(transactionError);
+  }, [chainRoom.transaction.error, escrow.transaction.error, privateVoteTransaction.error, showError]);
 
   useEffect(() => {
     if (!escrow.transaction.action || escrow.transaction.stage === "idle") return;
@@ -217,7 +223,6 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
 
   const mutate = useCallback(async (action: Exclude<PendingAction, null>, body: object) => {
     setPending(action);
-    setError(null);
     try {
       const actionPath = action === "voteCommit"
         ? "vote/commit"
@@ -238,12 +243,12 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
       setParty(result);
       return true;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "The room could not be updated.");
+      showError(cause instanceof Error ? cause.message : "The room could not be updated.");
       return false;
     } finally {
       setPending(null);
     }
-  }, [party.id]);
+  }, [party.id, showError]);
 
   useEffect(() => {
     if (!escrow.enabled || escrow.status !== "active" || !identity || !currentParticipant || !escrow.snapshot) return;
@@ -308,12 +313,12 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
           if (!ok) voteRevealRequested.current = false;
         })
         .catch((cause) => {
-          setError(cause instanceof Error ? cause.message : "The private vote could not be released.");
+          showError(cause instanceof Error ? cause.message : "The private vote could not be released.");
           voteRevealRequested.current = false;
         });
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [identity, mutate, party.status, party.voting, privateVotingEnabled, releasePrivateVote, voteSecret, votingSeconds]);
+  }, [identity, mutate, party.status, party.voting, privateVotingEnabled, releasePrivateVote, showError, voteSecret, votingSeconds]);
 
   useEffect(() => {
     if (
@@ -351,7 +356,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
     if (!identity) return;
     if (chainRoom.enabled && !chainRoom.isParticipant(identity.wallet)) {
       if (chainRoom.status !== "active") {
-        setError("The host must activate the MagicBlock room before you can join.");
+        showError("The host must activate the MagicBlock room before you can join.");
         return;
       }
       chainRoom.resetTransaction();
@@ -365,7 +370,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
     if (!identity) return;
     if (chainRoom.enabled && !chainRoom.isReady(identity.wallet)) {
       if (chainRoom.status !== "active") {
-        setError("The MagicBlock room is not active yet.");
+        showError("The MagicBlock room is not active yet.");
         return;
       }
       chainRoom.resetTransaction();
@@ -379,7 +384,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
     if (!identity) return;
     if (chainRoom.enabled && !chainRoom.isOpening) {
       if (chainRoom.status !== "active") {
-        setError("The MagicBlock room is not active yet.");
+        showError("The MagicBlock room is not active yet.");
         return;
       }
       chainRoom.resetTransaction();
@@ -419,12 +424,11 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
       if (!escrow.tokenAccount || amount > escrow.tokenAccount.amount) {
         throw new Error(`This wallet does not have enough ${fundsTokenLabel}.`);
       }
-      setError(null);
       setEscrowAmount(amount);
       escrow.resetTransaction();
       setEscrowIntent("deposit");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Check the contribution amount.");
+      showError(cause instanceof Error ? cause.message : "Check the contribution amount.");
     }
   }
 
@@ -456,7 +460,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
       try {
         await sealPrivateVote(selectedVote, party.voting!.deadline);
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : "The private vote could not be sealed.");
+        showError(cause instanceof Error ? cause.message : "The private vote could not be sealed.");
         return;
       }
     }
@@ -475,7 +479,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1_500);
     } catch {
-      setError("Your browser blocked clipboard access. Copy the URL from the address bar.");
+      showError("Your browser blocked clipboard access. Copy the URL from the address bar.");
     }
   }
 
@@ -510,15 +514,6 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
           </Button>
         </div>
       </div>
-
-      {error && (
-        <div role="alert" className="mt-5 flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between">
-          <span>{error}</span>
-          <button type="button" onClick={() => setError(null)} className="min-h-10 rounded-md px-3 text-left font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-right">
-            Dismiss
-          </button>
-        </div>
-      )}
 
       {chainRoom.enabled && (
         <div className="mt-5 space-y-4">

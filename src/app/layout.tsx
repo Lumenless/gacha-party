@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Sparkles } from "lucide-react";
 import { WalletAuthButton } from "@/components/wallet/wallet-auth-button";
 import { WalletAuthProvider } from "@/components/wallet/wallet-auth-provider";
+import { ToastProvider } from "@/components/ui/toast";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -15,7 +16,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <body className="noise antialiased">
-        <WalletAuthProvider>
+        <ToastProvider>
+          <WalletAuthProvider>
         <header className="mx-auto flex h-18 w-full max-w-7xl items-center justify-between px-4 md:px-6 lg:px-8">
           <Link
             href="/"
@@ -41,7 +43,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           </div>
         </header>
         {children}
-        </WalletAuthProvider>
+          </WalletAuthProvider>
+        </ToastProvider>
       </body>
     </html>
   );

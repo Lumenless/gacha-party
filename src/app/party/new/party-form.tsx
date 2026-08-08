@@ -10,6 +10,7 @@ import { createPartySchema, type CreatePartyInput } from "@/domain/party";
 import { formatUsdc, parseUsdc } from "@/domain/money";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/components/ui/toast";
 import { WalletAuthButton } from "@/components/wallet/wallet-auth-button";
 import { useWalletAuth } from "@/components/wallet/wallet-auth-provider";
 import {
@@ -38,6 +39,7 @@ function defaultDeadline() {
 export function CreatePartyForm({ packs, exactPackPrice = false }: { packs: PackOption[]; exactPackPrice?: boolean }) {
   const router = useRouter();
   const walletAuth = useWalletAuth();
+  const { error: showError } = useToast();
   const defaultPack = packs.find(({ code, isOpen }) => code === "pokemon_50" && isOpen) ?? packs.find(({ isOpen }) => isOpen);
   const activationRequired = walletAuth.enabled && process.env.NEXT_PUBLIC_ROOM_STATE_MODE === "magicblock";
   const [createdPartyId, setCreatedPartyId] = useState<string | null>(null);
@@ -53,7 +55,6 @@ export function CreatePartyForm({ packs, exactPackPrice = false }: { packs: Pack
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-    setError,
     clearErrors,
     setValue,
     control,
@@ -116,7 +117,7 @@ export function CreatePartyForm({ packs, exactPackPrice = false }: { packs: Pack
         ? roomActivationError(error)
         : error instanceof Error ? error.message : "Could not create the party.";
       setActivationStage("error");
-      setError("root", { message });
+      showError(message);
     }
   }
 
@@ -262,12 +263,6 @@ export function CreatePartyForm({ packs, exactPackPrice = false }: { packs: Pack
             </div>
             <input type="hidden" value="SIMPLE_MAJORITY" {...register("decisionRule")} />
           </fieldset>
-
-          {errors.root && (
-            <div role="alert" className="mt-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-              {errors.root.message}
-            </div>
-          )}
 
           {walletAuth.enabled && !walletAuth.walletAddress && (
             <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
