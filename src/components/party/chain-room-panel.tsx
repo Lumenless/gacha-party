@@ -2,6 +2,7 @@
 
 import { ExternalLink, RadioTower, RefreshCw, ShieldCheck, WalletCards } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { WalletAuthButton } from "@/components/wallet/wallet-auth-button";
 import type {
   ChainIntent,
@@ -141,6 +142,7 @@ export function ChainTransactionReview({
   onConfirm,
   onRecover,
   onCancel,
+  presentation = "card",
 }: {
   intent: ChainIntent;
   transaction: ChainTransactionState;
@@ -148,6 +150,7 @@ export function ChainTransactionReview({
   onConfirm: () => void;
   onRecover: () => void;
   onCancel: () => void;
+  presentation?: "card" | "dialog";
 }) {
   const copy = intentCopy[intent];
   const pending = transaction.action === intent && ["preparing", "simulating", "signing", "submitting", "confirming", "recovering"].includes(transaction.stage);
@@ -164,8 +167,8 @@ export function ChainTransactionReview({
           ? "Submitting…"
           : transaction.stage === "recovering" ? "Checking status…" : "Confirming on devnet…";
 
-  return (
-    <div className="rounded-xl border border-primary/40 bg-card p-5 sm:p-6" aria-live="polite">
+  const review = (
+    <div className={presentation === "card" ? "rounded-xl border border-primary/40 bg-card p-5 sm:p-6" : ""} aria-live="polite">
       <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">{copy.eyebrow}</p>
       <h2 className="mt-2 text-xl font-semibold">{copy.title}</h2>
       <p className="mt-2 max-w-prose text-sm leading-6 text-muted-foreground">{copy.detail}</p>
@@ -204,4 +207,19 @@ export function ChainTransactionReview({
       </div>
     </div>
   );
+
+  if (presentation === "dialog") {
+    return (
+      <Dialog
+        open
+        ariaLabel={copy.title}
+        dismissible={!pending && !Boolean(submitted && !confirmed)}
+        onClose={onCancel}
+      >
+        {review}
+      </Dialog>
+    );
+  }
+
+  return review;
 }

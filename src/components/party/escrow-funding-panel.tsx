@@ -11,6 +11,7 @@ import type { ContributionReceiptSnapshot, EscrowAccountSnapshot, WalletTokenAcc
 import { EscrowStatus as ProgramEscrowStatus } from "@/integrations/solana/program-client/src/generated";
 
 const PROGRAM_ADDRESS = "BMKHnBM1oq1LyXFYyHq2gUdyugo1N8aGF6wtBnJNd6Nz";
+const DEVNET_USDC_FAUCET_URL = "https://spl-token-faucet.com/?token-name=USDC-Dev";
 
 function explorerAddress(value: string) {
   return `https://explorer.solana.com/address/${value}?cluster=devnet`;
@@ -155,7 +156,13 @@ export function EscrowFundingPanel({
       </div>
 
       <dl className="mt-5 grid gap-3 rounded-lg bg-muted/60 p-4 text-sm sm:grid-cols-2">
-        <div><dt className="text-xs text-muted-foreground">Wallet balance</dt><dd className="mt-1 font-mono tabular-nums">{tokenAccount ? `${formatUsdc(tokenAccount.amount)} ${tokenLabel}` : "Token account not found"}</dd></div>
+        <div>
+          <dt className="text-xs text-muted-foreground">Wallet balance</dt>
+          <dd className="mt-1 font-mono tabular-nums">{tokenAccount ? `${formatUsdc(tokenAccount.amount)} ${tokenLabel}` : "Token account not found"}</dd>
+          <a href={DEVNET_USDC_FAUCET_URL} target="_blank" rel="noreferrer" className="mt-2 inline-flex min-h-6 items-center gap-1 text-xs font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            Get Devnet USDC <ExternalLink className="size-3" aria-hidden="true" />
+          </a>
+        </div>
         <div><dt className="text-xs text-muted-foreground">Your receipt</dt><dd className="mt-1 font-mono tabular-nums">{receipt ? `${formatUsdc(receipt.amount)} ${tokenLabel}` : "No deposit"}</dd></div>
       </dl>
 
@@ -163,7 +170,12 @@ export function EscrowFundingPanel({
         <div className="mt-4 rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm">
           <p className="font-semibold">Fund this wallet first</p>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">The configured token account does not exist. Use the approved devnet faucet, then refresh your balance.</p>
-          <Button type="button" variant="secondary" className="mt-3" onClick={onRefresh}><RefreshCw className="size-4" aria-hidden="true" /> Refresh balance</Button>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <a href={DEVNET_USDC_FAUCET_URL} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border bg-secondary px-5 text-sm font-semibold text-secondary-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+              Get Devnet USDC <ExternalLink className="size-4" aria-hidden="true" />
+            </a>
+            <Button type="button" variant="secondary" onClick={onRefresh}><RefreshCw className="size-4" aria-hidden="true" /> Refresh balance</Button>
+          </div>
         </div>
       )}
 
