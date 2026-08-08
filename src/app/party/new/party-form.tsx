@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowRight, Check, Coins, RadioTower, ShieldCheck, Users, WalletCards } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
-import { createPartySchema, type CreatePartyInput } from "@/domain/party";
+import { createPartySchema, MAX_PARTY_PLAYERS, MIN_PARTY_PLAYERS, type CreatePartyInput } from "@/domain/party";
 import { formatUsdc, parseUsdc } from "@/domain/money";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,7 +63,6 @@ export function CreatePartyForm({ packs, exactPackPrice = false }: { packs: Pack
     defaultValues: {
       name: "Friday Night Pull",
       packCode: defaultPack?.code,
-      maxPlayers: 2,
       fundingTarget: defaultPack ? formatUsdc(BigInt(defaultPack.priceBaseUnits)) : "50",
       fundingDeadline: defaultDeadline(),
       decisionRule: "SIMPLE_MAJORITY",
@@ -109,7 +108,7 @@ export function CreatePartyForm({ packs, exactPackPrice = false }: { packs: Pack
         await activateMagicBlockRoom({
           hostWallet: walletAuth.walletAddress,
           partyId,
-          maxPlayers: canonicalValues.maxPlayers,
+          maxPlayers: MAX_PARTY_PLAYERS,
           fundingTargetBaseUnits: parseUsdc(canonicalValues.fundingTarget).toString(),
           fundingDeadline: canonicalValues.fundingDeadline,
           signTransaction: walletAuth.signTransaction,
@@ -243,21 +242,11 @@ export function CreatePartyForm({ packs, exactPackPrice = false }: { packs: Pack
               {errors.name && <p id="name-error" className="text-xs text-destructive">{errors.name.message}</p>}
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <label htmlFor="maxPlayers" className="text-sm font-medium">Players</label>
-                <select id="maxPlayers" className="min-h-11 w-full rounded-md border bg-background/60 px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" {...register("maxPlayers", { valueAsNumber: true })}>
-                  <option value="2">2 players</option>
-                  <option value="3">3 players</option>
-                  <option value="4">4 players</option>
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <label htmlFor="fundingTarget" className="text-sm font-medium">Target</label>
-                <div className="relative">
-                  <Input id="fundingTarget" inputMode="decimal" autoComplete="off" className="pr-14 font-mono tabular-nums" aria-invalid={errors.fundingTarget ? true : undefined} readOnly={exactPackPrice} {...register("fundingTarget")} />
-                  <span className="pointer-events-none absolute right-3 top-3 text-xs text-muted-foreground">USDC</span>
-                </div>
+            <div className="space-y-1.5">
+              <label htmlFor="fundingTarget" className="text-sm font-medium">Target</label>
+              <div className="relative">
+                <Input id="fundingTarget" inputMode="decimal" autoComplete="off" className="pr-14 font-mono tabular-nums" aria-invalid={errors.fundingTarget ? true : undefined} readOnly={exactPackPrice} {...register("fundingTarget")} />
+                <span className="pointer-events-none absolute right-3 top-3 text-xs text-muted-foreground">USDC</span>
               </div>
             </div>
             {errors.fundingTarget && <p className="text-xs text-destructive">Enter a valid funding target.</p>}
@@ -293,7 +282,8 @@ export function CreatePartyForm({ packs, exactPackPrice = false }: { packs: Pack
             </Button>
           )}
 
-          <div className="mt-4 grid grid-cols-2 gap-2 rounded-lg bg-muted/60 p-3 text-xs">
+          <div className="mt-4 grid grid-cols-3 gap-2 rounded-lg bg-muted/60 p-3 text-xs">
+            <div><p className="text-muted-foreground">Players</p><p className="mt-1 font-medium">{MIN_PARTY_PLAYERS}–{MAX_PARTY_PLAYERS}</p></div>
             <div><p className="text-muted-foreground">Decision</p><p className="mt-1 font-medium">Simple majority</p></div>
             <div><p className="text-muted-foreground">Custody</p><p className="mt-1 font-medium">Devnet operator</p></div>
           </div>

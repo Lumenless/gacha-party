@@ -22,6 +22,7 @@ import {
 import { formatUsdc, parseUsdc } from "@/domain/money";
 import type { Party, VoteChoice } from "@/domain/party";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { WalletAuthButton } from "@/components/wallet/wallet-auth-button";
@@ -78,6 +79,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
   const [party, setParty] = useState(initialParty);
   const [identity, setIdentity] = useState<DemoIdentity | null>(null);
   const [displayName, setDisplayName] = useState("");
+  const [joinDialogOpen, setJoinDialogOpen] = useState(false);
   const [contribution, setContribution] = useState("");
   const [pending, setPending] = useState<PendingAction>(null);
   const [liveState, setLiveState] = useState<LiveState>("connecting");
@@ -348,7 +350,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
   }, [clock, identity, mutate, party.status, party.voting, privateVoteTransaction.stage, privateVotingEnabled, voteSecret]);
 
   async function finishJoin() {
-    if (!identity) return;
+    if (!identity) return false;
     const joined = await mutate("join", { wallet: identity.wallet, displayName });
     if (joined) {
       const nextIdentity = { ...identity, displayName };
@@ -356,6 +358,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
       localStorage.setItem(IDENTITY_KEY, JSON.stringify(nextIdentity));
       sessionStorage.setItem(`${IDENTITY_KEY}:${party.id}`, JSON.stringify(nextIdentity));
     }
+    return joined;
   }
 
   async function join(event: FormEvent) {
@@ -367,10 +370,11 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
         return;
       }
       chainRoom.resetTransaction();
+      setJoinDialogOpen(false);
       setChainIntent("join");
       return;
     }
-    await finishJoin();
+    if (await finishJoin()) setJoinDialogOpen(false);
   }
 
   async function markReady() {
@@ -696,24 +700,38 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
           )}
 
           {!currentParticipant && identity && !deadlinePassed && (party.status === "FUNDING" || party.status === "FUNDED") && party.participants.length < party.maxPlayers && escrow.snapshot?.status !== ProgramEscrowStatus.Locked && (
-            <form onSubmit={join} className="rounded-xl border border-primary/30 bg-primary/5 p-5 sm:p-6">
-              <div className="flex items-center gap-3">
-                <span className="grid size-10 place-items-center rounded-full bg-primary/15 text-primary"><WalletCards className="size-5" aria-hidden="true" /></span>
-                <div><h2 className="font-semibold">Join this party</h2><p className="text-xs text-muted-foreground">{walletAuth.enabled ? "Your verified Solana wallet identifies you in this room." : "A browser-scoped demo wallet will represent you."}</p></div>
+            <>
+              <div className="flex flex-col justify-between gap-4 rounded-xl border border-primary/30 bg-primary/5 p-5 sm:flex-row sm:items-center sm:p-6">
+                <div className="flex items-center gap-3">
+                  <span className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/15 text-primary"><WalletCards className="size-5" aria-hidden="true" /></span>
+                  <div><h2 className="font-semibold">Join this party</h2><p className="text-xs text-muted-foreground">Join the room before contributing to its shared vault.</p></div>
+                </div>
+                <Button type="button" onClick={() => setJoinDialogOpen(true)}>Join party</Button>
               </div>
-              <div className="mt-5 space-y-1.5">
-                <label htmlFor="displayName" className="text-sm font-medium">Display name</label>
-                <Input id="displayName" value={displayName} onChange={(event) => setDisplayName(event.target.value)} minLength={2} maxLength={24} autoComplete="nickname" required />
-              </div>
-              <Button
-                type="submit"
-                className="mt-4 w-full sm:w-auto"
-                loading={pending === "join"}
-                disabled={chainRoom.enabled && chainRoom.status !== "active"}
+              <Dialog
+                open={joinDialogOpen}
+                ariaLabel="Join this party"
+                dismissible={pending !== "join"}
+                onClose={() => setJoinDialogOpen(false)}
               >
-                {chainRoom.enabled && !chainRoom.isParticipant(identity.wallet) ? "Review onchain join" : `Join with ${walletAuth.enabled ? "wallet" : "demo wallet"}`}
-              </Button>
-            </form>
+                <form onSubmit={join}>
+                  <div className="flex items-center gap-3">
+                    <span className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/15 text-primary"><WalletCards className="size-5" aria-hidden="true" /></span>
+                    <div><h2 className="text-xl font-semibold">Join this party</h2><p className="mt-1 text-sm text-muted-foreground">{walletAuth.enabled ? "Your verified Solana wallet identifies you in this room." : "A browser-scoped demo wallet will represent you."}</p></div>
+                  </div>
+                  <div className="mt-5 space-y-1.5">
+                    <label htmlFor="displayName" className="text-sm font-medium">Display name</label>
+                    <Input id="displayName" value={displayName} onChange={(event) => setDisplayName(event.target.value)} minLength={2} maxLength={24} autoComplete="nickname" required autoFocus />
+                  </div>
+                  <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                    <Button type="button" variant="ghost" onClick={() => setJoinDialogOpen(false)} disabled={pending === "join"}>Cancel</Button>
+                    <Button type="submit" loading={pending === "join"} disabled={chainRoom.enabled && chainRoom.status !== "active"}>
+                      {chainRoom.enabled && !chainRoom.isParticipant(identity.wallet) ? "Review onchain join" : `Join with ${walletAuth.enabled ? "wallet" : "demo wallet"}`}
+                    </Button>
+                  </div>
+                </form>
+              </Dialog>
+            </>
           )}
 
           {walletAuth.enabled && !identity && (

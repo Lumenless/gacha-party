@@ -8,7 +8,7 @@ import { syncOnchainContributions } from "./party-room";
 import { assertMagicBlockJoin } from "./onchain-room";
 import { registerPartyEscrowParticipant } from "./operator-escrow";
 
-const ESCROW_VERSION_WITH_DEADLINE_REFUNDS = 4;
+const CURRENT_ESCROW_VERSION = 5;
 
 let clientPromise: Promise<DevnetEscrowClient> | null = null;
 let clientMint: string | null = null;
@@ -48,8 +48,8 @@ async function verifiedEscrow(party: Party) {
   const client = await escrowClient();
   const escrow = await client.fetchEscrow(party.hostWallet, party.id);
   if (!escrow) return null;
-  if (escrow.version !== ESCROW_VERSION_WITH_DEADLINE_REFUNDS) {
-    throw new Error("This escrow predates safe deadline refunds. Create a new demo party.");
+  if (escrow.version !== CURRENT_ESCROW_VERSION) {
+    throw new Error("This escrow predates the current ten-player layout. Create a new demo party.");
   }
   if (String(escrow.host) !== party.hostWallet) throw new Error("The escrow host does not match this party.");
   if (String(escrow.mint) !== verifiedMint()) throw new Error("The escrow mint does not match this deployment.");

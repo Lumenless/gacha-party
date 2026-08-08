@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { parseUsdc } from "@/domain/money";
-import { createPartySchema, type Party } from "@/domain/party";
+import { createPartySchema, MAX_PARTY_PLAYERS, type Party } from "@/domain/party";
 import type { CollectorCryptAdapter } from "@/integrations/collector-crypt/types";
 import { findRoomAddress } from "@/integrations/magicblock/router-client";
 import { partyRepository } from "./party-repository";
@@ -35,7 +35,7 @@ export async function createParty(
     packCode: pack.code,
     packName: pack.name,
     packImageUrl: pack.imageUrl,
-    maxPlayers: input.maxPlayers,
+    maxPlayers: MAX_PARTY_PLAYERS,
     fundingTargetBaseUnits: fundingTarget.toString(),
     fundingDeadline: new Date(input.fundingDeadline).toISOString(),
     decisionRule: input.decisionRule,

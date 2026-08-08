@@ -4,12 +4,12 @@ The `gacha-party-room` Anchor program contains two deliberately separate boundar
 
 ## State and instructions
 
-Each room is a PDA derived from `party-room`, the host wallet, and an eight-byte room identifier. Schema v2 stores up to four wallet addresses, a ready bitmask, `LOBBY → OPENING` phase, authoritative countdown end timestamp, monotonically increasing revision, and last-activity timestamp.
+Each room is a PDA derived from `party-room`, the host wallet, and an eight-byte room identifier. Schema v3 stores up to ten wallet addresses, a 16-bit ready mask, `LOBBY → OPENING` phase, authoritative countdown end timestamp, monotonically increasing revision, and last-activity timestamp.
 
 - `initialize_room`: creates a room with the host as participant zero.
 - `join_room`: rejects duplicate wallets and full rooms.
 - `set_ready`: updates one participant’s ready bit.
-- `start_opening`: host-only, one-shot ER transition after every current participant is ready; freezes membership and readiness and records the shared countdown timestamp.
+- `start_opening`: host-only, one-shot ER transition after at least two players joined and every current participant is ready; freezes membership and readiness and records the shared countdown timestamp.
 - `react`: emits a compact reaction event without growing account storage.
 - `delegate_room`: host-authorized base-layer delegation with an optional explicit ER validator.
 - `commit_room`: host-authorized ER commit to the base layer.
@@ -34,7 +34,7 @@ The safe expiry path requires each available voter to release their own vote; a 
 
 The escrow PDA is derived from `party-escrow`, the host wallet, and the same eight-byte room identifier. Its bounded roster is independent from the delegated room so token custody never depends on deserializing an account currently owned by MagicBlock's delegation program.
 
-- `initialize_escrow`: creates the vault immediately with the host as participant one, a 2–4 player limit, six-decimal SPL mint, integer funding target, immutable Unix deadline, and fixed operator.
+- `initialize_escrow`: creates the vault immediately with the host as participant one, a 2–10 player limit, six-decimal SPL mint, integer funding target, immutable Unix deadline, and fixed operator.
 - `register_escrow_participant`: lets the fixed operator idempotently mirror a server-verified MagicBlock join while escrow remains in `FUNDING`.
 - `deposit_contribution`: accepts one checked deposit from an allowed wallet, rejects target overfunding, and creates a wallet-specific receipt PDA.
 - `refund_contribution`: returns the entire recorded amount while escrow is unlocked, including after deadline cancellation, and closes the receipt.
@@ -96,3 +96,5 @@ The deadline-release upgrade deployed on 2026-08-04 with signature [`5sLd4ghH2v2
 The dynamic escrow v3 upgrade deployed on 2026-08-08 with signature [`586N3E9iC3NLzqgGXBgzSozKJz9opPaoi3dzFiu7PtvFptq89tk1LXK2AAWfWvQJEmPzRy3GtSyUwXfMoh23DNLg`](https://explorer.solana.com/tx/586N3E9iC3NLzqgGXBgzSozKJz9opPaoi3dzFiu7PtvFptq89tk1LXK2AAWfWvQJEmPzRy3GtSyUwXfMoh23DNLg?cluster=devnet). Existing v2 escrow accounts are intentionally incompatible; create a new party for v3 funding. The post-upgrade smoke created room `HrRJsZwwG6rtpyT4rVV3QZkbs1BYjYJQiitqngfV5rVi` and escrow `BcMZ1XWQciNyiNJqqXA4sXaY1UJUsdKZH6R2GUCgKR4r` (party ID `33178163`) in one transaction, then verified operator registration of participant two.
 
 The deadline/refund escrow v4 upgrade deployed on 2026-08-08 with signature [`2Vtfrb1pZyfm8N5rL7rSe8GGgDkpB4pJnCPDqvrsPzecEUBqgduoAwsFu18Fti7cjAVms4nf4L1X3HTcKdiMdbtj`](https://explorer.solana.com/tx/2Vtfrb1pZyfm8N5rL7rSe8GGgDkpB4pJnCPDqvrsPzecEUBqgduoAwsFu18Fti7cjAVms4nf4L1X3HTcKdiMdbtj?cluster=devnet). Existing v2/v3 escrow accounts are intentionally incompatible; create a new party for v4 funding. The post-upgrade smoke created room `GquCXvBkuZa115QDmRewkkJghZH78xqDwtDwfrrKEZH7` and escrow `2fgU9j8vMkDpXmkH7XTfuRuGcGVEsgaWVwUQRAGFA8JD` (party ID `80cd8fc0`), registered participant two, applied ready/countdown updates on the ER, and committed the room back to devnet.
+
+The fixed 2–10 player upgrade deployed on 2026-08-08 with signature [`3T66Mhq2w6FSkUEx7XDx4eRYe85yuf2WQTT92rURRCX7AUSv89wTb9BrqPYPb6nUVFRonv72YVN9tJtgZA3ddk3j`](https://explorer.solana.com/tx/3T66Mhq2w6FSkUEx7XDx4eRYe85yuf2WQTT92rURRCX7AUSv89wTb9BrqPYPb6nUVFRonv72YVN9tJtgZA3ddk3j?cluster=devnet). Room v3 and escrow v5 expand their fixed rosters to ten; existing accounts must be recreated. MagicBlock's EU devnet validator retained the previous program layout after the upgrade, so new room delegation moved to the officially supported US validator. The verified two-wallet smoke used room `E9tHR4rdcy28uHyZtivHyw7HxbbJEmuk2CRvPDcUwzW8` and escrow `7jrpgzXu4dwe5v6WwxpPBoxLSe2pLDgskopjFkMdwERL` (party ID `540403a2`), registered participant two, set both ready bits, started the authoritative countdown, and undelegated successfully.

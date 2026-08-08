@@ -41,10 +41,12 @@ export function transitionParty(from: PartyStatus, to: PartyStatus): PartyStatus
   return to;
 }
 
+export const MIN_PARTY_PLAYERS = 2;
+export const MAX_PARTY_PLAYERS = 10;
+
 export const createPartySchema = z.object({
   name: z.string().trim().min(2, "Use at least 2 characters.").max(40),
   packCode: z.string().trim().min(1),
-  maxPlayers: z.number().int().min(2).max(4),
   fundingTarget: z.string().trim().min(1),
   fundingDeadline: z.string().refine(
     (value) => !Number.isNaN(Date.parse(value)),

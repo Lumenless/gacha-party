@@ -6,18 +6,18 @@
  * @see https://github.com/codama-idl/codama
  */
 
-import { combineCodec, getAddressDecoder, getAddressEncoder, getBooleanDecoder, getBooleanEncoder, getStructDecoder, getStructEncoder, getU64Decoder, getU64Encoder, getU8Decoder, getU8Encoder, type Address, type FixedSizeCodec, type FixedSizeDecoder, type FixedSizeEncoder } from '@solana/kit';
+import { combineCodec, getAddressDecoder, getAddressEncoder, getBooleanDecoder, getBooleanEncoder, getStructDecoder, getStructEncoder, getU16Decoder, getU16Encoder, getU64Decoder, getU64Encoder, type Address, type FixedSizeCodec, type FixedSizeDecoder, type FixedSizeEncoder } from '@solana/kit';
 
 export type ReadyChanged = { room: Address; player: Address; ready: boolean; readyMask: number; revision: bigint;  };
 
 export type ReadyChangedArgs = { room: Address; player: Address; ready: boolean; readyMask: number; revision: number | bigint;  };
 
 export function getReadyChangedEncoder(): FixedSizeEncoder<ReadyChangedArgs> {
-    return getStructEncoder([['room', getAddressEncoder()], ['player', getAddressEncoder()], ['ready', getBooleanEncoder()], ['readyMask', getU8Encoder()], ['revision', getU64Encoder()]]);
+    return getStructEncoder([['room', getAddressEncoder()], ['player', getAddressEncoder()], ['ready', getBooleanEncoder()], ['readyMask', getU16Encoder()], ['revision', getU64Encoder()]]);
 }
 
 export function getReadyChangedDecoder(): FixedSizeDecoder<ReadyChanged> {
-    return getStructDecoder([['room', getAddressDecoder()], ['player', getAddressDecoder()], ['ready', getBooleanDecoder()], ['readyMask', getU8Decoder()], ['revision', getU64Decoder()]]);
+    return getStructDecoder([['room', getAddressDecoder()], ['player', getAddressDecoder()], ['ready', getBooleanDecoder()], ['readyMask', getU16Decoder()], ['revision', getU64Decoder()]]);
 }
 
 export function getReadyChangedCodec(): FixedSizeCodec<ReadyChangedArgs, ReadyChanged> {

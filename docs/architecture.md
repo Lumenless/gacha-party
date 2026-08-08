@@ -150,6 +150,13 @@ MagicBlock's eATA model is the later path if contribution balances themselves mu
 - A rejected or failed activation keeps the reserved invite ID and retries that same room instead of creating duplicate parties. No token approval or asset transfer occurs during activation.
 - The create surface uses a pack-detail composition: horizontally browsable live inventory, a dominant collectible preview, and a compact sticky party-action panel. This borrows the information hierarchy of strong gacha storefronts while keeping original Gacha Party styling, multiplayer controls, and custody disclosures.
 
+## Fixed 2–10 player decision
+
+- Party creators no longer choose a room size. Every new party accepts up to ten unique wallets and requires at least two participants before the opening transition or escrow lock.
+- Room schema v3 expands the fixed participant array from four to ten and replaces the eight-bit ready mask with a 16-bit mask. Escrow schema v5 expands its independent base-layer roster to ten.
+- The fixed upper bound keeps account rent, transaction decoding, and readiness checks deterministic while removing an unnecessary creation decision. Existing room v2 and escrow v4 accounts are layout-incompatible and must be replaced with newly created demo parties after deployment.
+- New room delegation targets MagicBlock's US devnet validator. During the schema upgrade, the EU devnet validator continued executing its cached v2 program and rewrote v3 accounts at old offsets; a fresh US delegation loaded v3 correctly and passed the two-wallet join, ready, countdown, and undelegation smoke.
+
 ## Milestone 4H decision — Vercel-safe application state
 
 - Supabase is used in local and Vercel application runtimes; Vitest uses isolated in-memory adapters. This keeps development aligned with deployment without making unit tests network-dependent.

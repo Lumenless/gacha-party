@@ -9,3 +9,5 @@ tsconfig.tsbuildinfo
 .anchor/
 target/
 test-ledger/
+.vercel
+.env.local

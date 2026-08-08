@@ -40,8 +40,8 @@ import {
 
 export const MAGICBLOCK_DEVNET_ROUTER_URL = "https://devnet-router.magicblock.app";
 export const SOLANA_DEVNET_URL = "https://api.devnet.solana.com";
-export const MAGICBLOCK_DEVNET_ER_URL = "https://devnet-eu.magicblock.app";
-export const MAGICBLOCK_DEVNET_VALIDATOR = address("MEUGGrYPxKk17hCr7wpT6s8dtNokZj5U2L57vjYMS8e");
+export const MAGICBLOCK_DEVNET_ER_URL = "https://devnet-us.magicblock.app";
+export const MAGICBLOCK_DEVNET_VALIDATOR = address("MUS3hc9TCw4cGC12vHNoYcCGzJG1txjgQLZWVoeNHNd");
 export const ROOM_SEED = new TextEncoder().encode("party-room");
 
 export type RoomAction = "initialize" | "join" | "ready" | "start" | "react" | "delegate" | "commit" | "undelegate";
@@ -89,8 +89,8 @@ export class MagicRouterRoomClient {
   }
 
   async prepareInitialize(host: string, partyId: string, maxPlayers: number) {
-    if (!Number.isInteger(maxPlayers) || maxPlayers < 2 || maxPlayers > 4) {
-      throw new Error("A room must allow between 2 and 4 players.");
+    if (!Number.isInteger(maxPlayers) || maxPlayers < 2 || maxPlayers > 10) {
+      throw new Error("A room must allow between 2 and 10 players.");
     }
     const hostAddress = address(host);
     const roomAddress = await findRoomAddress(host, partyId);
@@ -108,8 +108,8 @@ export class MagicRouterRoomClient {
     maxPlayers: number,
     baseLayerInstructions: readonly Instruction[] = [],
   ) {
-    if (!Number.isInteger(maxPlayers) || maxPlayers < 2 || maxPlayers > 4) {
-      throw new Error("A room must allow between 2 and 4 players.");
+    if (!Number.isInteger(maxPlayers) || maxPlayers < 2 || maxPlayers > 10) {
+      throw new Error("A room must allow between 2 and 10 players.");
     }
     const hostAddress = address(host);
     const roomAddress = await findRoomAddress(host, partyId);

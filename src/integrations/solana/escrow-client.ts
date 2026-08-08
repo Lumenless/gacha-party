@@ -125,8 +125,8 @@ export class DevnetEscrowClient {
   ): Promise<Instruction> {
     assertTokenAmount(fundingTarget, "Funding target");
     assertFundingDeadline(fundingDeadline);
-    if (!Number.isInteger(maxPlayers) || maxPlayers < 2 || maxPlayers > 4) {
-      throw new Error("Escrow must allow between 2 and 4 players.");
+    if (!Number.isInteger(maxPlayers) || maxPlayers < 2 || maxPlayers > 10) {
+      throw new Error("Escrow must allow between 2 and 10 players.");
     }
     if (!this.operator) throw new Error("A verified devnet operator address is required to initialize escrow.");
     const hostAddress = address(host);

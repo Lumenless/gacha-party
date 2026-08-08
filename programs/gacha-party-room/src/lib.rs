@@ -22,10 +22,10 @@ pub const ESCROW_SEED: &[u8] = b"party-escrow";
 pub const ESCROW_VAULT_SEED: &[u8] = b"escrow-vault";
 pub const CONTRIBUTION_SEED: &[u8] = b"contribution";
 pub const PRIVATE_VOTE_SEED: &[u8] = b"private-vote";
-pub const MAX_PLAYERS: usize = 4;
-pub const ROOM_VERSION: u8 = 2;
+pub const MAX_PLAYERS: usize = 10;
+pub const ROOM_VERSION: u8 = 3;
 pub const OPENING_LEAD_SECONDS: i64 = 4;
-pub const ESCROW_VERSION: u8 = 4;
+pub const ESCROW_VERSION: u8 = 5;
 pub const CONTRIBUTION_VERSION: u8 = 1;
 pub const PRIVATE_VOTE_VERSION: u8 = 1;
 pub const USDC_DECIMALS: u8 = 6;
@@ -736,7 +736,7 @@ pub struct InitializeEscrow<'info> {
         seeds = [ESCROW_SEED, host.key().as_ref(), room_id.as_ref()],
         bump,
     )]
-    pub escrow: Account<'info, EscrowState>,
+    pub escrow: Box<Account<'info, EscrowState>>,
     #[account(
         init,
         payer = host,
@@ -776,7 +776,7 @@ pub struct DepositContribution<'info> {
         has_one = mint @ EscrowError::InvalidEscrowMint,
         has_one = vault @ EscrowError::InvalidEscrowVault,
     )]
-    pub escrow: Account<'info, EscrowState>,
+    pub escrow: Box<Account<'info, EscrowState>>,
     #[account(
         init,
         payer = contributor,
@@ -813,7 +813,7 @@ pub struct RefundContribution<'info> {
         has_one = mint @ EscrowError::InvalidEscrowMint,
         has_one = vault @ EscrowError::InvalidEscrowVault,
     )]
-    pub escrow: Account<'info, EscrowState>,
+    pub escrow: Box<Account<'info, EscrowState>>,
     #[account(
         mut,
         close = contributor,
@@ -943,7 +943,7 @@ pub struct RoomState {
     pub host: Pubkey,
     pub max_players: u8,
     pub participant_count: u8,
-    pub ready_mask: u8,
+    pub ready_mask: u16,
     pub phase: RoomPhase,
     pub countdown_ends_at: i64,
     pub revision: u64,
@@ -1169,7 +1169,7 @@ impl RoomState {
     fn set_player_ready(&mut self, player: Pubkey, ready: bool, now: i64) -> Result<()> {
         self.require_lobby()?;
         let index = self.require_participant(player)?;
-        let bit = 1u8
+        let bit = 1u16
             .checked_shl(index as u32)
             .ok_or(RoomError::InvalidReadyIndex)?;
         self.ready_mask = if ready {
@@ -1188,6 +1188,7 @@ impl RoomState {
     fn start_opening(&mut self, player: Pubkey, now: i64) -> Result<()> {
         require_keys_eq!(self.host, player, RoomError::HostRequired);
         self.require_lobby()?;
+        require!(self.participant_count >= 2, RoomError::NotEnoughPlayers);
         require!(self.everyone_ready(), RoomError::EveryoneMustBeReady);
         self.countdown_ends_at = now
             .checked_add(OPENING_LEAD_SECONDS)
@@ -1197,7 +1198,7 @@ impl RoomState {
     }
 
     pub fn everyone_ready(&self) -> bool {
-        let expected = (1u8 << self.participant_count) - 1;
+        let expected = (1u16 << self.participant_count) - 1;
         self.participant_count > 0 && self.ready_mask & expected == expected
     }
 }
@@ -1231,7 +1232,7 @@ pub struct ReadyChanged {
     pub room: Pubkey,
     pub player: Pubkey,
     pub ready: bool,
-    pub ready_mask: u8,
+    pub ready_mask: u16,
     pub revision: u64,
 }
 
@@ -1320,7 +1321,7 @@ pub struct EscrowSettled {
 
 #[error_code]
 pub enum RoomError {
-    #[msg("Player limit must be between two and four.")]
+    #[msg("Player limit must be between two and ten.")]
     InvalidPlayerLimit,
     #[msg("This wallet already joined the room.")]
     AlreadyJoined,
@@ -1358,6 +1359,8 @@ pub enum RoomError {
     PrivateVoteClosed,
     #[msg("The private vote remains sealed until its reveal deadline.")]
     PrivateVoteRevealLocked,
+    #[msg("At least two players must join before opening.")]
+    NotEnoughPlayers,
 }
 
 #[error_code]
@@ -1370,7 +1373,7 @@ pub enum EscrowError {
     FundingDeadlinePassed,
     #[msg("The funding deadline has not passed yet.")]
     FundingDeadlineNotReached,
-    #[msg("The escrow player limit must be between two and four.")]
+    #[msg("The escrow player limit must be between two and ten.")]
     InvalidParticipantCount,
     #[msg("The host must be the first escrow participant.")]
     HostMustBeFirstParticipant,
@@ -1496,6 +1499,24 @@ mod tests {
     }
 
     #[test]
+    fn ready_mask_supports_ten_players() {
+        let host = Pubkey::new_unique();
+        let mut state = room(host, MAX_PLAYERS as u8);
+        for timestamp in 101..110 {
+            state.join(Pubkey::new_unique(), timestamp).unwrap();
+        }
+        assert_eq!(state.participant_count, MAX_PLAYERS as u8);
+        for index in 0..MAX_PLAYERS {
+            let player = state.participants[index];
+            state
+                .set_player_ready(player, true, 120 + index as i64)
+                .unwrap();
+        }
+        assert_eq!(state.ready_mask, 0b11_1111_1111);
+        assert!(state.everyone_ready());
+    }
+
+    #[test]
     fn rejects_non_participant_ready_updates() {
         let mut state = room(Pubkey::new_unique(), 4);
         assert!(state
@@ -1523,6 +1544,15 @@ mod tests {
         assert!(state.start_opening(host, 107).is_err());
         assert!(state.set_player_ready(host, false, 107).is_err());
         assert!(state.join(Pubkey::new_unique(), 107).is_err());
+    }
+
+    #[test]
+    fn a_single_ready_host_cannot_start_opening() {
+        let host = Pubkey::new_unique();
+        let mut state = room(host, MAX_PLAYERS as u8);
+        state.set_player_ready(host, true, 101).unwrap();
+        assert!(state.everyone_ready());
+        assert!(state.start_opening(host, 102).is_err());
     }
 
     #[test]
@@ -1592,6 +1622,9 @@ mod tests {
         let host = Pubkey::new_unique();
         let player = Pubkey::new_unique();
         let outsider = Pubkey::new_unique();
+        let mut participants = [Pubkey::default(); MAX_PLAYERS];
+        participants[0] = host;
+        participants[1] = player;
         let state = EscrowState {
             version: ESCROW_VERSION,
             bump: 1,
@@ -1604,13 +1637,13 @@ mod tests {
             funding_target: 10_000_000,
             funding_deadline: 200,
             total_contributed: 0,
-            max_players: 4,
+            max_players: MAX_PLAYERS as u8,
             participant_count: 2,
             contributor_count: 0,
             status: EscrowStatus::Funding,
             purchase_signature: [0; 64],
             purchase_memo_hash: [0; 32],
-            participants: [host, player, Pubkey::default(), Pubkey::default()],
+            participants,
         };
         assert!(state.require_participant(host).is_ok());
         assert!(state.require_participant(player).is_ok());
@@ -1621,6 +1654,9 @@ mod tests {
     fn escrow_lifecycle_rejects_replays() {
         let host = Pubkey::new_unique();
         let player = Pubkey::new_unique();
+        let mut participants = [Pubkey::default(); MAX_PLAYERS];
+        participants[0] = host;
+        participants[1] = player;
         let mut state = EscrowState {
             version: ESCROW_VERSION,
             bump: 1,
@@ -1633,13 +1669,13 @@ mod tests {
             funding_target: 10_000_000,
             funding_deadline: 200,
             total_contributed: 10_000_000,
-            max_players: 4,
+            max_players: MAX_PLAYERS as u8,
             participant_count: 2,
             contributor_count: 2,
             status: EscrowStatus::Funding,
             purchase_signature: [0; 64],
             purchase_memo_hash: [0; 32],
-            participants: [host, player, Pubkey::default(), Pubkey::default()],
+            participants,
         };
 
         assert!(state.require_status(EscrowStatus::Funding).is_ok());
