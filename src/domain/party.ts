@@ -19,7 +19,7 @@ export type PartyStatus = (typeof partyStatuses)[number];
 const transitions: Readonly<Record<PartyStatus, readonly PartyStatus[]>> = {
   DRAFT: ["FUNDING", "CANCELLED"],
   FUNDING: ["FUNDED", "CANCELLED", "EXPIRED"],
-  FUNDED: ["FUNDING", "READY", "CANCELLED"],
+  FUNDED: ["FUNDING", "READY", "CANCELLED", "EXPIRED"],
   READY: ["OPENING", "CANCELLED"],
   OPENING: ["REVEALED", "CANCELLED"],
   REVEALED: ["VOTING"],
@@ -82,7 +82,7 @@ export type VoteChoice = "KEEP" | "SELL";
 
 export type PartyActivity = {
   id: string;
-  kind: "CREATED" | "JOINED" | "CONTRIBUTED" | "READY" | "COUNTDOWN" | "REVEALED" | "VOTE" | "SETTLED";
+  kind: "CREATED" | "JOINED" | "CONTRIBUTED" | "READY" | "COUNTDOWN" | "REVEALED" | "VOTE" | "SETTLED" | "EXPIRED";
   message: string;
   createdAt: string;
 };

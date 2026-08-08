@@ -37,10 +37,12 @@ export function EscrowFundingPanel({
   tokenLabel,
   contribution,
   remaining,
+  deadlinePassed,
   onContributionChange,
   onReviewInitialize,
   onReviewDeposit,
   onReviewRefund,
+  onReviewCancel,
   onReviewLock,
   onRefresh,
 }: {
@@ -57,14 +59,17 @@ export function EscrowFundingPanel({
   tokenLabel: string;
   contribution: string;
   remaining: bigint;
+  deadlinePassed: boolean;
   onContributionChange: (value: string) => void;
   onReviewInitialize: () => void;
   onReviewDeposit: () => void;
   onReviewRefund: () => void;
+  onReviewCancel: () => void;
   onReviewLock: () => void;
   onRefresh: () => void;
 }) {
   const fundingOpen = snapshot?.status === ProgramEscrowStatus.Funding;
+  const cancelled = snapshot?.status === ProgramEscrowStatus.Cancelled;
   if (status === "disabled") return null;
 
   if (status === "unconfigured") {
@@ -168,7 +173,7 @@ export function EscrowFundingPanel({
         </div>
       )}
 
-      {isParticipant && tokenAccount && !receipt && fundingOpen && (
+      {isParticipant && tokenAccount && !receipt && fundingOpen && !deadlinePassed && (
         <form onSubmit={(event) => { event.preventDefault(); onReviewDeposit(); }} className="mt-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="flex-1 space-y-1.5">
@@ -184,28 +189,56 @@ export function EscrowFundingPanel({
         </form>
       )}
 
-      {receipt && fundingOpen && (
+      {receipt && fundingOpen && !deadlinePassed && (
         <div className="mt-5 flex flex-col justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 p-4 sm:flex-row sm:items-center">
           <div><p className="font-semibold">Contribution confirmed</p><p className="mt-1 text-xs text-muted-foreground">Refunds remain available until the host locks the fully funded escrow.</p></div>
           <Button type="button" variant="secondary" onClick={onReviewRefund}><RotateCcw className="size-4" aria-hidden="true" /> Review refund</Button>
         </div>
       )}
 
-      {isHost && fundingOpen && participantCount >= 2 && snapshot?.totalContributed === snapshot?.fundingTarget && (
+      {isParticipant && fundingOpen && deadlinePassed && (
+        <div className="mt-5 flex flex-col justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-4 sm:flex-row sm:items-center">
+          <div>
+            <p className="font-semibold">Funding deadline passed</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              {receipt
+                ? "One signature marks the escrow cancelled and returns your complete recorded contribution."
+                : "Mark the escrow cancelled so every contributor can reclaim their own deposit."}
+            </p>
+          </div>
+          <Button type="button" variant="secondary" onClick={receipt ? onReviewRefund : onReviewCancel}>
+            <RotateCcw className="size-4" aria-hidden="true" /> {receipt ? "Review refund" : "Mark expired"}
+          </Button>
+        </div>
+      )}
+
+      {isParticipant && cancelled && (
+        <div className="mt-5 flex flex-col justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 p-4 sm:flex-row sm:items-center">
+          <div>
+            <p className="font-semibold">Funding cancelled safely</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              {receipt ? "Your full recorded contribution remains in the vault until you sign its refund." : "You have no remaining deposit in this vault."}
+            </p>
+          </div>
+          {receipt && <Button type="button" variant="secondary" onClick={onReviewRefund}><RotateCcw className="size-4" aria-hidden="true" /> Review refund</Button>}
+        </div>
+      )}
+
+      {isHost && fundingOpen && !deadlinePassed && participantCount >= 2 && snapshot?.totalContributed === snapshot?.fundingTarget && (
         <div className="mt-5 flex flex-col justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 p-4 sm:flex-row sm:items-center">
           <div><p className="font-semibold">Fully funded</p><p className="mt-1 text-xs text-muted-foreground">Locking permanently disables refunds and authorizes the devnet operator purchase.</p></div>
           <Button type="button" onClick={onReviewLock}>Review lock</Button>
         </div>
       )}
 
-      {isHost && fundingOpen && participantCount < 2 && snapshot?.totalContributed === snapshot?.fundingTarget && (
+      {isHost && fundingOpen && !deadlinePassed && participantCount < 2 && snapshot?.totalContributed === snapshot?.fundingTarget && (
         <div className="mt-5 rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm">
           <p className="font-semibold">Fully funded — invite one friend</p>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">At least two registered players are required before the party can lock funds and open the pack.</p>
         </div>
       )}
 
-      {!fundingOpen && (
+      {!fundingOpen && !cancelled && (
         <div className="mt-5 rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm">
           <p className="font-semibold">Escrow {snapshot?.status === ProgramEscrowStatus.Locked ? "locked for purchase" : "handed to the devnet operator"}</p>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">Deposits and refunds are disabled by the on-chain lifecycle.</p>
@@ -219,6 +252,7 @@ const intentCopy: Record<EscrowIntent, { eyebrow: string; title: string }> = {
   initialize: { eyebrow: "Escrow activation", title: "Create this funding vault?" },
   deposit: { eyebrow: "Token contribution", title: "Deposit into the party vault?" },
   refund: { eyebrow: "Full refund", title: "Return your contribution?" },
+  cancel: { eyebrow: "Deadline enforcement", title: "Mark this funding round expired?" },
   lock: { eyebrow: "Purchase authorization", title: "Lock the party escrow?" },
 };
 
@@ -230,6 +264,7 @@ export function EscrowTransactionReview({
   tokenLabel,
   canSignTransactions,
   onConfirm,
+  onRecover,
   onCancel,
 }: {
   intent: EscrowIntent;
@@ -239,13 +274,15 @@ export function EscrowTransactionReview({
   tokenLabel: string;
   canSignTransactions: boolean;
   onConfirm: () => void;
+  onRecover: () => void;
   onCancel: () => void;
 }) {
-  const pending = transaction.action === intent && ["preparing", "simulating", "signing", "submitting"].includes(transaction.stage);
+  const pending = transaction.action === intent && ["preparing", "simulating", "signing", "submitting", "confirming", "recovering"].includes(transaction.stage);
   const confirmed = transaction.action === intent && transaction.stage === "confirmed" ? transaction.signature : null;
+  const submitted = transaction.action === intent ? transaction.signature : null;
   const actionError = transaction.action === intent ? transaction.error : null;
-  const stageLabel = transaction.stage === "preparing" ? "Preparing…" : transaction.stage === "simulating" ? "Simulating…" : transaction.stage === "signing" ? "Confirm in wallet…" : "Confirming…";
-  const assets = intent === "initialize" ? "None" : intent === "lock" ? "No transfer; refunds disabled" : `${formatUsdc(amount)} ${tokenLabel}`;
+  const stageLabel = transaction.stage === "preparing" ? "Preparing…" : transaction.stage === "simulating" ? "Simulating…" : transaction.stage === "signing" ? "Confirm in wallet…" : transaction.stage === "submitting" ? "Submitting…" : transaction.stage === "recovering" ? "Checking status…" : "Confirming…";
+  const assets = intent === "initialize" || intent === "cancel" ? "None" : intent === "lock" ? "No transfer; refunds disabled" : `${formatUsdc(amount)} ${tokenLabel}`;
 
   return (
     <div className="rounded-xl border border-primary/40 bg-card p-5 sm:p-6" aria-live="polite">
@@ -260,10 +297,12 @@ export function EscrowTransactionReview({
         <div className="sm:col-span-2"><dt className="text-xs text-muted-foreground">Network fee</dt><dd className="mt-1 text-xs">Shown by your wallet in devnet SOL. Escrow activation also pays account rent.</dd></div>
       </dl>
       {actionError && <p role="alert" className="mt-4 text-sm text-destructive">{actionError}</p>}
-      {confirmed && <a href={explorerTransaction(confirmed)} target="_blank" rel="noreferrer" className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-md text-sm font-semibold text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Transaction confirmed <ExternalLink className="size-4" aria-hidden="true" /></a>}
+      {submitted && <a href={explorerTransaction(submitted)} target="_blank" rel="noreferrer" className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-md text-sm font-semibold text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{confirmed ? "Transaction confirmed" : "View submitted transaction"} <ExternalLink className="size-4" aria-hidden="true" /></a>}
       <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button type="button" variant="ghost" onClick={onCancel} disabled={pending}>{confirmed ? "Done" : "Cancel"}</Button>
-        {canSignTransactions ? (
+        <Button type="button" variant="ghost" onClick={onCancel} disabled={pending || Boolean(submitted && !confirmed)}>{confirmed ? "Done" : "Cancel"}</Button>
+        {submitted && !confirmed ? (
+          <Button type="button" onClick={onRecover} loading={pending}>Check transaction status</Button>
+        ) : canSignTransactions ? (
           <Button type="button" onClick={onConfirm} loading={pending} disabled={Boolean(confirmed)}>{pending ? stageLabel : confirmed ? "Confirmed" : "Confirm and sign"}</Button>
         ) : <WalletAuthButton />}
       </div>

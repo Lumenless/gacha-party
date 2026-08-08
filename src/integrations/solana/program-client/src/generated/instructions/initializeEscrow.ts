@@ -6,7 +6,7 @@
  * @see https://github.com/codama-idl/codama
  */
 
-import { combineCodec, fixDecoderSize, fixEncoderSize, getAddressDecoder, getAddressEncoder, getBytesDecoder, getBytesEncoder, getProgramDerivedAddress, getStructDecoder, getStructEncoder, getU64Decoder, getU64Encoder, getU8Decoder, getU8Encoder, transformEncoder, type AccountMeta, type AccountSignerMeta, type Address, type FixedSizeCodec, type FixedSizeDecoder, type FixedSizeEncoder, type Instruction, type InstructionWithAccounts, type InstructionWithData, type ReadonlyAccount, type ReadonlyUint8Array, type TransactionSigner, type WritableAccount, type WritableSignerAccount } from '@solana/kit';
+import { combineCodec, fixDecoderSize, fixEncoderSize, getAddressDecoder, getAddressEncoder, getBytesDecoder, getBytesEncoder, getI64Decoder, getI64Encoder, getProgramDerivedAddress, getStructDecoder, getStructEncoder, getU64Decoder, getU64Encoder, getU8Decoder, getU8Encoder, transformEncoder, type AccountMeta, type AccountSignerMeta, type Address, type FixedSizeCodec, type FixedSizeDecoder, type FixedSizeEncoder, type Instruction, type InstructionWithAccounts, type InstructionWithData, type ReadonlyAccount, type ReadonlyUint8Array, type TransactionSigner, type WritableAccount, type WritableSignerAccount } from '@solana/kit';
 import { GACHA_PARTY_ROOM_PROGRAM_ADDRESS } from '../programs';
 import { expectAddress, expectSome, getAccountMetaFactory, type ResolvedAccount } from '../shared';
 
@@ -17,16 +17,16 @@ export function getInitializeEscrowDiscriminatorBytes() { return fixEncoderSize(
 export type InitializeEscrowInstruction<TProgram extends string = typeof GACHA_PARTY_ROOM_PROGRAM_ADDRESS, TAccountEscrow extends string | AccountMeta<string> = string, TAccountVault extends string | AccountMeta<string> = string, TAccountMint extends string | AccountMeta<string> = string, TAccountHost extends string | AccountMeta<string> = string, TAccountTokenProgram extends string | AccountMeta<string> = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", TAccountSystemProgram extends string | AccountMeta<string> = "11111111111111111111111111111111", TAccountRent extends string | AccountMeta<string> = "SysvarRent111111111111111111111111111111111", TRemainingAccounts extends readonly AccountMeta<string>[] = []> =
 Instruction<TProgram> & InstructionWithData<ReadonlyUint8Array> & InstructionWithAccounts<[TAccountEscrow extends string ? WritableAccount<TAccountEscrow> : TAccountEscrow, TAccountVault extends string ? WritableAccount<TAccountVault> : TAccountVault, TAccountMint extends string ? ReadonlyAccount<TAccountMint> : TAccountMint, TAccountHost extends string ? WritableSignerAccount<TAccountHost> & AccountSignerMeta<TAccountHost> : TAccountHost, TAccountTokenProgram extends string ? ReadonlyAccount<TAccountTokenProgram> : TAccountTokenProgram, TAccountSystemProgram extends string ? ReadonlyAccount<TAccountSystemProgram> : TAccountSystemProgram, TAccountRent extends string ? ReadonlyAccount<TAccountRent> : TAccountRent, ...TRemainingAccounts]>;
 
-export type InitializeEscrowInstructionData = { discriminator: ReadonlyUint8Array; roomId: ReadonlyUint8Array; fundingTarget: bigint; maxPlayers: number; operator: Address;  };
+export type InitializeEscrowInstructionData = { discriminator: ReadonlyUint8Array; roomId: ReadonlyUint8Array; fundingTarget: bigint; fundingDeadline: bigint; maxPlayers: number; operator: Address;  };
 
-export type InitializeEscrowInstructionDataArgs = { roomId: ReadonlyUint8Array; fundingTarget: number | bigint; maxPlayers: number; operator: Address;  };
+export type InitializeEscrowInstructionDataArgs = { roomId: ReadonlyUint8Array; fundingTarget: number | bigint; fundingDeadline: number | bigint; maxPlayers: number; operator: Address;  };
 
 export function getInitializeEscrowInstructionDataEncoder(): FixedSizeEncoder<InitializeEscrowInstructionDataArgs> {
-    return transformEncoder(getStructEncoder([['discriminator', fixEncoderSize(getBytesEncoder(), 8)], ['roomId', fixEncoderSize(getBytesEncoder(), 8)], ['fundingTarget', getU64Encoder()], ['maxPlayers', getU8Encoder()], ['operator', getAddressEncoder()]]), (value) => ({ ...value, discriminator: INITIALIZE_ESCROW_DISCRIMINATOR }));
+    return transformEncoder(getStructEncoder([['discriminator', fixEncoderSize(getBytesEncoder(), 8)], ['roomId', fixEncoderSize(getBytesEncoder(), 8)], ['fundingTarget', getU64Encoder()], ['fundingDeadline', getI64Encoder()], ['maxPlayers', getU8Encoder()], ['operator', getAddressEncoder()]]), (value) => ({ ...value, discriminator: INITIALIZE_ESCROW_DISCRIMINATOR }));
 }
 
 export function getInitializeEscrowInstructionDataDecoder(): FixedSizeDecoder<InitializeEscrowInstructionData> {
-    return getStructDecoder([['discriminator', fixDecoderSize(getBytesDecoder(), 8)], ['roomId', fixDecoderSize(getBytesDecoder(), 8)], ['fundingTarget', getU64Decoder()], ['maxPlayers', getU8Decoder()], ['operator', getAddressDecoder()]]);
+    return getStructDecoder([['discriminator', fixDecoderSize(getBytesDecoder(), 8)], ['roomId', fixDecoderSize(getBytesDecoder(), 8)], ['fundingTarget', getU64Decoder()], ['fundingDeadline', getI64Decoder()], ['maxPlayers', getU8Decoder()], ['operator', getAddressDecoder()]]);
 }
 
 export function getInitializeEscrowInstructionDataCodec(): FixedSizeCodec<InitializeEscrowInstructionDataArgs, InitializeEscrowInstructionData> {
@@ -43,6 +43,7 @@ systemProgram?: Address<TAccountSystemProgram>;
 rent?: Address<TAccountRent>;
 roomId: InitializeEscrowInstructionDataArgs["roomId"];
 fundingTarget: InitializeEscrowInstructionDataArgs["fundingTarget"];
+fundingDeadline: InitializeEscrowInstructionDataArgs["fundingDeadline"];
 maxPlayers: InitializeEscrowInstructionDataArgs["maxPlayers"];
 operator: InitializeEscrowInstructionDataArgs["operator"];
 }
@@ -91,6 +92,7 @@ systemProgram?: Address<TAccountSystemProgram>;
 rent?: Address<TAccountRent>;
 roomId: InitializeEscrowInstructionDataArgs["roomId"];
 fundingTarget: InitializeEscrowInstructionDataArgs["fundingTarget"];
+fundingDeadline: InitializeEscrowInstructionDataArgs["fundingDeadline"];
 maxPlayers: InitializeEscrowInstructionDataArgs["maxPlayers"];
 operator: InitializeEscrowInstructionDataArgs["operator"];
 }

@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Signature } from "@solana/kit";
 import type { Party } from "@/domain/party";
+import { EscrowStatus as ProgramEscrowStatus } from "@/integrations/solana/program-client/src/generated";
 import { useWalletAuth } from "@/components/wallet/wallet-auth-provider";
 import {
   DevnetEscrowClient,
@@ -10,10 +12,15 @@ import {
   type PreparedEscrowTransaction,
   type WalletTokenAccountSnapshot,
 } from "./escrow-client";
+import {
+  parsePendingEscrowTransaction,
+  pendingEscrowTransactionKey,
+  type PendingEscrowTransaction,
+} from "./pending-escrow-transaction";
 
 export type EscrowStatus = "disabled" | "unconfigured" | "loading" | "missing" | "active" | "error";
-export type EscrowIntent = "initialize" | "deposit" | "refund" | "lock";
-export type EscrowTransactionStage = "idle" | "preparing" | "simulating" | "signing" | "submitting" | "confirmed" | "error";
+export type EscrowIntent = "initialize" | "deposit" | "refund" | "cancel" | "lock";
+export type EscrowTransactionStage = "idle" | "preparing" | "simulating" | "signing" | "submitting" | "confirming" | "recovering" | "confirmed" | "error";
 
 export type EscrowTransactionState = {
   action: EscrowIntent | null;
@@ -23,6 +30,7 @@ export type EscrowTransactionState = {
 };
 
 const idleTransaction: EscrowTransactionState = { action: null, stage: "idle", signature: null, error: null };
+const PENDING_TRANSACTION_EXPIRY_MS = 5 * 60 * 1_000;
 const clients = new Map<string, Promise<DevnetEscrowClient>>();
 
 function escrowClient(mint: string, operator: string) {
@@ -39,6 +47,7 @@ function transactionError(cause: unknown) {
   const message = cause instanceof Error ? cause.message : "The escrow transaction failed.";
   if (/reject|cancel|declin/i.test(message)) return "Signature cancelled. No tokens moved.";
   if (/blockhash|expired/i.test(message)) return "The transaction expired. Review it again with a fresh blockhash.";
+  if (/confirmation timed out/i.test(message)) return "The transaction was submitted but confirmation is taking longer than expected. Check its status before signing anything again.";
   if (/insufficient.*(fund|balance)|custom program error: 0x1784/i.test(message)) {
     return "This wallet does not have enough tokens or devnet SOL for the contribution and account rent.";
   }
@@ -46,7 +55,7 @@ function transactionError(cause: unknown) {
   return message;
 }
 
-export function useSolanaEscrow(party: Pick<Party, "id" | "hostWallet" | "fundingTargetBaseUnits" | "maxPlayers" | "participants">) {
+export function useSolanaEscrow(party: Pick<Party, "id" | "hostWallet" | "fundingTargetBaseUnits" | "fundingDeadline" | "maxPlayers" | "participants">) {
   const wallet = useWalletAuth();
   const fundsMode = process.env.NEXT_PUBLIC_FUNDS_MODE;
   const mint = process.env.NEXT_PUBLIC_USDC_MINT?.trim() ?? "";
@@ -99,24 +108,96 @@ export function useSolanaEscrow(party: Pick<Party, "id" | "hostWallet" | "fundin
 
   const execute = useCallback(async (action: EscrowIntent, prepare: () => Promise<PreparedEscrowTransaction>) => {
     setTransaction({ action, stage: "preparing", signature: null, error: null });
+    let submittedSignature: string | null = null;
     try {
       if (!configured) throw new Error("Real funding is not configured for this deployment.");
       if (!wallet.canSignTransactions) throw new Error("Reconnect your wallet to enable transaction signing.");
+      if (wallet.walletAddress) {
+        const pending = parsePendingEscrowTransaction(localStorage.getItem(
+          pendingEscrowTransactionKey(party.id, wallet.walletAddress),
+        ));
+        if (pending) throw new Error("A submitted transaction is still awaiting confirmation. Check its status before signing again.");
+      }
       const prepared = await prepare();
       setTransaction({ action, stage: "simulating", signature: null, error: null });
       await (await escrowClient(mint, operator)).simulateTransaction(prepared);
       setTransaction({ action, stage: "signing", signature: null, error: null });
       const signed = await wallet.signTransaction(prepared.transaction);
       setTransaction({ action, stage: "submitting", signature: null, error: null });
-      const signature = await (await escrowClient(mint, operator)).submitSignedTransaction(signed);
+      const signature = await (await escrowClient(mint, operator)).submitSignedTransaction(signed, (submitted) => {
+        submittedSignature = String(submitted);
+        if (wallet.walletAddress) {
+          const pending: PendingEscrowTransaction = {
+            action,
+            signature: submittedSignature,
+            partyId: party.id,
+            wallet: wallet.walletAddress,
+            submittedAt: Date.now(),
+          };
+          localStorage.setItem(
+            pendingEscrowTransactionKey(party.id, wallet.walletAddress),
+            JSON.stringify(pending),
+          );
+        }
+        setTransaction({ action, stage: "confirming", signature: submittedSignature, error: null });
+      });
+      if (wallet.walletAddress) localStorage.removeItem(pendingEscrowTransactionKey(party.id, wallet.walletAddress));
       setTransaction({ action, stage: "confirmed", signature, error: null });
       await refresh();
       return true;
     } catch (cause) {
-      setTransaction({ action, stage: "error", signature: null, error: transactionError(cause) });
+      setTransaction({ action, stage: "error", signature: submittedSignature, error: transactionError(cause) });
       return false;
     }
-  }, [configured, mint, operator, refresh, wallet]);
+  }, [configured, mint, operator, party.id, refresh, wallet]);
+
+  const recoverPending = useCallback(async () => {
+    if (!configured || !wallet.walletAddress) return false;
+    const key = pendingEscrowTransactionKey(party.id, wallet.walletAddress);
+    const pending = parsePendingEscrowTransaction(localStorage.getItem(key));
+    if (!pending) return false;
+    setTransaction({ action: pending.action, stage: "recovering", signature: pending.signature, error: null });
+    try {
+      const client = await escrowClient(mint, operator);
+      const [currentEscrow, currentReceipt] = await Promise.all([
+        client.fetchEscrow(party.hostWallet, party.id),
+        client.fetchReceipt(party.hostWallet, party.id, wallet.walletAddress),
+      ]);
+      const stateConfirmsTransaction = pending.action === "initialize"
+        ? Boolean(currentEscrow)
+        : pending.action === "deposit"
+          ? Boolean(currentReceipt)
+          : pending.action === "refund"
+            ? !currentReceipt
+            : pending.action === "cancel"
+              ? currentEscrow?.status === ProgramEscrowStatus.Cancelled
+              : currentEscrow !== null && currentEscrow.status !== ProgramEscrowStatus.Funding;
+      if (!stateConfirmsTransaction) await client.confirmSignature(pending.signature as Signature);
+      localStorage.removeItem(key);
+      setTransaction({ action: pending.action, stage: "confirmed", signature: pending.signature, error: null });
+      await refresh();
+      return true;
+    } catch (cause) {
+      const failed = /failed after submission/i.test(cause instanceof Error ? cause.message : "");
+      const expiredWithoutState = Date.now() - pending.submittedAt >= PENDING_TRANSACTION_EXPIRY_MS;
+      const message = expiredWithoutState
+        ? "The submitted transaction was not found on-chain after its blockhash expired. It is safe to review and sign a fresh transaction."
+        : transactionError(cause);
+      if (failed || expiredWithoutState) localStorage.removeItem(key);
+      setTransaction({ action: pending.action, stage: "error", signature: pending.signature, error: message });
+      return false;
+    }
+  }, [configured, mint, operator, party.hostWallet, party.id, refresh, wallet.walletAddress]);
+
+  useEffect(() => {
+    if (!configured || !wallet.walletAddress) return;
+    const pending = parsePendingEscrowTransaction(localStorage.getItem(
+      pendingEscrowTransactionKey(party.id, wallet.walletAddress),
+    ));
+    if (!pending) return;
+    const timer = window.setTimeout(() => void recoverPending(), 0);
+    return () => window.clearTimeout(timer);
+  }, [configured, party.id, recoverPending, wallet.walletAddress]);
 
   const initialize = useCallback(() => {
     if (snapshot) return Promise.resolve(true);
@@ -124,9 +205,10 @@ export function useSolanaEscrow(party: Pick<Party, "id" | "hostWallet" | "fundin
       party.hostWallet,
       party.id,
       BigInt(party.fundingTargetBaseUnits),
+      BigInt(Math.floor(new Date(party.fundingDeadline).getTime() / 1_000)),
       party.maxPlayers,
     ));
-  }, [execute, mint, operator, party.fundingTargetBaseUnits, party.hostWallet, party.id, party.maxPlayers, snapshot]);
+  }, [execute, mint, operator, party.fundingDeadline, party.fundingTargetBaseUnits, party.hostWallet, party.id, party.maxPlayers, snapshot]);
 
   const deposit = useCallback((amount: bigint) => {
     if (!wallet.walletAddress || !tokenAccount) return Promise.resolve(false);
@@ -139,15 +221,24 @@ export function useSolanaEscrow(party: Pick<Party, "id" | "hostWallet" | "fundin
     ));
   }, [execute, mint, operator, party.hostWallet, party.id, tokenAccount, wallet.walletAddress]);
 
-  const refund = useCallback(() => {
-    if (!wallet.walletAddress || !tokenAccount) return Promise.resolve(false);
+  const refund = useCallback((cancelExpired = false) => {
+    if (!wallet.walletAddress) return Promise.resolve(false);
     return execute("refund", async () => (await escrowClient(mint, operator)).prepareRefund(
       wallet.walletAddress!,
       party.hostWallet,
       party.id,
-      tokenAccount.address,
+      cancelExpired,
     ));
-  }, [execute, mint, operator, party.hostWallet, party.id, tokenAccount, wallet.walletAddress]);
+  }, [execute, mint, operator, party.hostWallet, party.id, wallet.walletAddress]);
+
+  const cancel = useCallback(() => {
+    if (!wallet.walletAddress) return Promise.resolve(false);
+    return execute("cancel", async () => (await escrowClient(mint, operator)).prepareCancel(
+      wallet.walletAddress!,
+      party.hostWallet,
+      party.id,
+    ));
+  }, [execute, mint, operator, party.hostWallet, party.id, wallet.walletAddress]);
 
   const lock = useCallback(() => execute("lock", async () => (
     await escrowClient(mint, operator)
@@ -174,7 +265,9 @@ export function useSolanaEscrow(party: Pick<Party, "id" | "hostWallet" | "fundin
     initialize,
     deposit,
     refund,
+    cancel,
     lock,
+    recoverPending,
     resetTransaction: () => setTransaction(idleTransaction),
   };
 }

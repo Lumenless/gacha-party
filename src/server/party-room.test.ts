@@ -182,4 +182,37 @@ describe("multiplayer room service", () => {
       realtime,
     )).rejects.toThrow("receipts do not match");
   });
+
+  it("mirrors on-chain cancellation and keeps later refund reconciliation idempotent", async () => {
+    await joinParty("party-1", { wallet: "DemoPlayerWallet0001", displayName: "Alice" }, realtime);
+    const roster = ["DEMO_HOST_WALLET", "DemoPlayerWallet0001"];
+    const expired = await syncOnchainContributions(
+      "party-1",
+      new Map([
+        ["DEMO_HOST_WALLET", parseUsdc("20")],
+        ["DemoPlayerWallet0001", parseUsdc("10")],
+      ]),
+      parseUsdc("30"),
+      parseUsdc("50"),
+      roster,
+      realtime,
+      true,
+    );
+    expect(expired.status).toBe("EXPIRED");
+
+    const refunded = await syncOnchainContributions(
+      "party-1",
+      new Map([
+        ["DEMO_HOST_WALLET", 0n],
+        ["DemoPlayerWallet0001", parseUsdc("10")],
+      ]),
+      parseUsdc("10"),
+      parseUsdc("50"),
+      roster,
+      realtime,
+      true,
+    );
+    expect(refunded.status).toBe("EXPIRED");
+    expect(refunded.participants[0]?.contributionBaseUnits).toBe("0");
+  });
 });

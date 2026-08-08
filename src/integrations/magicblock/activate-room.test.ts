@@ -33,7 +33,10 @@ beforeEach(() => {
     transaction: new Uint8Array([1, 2, 3]),
   });
   mocks.simulateTransaction.mockResolvedValue(10n);
-  mocks.submitSignedTransaction.mockResolvedValue("confirmed-signature");
+  mocks.submitSignedTransaction.mockImplementation(async (_transaction, onSubmitted?: (signature: string) => void) => {
+    onSubmitted?.("confirmed-signature");
+    return "confirmed-signature";
+  });
 });
 
 afterEach(() => vi.unstubAllEnvs());
@@ -48,14 +51,15 @@ describe("new party MagicBlock activation", () => {
       partyId: "12345678",
       maxPlayers: 2,
       fundingTargetBaseUnits: "50000000",
+      fundingDeadline: "2026-08-09T00:00:00.000Z",
       signTransaction,
       onStage: (stage) => stages.push(stage),
     });
 
-    expect(stages).toEqual(["preparing", "simulating", "signing", "submitting"]);
+    expect(stages).toEqual(["preparing", "simulating", "signing", "submitting", "confirming"]);
     expect(mocks.simulateTransaction).toHaveBeenCalledBefore(signTransaction);
     expect(signTransaction).toHaveBeenCalledWith(new Uint8Array([1, 2, 3]));
-    expect(mocks.submitSignedTransaction).toHaveBeenCalledWith(new Uint8Array([4, 5, 6]));
+    expect(mocks.submitSignedTransaction).toHaveBeenCalledWith(new Uint8Array([4, 5, 6]), expect.any(Function));
     expect(signature).toBe("confirmed-signature");
   });
 
@@ -68,6 +72,7 @@ describe("new party MagicBlock activation", () => {
       partyId: "12345678",
       maxPlayers: 2,
       fundingTargetBaseUnits: "50000000",
+      fundingDeadline: "2026-08-09T00:00:00.000Z",
       signTransaction,
     })).resolves.toBeNull();
 
@@ -85,10 +90,11 @@ describe("new party MagicBlock activation", () => {
       partyId: "12345678",
       maxPlayers: 3,
       fundingTargetBaseUnits: "75000000",
+      fundingDeadline: "2026-08-09T00:00:00.000Z",
       signTransaction: async () => new Uint8Array([4, 5, 6]),
     });
 
-    expect(mocks.buildInitializeInstruction).toHaveBeenCalledWith("host", "12345678", 75_000_000n, 3);
+    expect(mocks.buildInitializeInstruction).toHaveBeenCalledWith("host", "12345678", 75_000_000n, 1_786_233_600n, 3);
     expect(mocks.prepareInitializeAndDelegation).toHaveBeenCalledWith(
       "host",
       "12345678",

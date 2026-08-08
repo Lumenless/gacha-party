@@ -6,6 +6,7 @@
  * @see https://github.com/codama-idl/codama
  */
 
+export * from './cancelExpiredEscrow';
 export * from './castPrivateVote';
 export * from './commitRoom';
 export * from './delegatePrivateVote';

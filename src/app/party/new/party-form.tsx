@@ -104,6 +104,7 @@ export function CreatePartyForm({ packs, exactPackPrice = false }: { packs: Pack
           partyId,
           maxPlayers: values.maxPlayers,
           fundingTargetBaseUnits: parseUsdc(values.fundingTarget).toString(),
+          fundingDeadline: values.fundingDeadline,
           signTransaction: walletAuth.signTransaction,
           onStage: setActivationStage,
         });
@@ -127,7 +128,9 @@ export function CreatePartyForm({ packs, exactPackPrice = false }: { packs: Pack
         ? "Checking transaction…"
         : activationStage === "signing"
           ? "Confirm in wallet…"
-          : activationStage === "submitting" ? "Activating room…" : null;
+        : activationStage === "submitting"
+          ? "Submitting activation…"
+          : activationStage === "confirming" ? "Confirming room and vault…" : null;
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate aria-busy={isSubmitting}>

@@ -51,6 +51,7 @@ async function main() {
     signer.address,
     partyId,
     50_000_000n,
+    BigInt(Math.floor(Date.now() / 1_000) + 60),
     2,
   );
   await signAndSubmit(await client.prepareInitializeAndDelegation(
@@ -64,7 +65,7 @@ async function main() {
     throw new Error("Initialized room did not decode to the expected state.");
   }
   let escrow = await escrowClient.fetchEscrow(signer.address, partyId);
-  if (!escrow || escrow.version !== 3 || escrow.participantCount !== 1 || escrow.maxPlayers !== 2) {
+  if (!escrow || escrow.version !== 4 || escrow.participantCount !== 1 || escrow.maxPlayers !== 2) {
     throw new Error("Initialized escrow did not decode to the expected dynamic roster.");
   }
   const party = {

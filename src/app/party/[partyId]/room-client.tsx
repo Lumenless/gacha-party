@@ -104,6 +104,18 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
   const realExecution = party.executionMode === "DEVNET";
 
   useEffect(() => {
+    if (!escrow.transaction.action || escrow.transaction.stage === "idle") return;
+    const action = escrow.transaction.action;
+    queueMicrotask(() => setEscrowIntent(action));
+  }, [escrow.transaction.action, escrow.transaction.stage]);
+
+  useEffect(() => {
+    if (!chainRoom.transaction.action || chainRoom.transaction.stage === "idle") return;
+    const action = chainRoom.transaction.action;
+    queueMicrotask(() => setChainIntent(action));
+  }, [chainRoom.transaction.action, chainRoom.transaction.stage]);
+
+  useEffect(() => {
     const partyIdentityKey = `${IDENTITY_KEY}:${initialParty.id}`;
     if (walletAuth.enabled) {
       const nextIdentity = walletAuth.walletAddress
@@ -164,9 +176,14 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
   }, [initialParty.id]);
 
   useEffect(() => {
-    if (party.status !== "OPENING" && party.status !== "VOTING") return;
-    const timer = window.setInterval(() => setClock(Date.now()), 250);
-    return () => window.clearInterval(timer);
+    if (!["FUNDING", "FUNDED", "OPENING", "VOTING"].includes(party.status)) return;
+    const update = () => setClock(Date.now());
+    const initial = window.setTimeout(update, 0);
+    const timer = window.setInterval(update, party.status === "OPENING" || party.status === "VOTING" ? 250 : 1_000);
+    return () => {
+      window.clearTimeout(initial);
+      window.clearInterval(timer);
+    };
   }, [party.status]);
 
   const currentParticipant = identity
@@ -186,6 +203,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
     month: "short",
     day: "numeric",
   }).format(new Date(party.fundingDeadline));
+  const deadlinePassed = clock > new Date(party.fundingDeadline).getTime();
   const countdownMilliseconds = party.countdownEndsAt && clock
     ? new Date(party.countdownEndsAt).getTime() - clock
     : 3_000;
@@ -231,8 +249,9 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
     if (!escrow.enabled || escrow.status !== "active" || !identity || !currentParticipant || !escrow.snapshot) return;
     const receiptAmount = escrow.receipt?.amount ?? 0n;
     const mirrorAmount = BigInt(currentParticipant.contributionBaseUnits);
-    const syncKey = `${escrow.snapshot.totalContributed}:${funded}:${receiptAmount}:${mirrorAmount}`;
-    if ((receiptAmount !== mirrorAmount || escrow.snapshot.totalContributed !== funded) && escrowSyncRequested.current !== syncKey) {
+    const statusMismatch = escrow.snapshot.status === ProgramEscrowStatus.Cancelled && party.status !== "EXPIRED";
+    const syncKey = `${escrow.snapshot.status}:${party.status}:${escrow.snapshot.totalContributed}:${funded}:${receiptAmount}:${mirrorAmount}`;
+    if ((statusMismatch || receiptAmount !== mirrorAmount || escrow.snapshot.totalContributed !== funded) && escrowSyncRequested.current !== syncKey) {
       escrowSyncRequested.current = syncKey;
     } else {
       return;
@@ -243,7 +262,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
       });
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [currentParticipant, escrow.enabled, escrow.receipt, escrow.snapshot, escrow.status, funded, identity, mutate]);
+  }, [currentParticipant, escrow.enabled, escrow.receipt, escrow.snapshot, escrow.status, funded, identity, mutate, party.status]);
 
   useEffect(() => {
     if (
@@ -416,8 +435,10 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
       : escrowIntent === "deposit"
         ? await escrow.deposit(escrowAmount)
         : escrowIntent === "refund"
-          ? await escrow.refund()
-          : await escrow.lock();
+          ? await escrow.refund(deadlinePassed && escrow.snapshot?.status === ProgramEscrowStatus.Funding)
+          : escrowIntent === "cancel"
+            ? await escrow.cancel()
+            : await escrow.lock();
     if (!confirmed) return;
     if (escrowIntent !== "initialize") {
       const synced = await mutate("syncContribution", { wallet: identity.wallet });
@@ -519,7 +540,17 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
               transaction={chainRoom.transaction}
               canSignTransactions={walletAuth.canSignTransactions}
               onConfirm={() => void confirmChainIntent()}
+              onRecover={() => void chainRoom.recoverPending()}
               onCancel={() => {
+                if (chainRoom.transaction.stage === "confirmed") {
+                  if (chainIntent === "join" && !currentParticipant) void finishJoin();
+                  if (chainIntent === "ready" && currentParticipant && !currentParticipant.ready && identity) {
+                    void mutate("ready", { wallet: identity.wallet });
+                  }
+                  if (chainIntent === "start" && party.status === "READY" && identity) {
+                    void mutate("start", { wallet: identity.wallet });
+                  }
+                }
                 chainRoom.resetTransaction();
                 setChainIntent(null);
               }}
@@ -616,6 +647,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                 tokenLabel={fundsTokenLabel}
                 contribution={contribution}
                 remaining={remaining}
+                deadlinePassed={deadlinePassed}
                 onContributionChange={setContribution}
                 onReviewInitialize={() => {
                   setEscrowAmount(0n);
@@ -627,6 +659,11 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                   setEscrowAmount(escrow.receipt?.amount ?? 0n);
                   escrow.resetTransaction();
                   setEscrowIntent("refund");
+                }}
+                onReviewCancel={() => {
+                  setEscrowAmount(0n);
+                  escrow.resetTransaction();
+                  setEscrowIntent("cancel");
                 }}
                 onReviewLock={() => {
                   setEscrowAmount(target);
@@ -644,6 +681,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                   tokenLabel={fundsTokenLabel}
                   canSignTransactions={walletAuth.canSignTransactions}
                   onConfirm={() => void confirmEscrowIntent()}
+                  onRecover={() => void escrow.recoverPending()}
                   onCancel={() => {
                     escrow.resetTransaction();
                     setEscrowIntent(null);
@@ -653,7 +691,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
             </div>
           )}
 
-          {!currentParticipant && identity && (party.status === "FUNDING" || party.status === "FUNDED") && party.participants.length < party.maxPlayers && escrow.snapshot?.status !== ProgramEscrowStatus.Locked && (
+          {!currentParticipant && identity && !deadlinePassed && (party.status === "FUNDING" || party.status === "FUNDED") && party.participants.length < party.maxPlayers && escrow.snapshot?.status !== ProgramEscrowStatus.Locked && (
             <form onSubmit={join} className="rounded-xl border border-primary/30 bg-primary/5 p-5 sm:p-6">
               <div className="flex items-center gap-3">
                 <span className="grid size-10 place-items-center rounded-full bg-primary/15 text-primary"><WalletCards className="size-5" aria-hidden="true" /></span>
@@ -712,7 +750,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                 );
               })}
             </ul>
-            {party.participants.length < party.maxPlayers && (party.status === "FUNDING" || party.status === "FUNDED") && escrow.snapshot?.status !== ProgramEscrowStatus.Locked && (
+            {party.participants.length < party.maxPlayers && !deadlinePassed && (party.status === "FUNDING" || party.status === "FUNDED") && escrow.snapshot?.status !== ProgramEscrowStatus.Locked && (
               <div className="mt-3 flex min-h-14 items-center justify-between rounded-lg border border-dashed px-3 text-sm text-muted-foreground">
                 <span>Waiting for friends</span><Copy className="size-4" aria-hidden="true" />
               </div>
@@ -738,7 +776,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
             </form>
           )}
 
-          {identity && currentParticipant && (party.status === "FUNDED" || party.status === "READY") && escrow.enabled && (
+          {identity && currentParticipant && !deadlinePassed && (party.status === "FUNDED" || party.status === "READY") && escrow.enabled && (
             <div className="rounded-xl border border-primary/30 bg-primary/5 p-5 sm:p-6">
               <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
                 <div>

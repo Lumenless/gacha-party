@@ -8,7 +8,7 @@
 
 import { combineCodec, getEnumDecoder, getEnumEncoder, type FixedSizeCodec, type FixedSizeDecoder, type FixedSizeEncoder } from '@solana/kit';
 
-export enum EscrowStatus { Funding, Locked, Released, Purchased, Settled };
+export enum EscrowStatus { Funding, Locked, Released, Purchased, Settled, Cancelled };
 
 export type EscrowStatusArgs = EscrowStatus;
 

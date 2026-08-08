@@ -115,13 +115,16 @@ MagicBlock's eATA model is the later path if contribution balances themselves mu
 
 - `NEXT_PUBLIC_FUNDS_MODE=mock` remains the default. Real funding requires `wallet` identity mode plus matching, non-empty `NEXT_PUBLIC_USDC_MINT` and server-only `USDC_MINT` values.
 - Party creation initializes the MagicBlock room and the base-layer escrow in the same host-signed transaction. The host is participant one and can deposit immediately.
-- Escrow v3 uses a bounded dynamic roster. After a wallet signs the MagicBlock join, the server verifies the exact ordered room roster and the trusted devnet operator mirrors that wallet into escrow. Registration is idempotent; arbitrary wallets cannot permissionlessly consume party slots.
-- New participants may join while escrow remains in `FUNDING`, including after the target is reached but before lock. Lock requires full funding and at least two registered participants, then permanently freezes the roster, deposits, and refunds.
+- Escrow v4 uses a bounded dynamic roster and an immutable funding deadline. After a wallet signs the MagicBlock join, the server verifies the exact ordered room roster and the trusted devnet operator mirrors that wallet into escrow. Registration is idempotent; arbitrary wallets cannot permissionlessly consume party slots.
+- New participants may join while escrow remains in `FUNDING`, including after the target is reached but before lock. Solana `Clock` closes registration, deposits, and locking after the deadline. Anyone may then transition the still-unlocked escrow to `CANCELLED`; each receipt owner independently returns the full integer amount to their own checked token account.
+- A deadline cancellation and the caller's refund can share one atomic transaction. Refund preparation idempotently recreates the contributor's associated token account if it was closed, preventing a recoverable account-lifecycle issue from stranding funds.
+- Submitted funding signatures are persisted per party and wallet. After reload or confirmation timeout, the client verifies the escrow/receipt postcondition before relying on signature history; it blocks duplicate signing until confirmation, explicit failure, or blockhash expiry without matching state.
 - The client derives the classic SPL associated token account through `@solana-program/token`, reads its balance, and refuses to prepare deposits above the wallet balance or remaining target.
 - Every action shows devnet, exact asset impact, mint, program, and fee source before signing. The exact transaction is simulated, explicitly signed through Wallet Standard, submitted, and confirmed before product state changes.
 - The server reads every participant receipt and the escrow total directly from devnet. It mirrors exact amounts idempotently only when the host, mint, target, roster, receipt relationships, and summed total all match.
 - Connected participants automatically retry this proof synchronization when an on-chain receipt and SSE funding state diverge. This covers a confirmed transaction followed by an interrupted HTTP request.
-- Existing escrow v2 accounts cannot be decoded as v3 and must be replaced with newly created demo parties after the devnet program upgrade. Room PDA derivation is unchanged.
+- Existing escrow v2/v3 accounts cannot be decoded as v4 and must be replaced with newly created demo parties after the devnet program upgrade. Room PDA derivation is unchanged.
+- Escrow v4 is locally validated but intentionally not deployed with the web client until the independent review in `docs/security-review-deadline-refunds.md` is complete.
 
 ## Milestone 4G1 decision — private voting boundary
 

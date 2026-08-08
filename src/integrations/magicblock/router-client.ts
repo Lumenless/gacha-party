@@ -214,14 +214,26 @@ export class MagicRouterRoomClient {
     return { address: roomAddress, ...account.data };
   }
 
-  async submitSignedTransaction(signedTransaction: Uint8Array): Promise<Signature> {
+  async sendSignedTransaction(signedTransaction: Uint8Array): Promise<Signature> {
     const decoded = getTransactionDecoder().decode(signedTransaction);
-    const signature = await this.connection.rpc.sendTransaction(
+    return this.connection.rpc.sendTransaction(
       getBase64EncodedWireTransaction(decoded),
       { encoding: "base64", preflightCommitment: "confirmed", skipPreflight: false },
     ).send();
-    await this.connection.confirmTransaction(signature, { commitment: "confirmed" });
+  }
+
+  async submitSignedTransaction(
+    signedTransaction: Uint8Array,
+    onSubmitted?: (signature: Signature) => void,
+  ): Promise<Signature> {
+    const signature = await this.sendSignedTransaction(signedTransaction);
+    onSubmitted?.(signature);
+    await this.confirmSignature(signature);
     return signature;
+  }
+
+  async confirmSignature(signature: Signature) {
+    await this.connection.confirmTransaction(signature, { commitment: "confirmed" });
   }
 
   async simulateTransaction(prepared: PreparedRoomTransaction): Promise<bigint | null> {

@@ -34,11 +34,12 @@ The safe expiry path requires each available voter to release their own vote; a 
 
 The escrow PDA is derived from `party-escrow`, the host wallet, and the same eight-byte room identifier. Its bounded roster is independent from the delegated room so token custody never depends on deserializing an account currently owned by MagicBlock's delegation program.
 
-- `initialize_escrow`: creates the vault immediately with the host as participant one, a 2–4 player limit, six-decimal SPL mint, integer funding target, and fixed operator.
+- `initialize_escrow`: creates the vault immediately with the host as participant one, a 2–4 player limit, six-decimal SPL mint, integer funding target, immutable Unix deadline, and fixed operator.
 - `register_escrow_participant`: lets the fixed operator idempotently mirror a server-verified MagicBlock join while escrow remains in `FUNDING`.
 - `deposit_contribution`: accepts one checked deposit from an allowed wallet, rejects target overfunding, and creates a wallet-specific receipt PDA.
-- `refund_contribution`: returns the entire recorded amount while the escrow is in `FUNDING`.
-- `lock_escrow`: host-authorized, fully-funded transition requiring at least two participants that permanently disables roster changes, deposits, and refunds.
+- `refund_contribution`: returns the entire recorded amount while escrow is unlocked, including after deadline cancellation, and closes the receipt.
+- `cancel_expired_escrow`: permissionlessly changes an unlocked escrow to `CANCELLED` only after Solana `Clock` passes its deadline.
+- `lock_escrow`: host-authorized, fully-funded transition requiring at least two participants and an open deadline that permanently disables roster changes, deposits, and refunds.
 - `release_to_operator`: operator-authorized, one-time transfer of the exact target to the fixed operator token account.
 - `mark_purchased`: records the confirmed Collector Crypt signature and memo hash.
 - `mark_settled`: final replay guard, executed atomically with proportional participant payouts.
@@ -77,6 +78,8 @@ The reproducible devnet smoke command simulates and submits a combined initializ
 ```bash
 pnpm smoke:program:devnet
 ```
+
+The local escrow smoke creates a real six-decimal SPL test mint, deposits integer tokens, waits for the immutable deadline, atomically cancels and refunds, then verifies zero accounted vault balance, `CANCELLED` status, and a closed contribution receipt.
 
 The successful 2026-08-03 simulated smoke room was `FJ4mwFtWMZD8QTgdyfbs1RE3qSNuekRbgJqbe8tWoaAe` (party ID `198989b2`).
 

@@ -2,13 +2,14 @@ import type { Signature } from "@solana/kit";
 import { DevnetEscrowClient } from "@/integrations/solana/escrow-client";
 import { MagicRouterRoomClient } from "./router-client";
 
-export type RoomActivationStage = "preparing" | "simulating" | "signing" | "submitting";
+export type RoomActivationStage = "preparing" | "simulating" | "signing" | "submitting" | "confirming";
 
 export async function activateMagicBlockRoom(input: {
   hostWallet: string;
   partyId: string;
   maxPlayers: number;
   fundingTargetBaseUnits: string;
+  fundingDeadline: string;
   signTransaction: (transaction: Uint8Array) => Promise<Uint8Array>;
   onStage?: (stage: RoomActivationStage) => void;
 }): Promise<Signature | null> {
@@ -32,6 +33,7 @@ export async function activateMagicBlockRoom(input: {
         input.hostWallet,
         input.partyId,
         BigInt(input.fundingTargetBaseUnits),
+        fundingDeadlineSeconds(input.fundingDeadline),
         input.maxPlayers,
       )
     : null;
@@ -41,6 +43,7 @@ export async function activateMagicBlockRoom(input: {
         input.hostWallet,
         input.partyId,
         BigInt(input.fundingTargetBaseUnits),
+        fundingDeadlineSeconds(input.fundingDeadline),
         input.maxPlayers,
       )
     : await client.prepareInitializeAndDelegation(
@@ -56,8 +59,14 @@ export async function activateMagicBlockRoom(input: {
   const signed = await input.signTransaction(prepared.transaction);
   input.onStage?.("submitting");
   return "escrowAddress" in prepared
-    ? escrowClient!.submitSignedTransaction(signed)
-    : client.submitSignedTransaction(signed);
+    ? escrowClient!.submitSignedTransaction(signed, () => input.onStage?.("confirming"))
+    : client.submitSignedTransaction(signed, () => input.onStage?.("confirming"));
+}
+
+function fundingDeadlineSeconds(value: string) {
+  const milliseconds = new Date(value).getTime();
+  if (!Number.isFinite(milliseconds)) throw new Error("The funding deadline is invalid.");
+  return BigInt(Math.floor(milliseconds / 1_000));
 }
 
 export function roomActivationError(cause: unknown): string {

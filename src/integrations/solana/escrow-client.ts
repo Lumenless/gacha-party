@@ -1,6 +1,6 @@
 import {
   address,
-  appendTransactionMessageInstruction,
+  appendTransactionMessageInstructions,
   compileTransaction,
   createNoopSigner,
   createTransactionMessage,
@@ -16,11 +16,12 @@ import {
   type Signature,
 } from "@solana/kit";
 import { Connection } from "@magicblock-labs/ephemeral-rollups-kit";
-import { fetchMaybeToken, findAssociatedTokenPda, TOKEN_PROGRAM_ADDRESS } from "@solana-program/token";
+import { fetchMaybeToken, findAssociatedTokenPda, getCreateAssociatedTokenIdempotentInstruction, TOKEN_PROGRAM_ADDRESS } from "@solana-program/token";
 import {
   GACHA_PARTY_ROOM_PROGRAM_ADDRESS,
   fetchMaybeContributionReceipt,
   fetchMaybeEscrowState,
+  getCancelExpiredEscrowInstruction,
   getDepositContributionInstructionAsync,
   getInitializeEscrowInstructionAsync,
   getLockEscrowInstruction,
@@ -35,7 +36,7 @@ const ESCROW_VAULT_SEED = new TextEncoder().encode("escrow-vault");
 const CONTRIBUTION_SEED = new TextEncoder().encode("contribution");
 const U64_MAX = 18_446_744_073_709_551_615n;
 
-export type EscrowAction = "initialize" | "deposit" | "refund" | "lock";
+export type EscrowAction = "initialize" | "deposit" | "refund" | "cancel" | "lock";
 
 export type PreparedEscrowTransaction = {
   action: EscrowAction;
@@ -106,11 +107,12 @@ export class DevnetEscrowClient {
     host: string,
     partyId: string,
     fundingTarget: bigint,
+    fundingDeadline: bigint,
     maxPlayers: number,
   ): Promise<PreparedEscrowTransaction> {
     const hostAddress = address(host);
     const escrowAddress = await findEscrowAddress(host, partyId);
-    const instruction = await this.buildInitializeInstruction(host, partyId, fundingTarget, maxPlayers);
+    const instruction = await this.buildInitializeInstruction(host, partyId, fundingTarget, fundingDeadline, maxPlayers);
     return this.prepare("initialize", escrowAddress, hostAddress, instruction);
   }
 
@@ -118,9 +120,11 @@ export class DevnetEscrowClient {
     host: string,
     partyId: string,
     fundingTarget: bigint,
+    fundingDeadline: bigint,
     maxPlayers: number,
   ): Promise<Instruction> {
     assertTokenAmount(fundingTarget, "Funding target");
+    assertFundingDeadline(fundingDeadline);
     if (!Number.isInteger(maxPlayers) || maxPlayers < 2 || maxPlayers > 4) {
       throw new Error("Escrow must allow between 2 and 4 players.");
     }
@@ -134,6 +138,7 @@ export class DevnetEscrowClient {
       host: createNoopSigner(hostAddress),
       roomId: encodeRoomId(partyId),
       fundingTarget,
+      fundingDeadline,
       maxPlayers,
       operator: this.operator,
     });
@@ -176,19 +181,45 @@ export class DevnetEscrowClient {
     contributor: string,
     host: string,
     partyId: string,
-    contributorToken: string,
+    cancelExpired = false,
   ): Promise<PreparedEscrowTransaction> {
     const contributorAddress = address(contributor);
     const escrowAddress = await findEscrowAddress(host, partyId);
-    const instruction = await getRefundContributionInstructionAsync({
+    const [contributorToken] = await findAssociatedTokenPda({
+      owner: contributorAddress,
+      mint: this.mint,
+      tokenProgram: TOKEN_PROGRAM_ADDRESS,
+    });
+    const ensureContributorToken = getCreateAssociatedTokenIdempotentInstruction({
+      payer: createNoopSigner(contributorAddress),
+      ata: contributorToken,
+      owner: contributorAddress,
+      mint: this.mint,
+    });
+    const refundInstruction = await getRefundContributionInstructionAsync({
       escrow: escrowAddress,
       receipt: await findContributionReceiptAddress(escrowAddress, contributor),
-      contributorToken: address(contributorToken),
+      contributorToken,
       vault: await findEscrowVaultAddress(escrowAddress),
       mint: this.mint,
       contributor: createNoopSigner(contributorAddress),
     });
-    return this.prepare("refund", escrowAddress, contributorAddress, instruction);
+    const instructions = cancelExpired
+      ? [getCancelExpiredEscrowInstruction({
+          escrow: escrowAddress,
+          canceller: createNoopSigner(contributorAddress),
+        }), ensureContributorToken, refundInstruction]
+      : [ensureContributorToken, refundInstruction];
+    return this.prepare("refund", escrowAddress, contributorAddress, instructions);
+  }
+
+  async prepareCancel(canceller: string, host: string, partyId: string): Promise<PreparedEscrowTransaction> {
+    const cancellerAddress = address(canceller);
+    const escrowAddress = await findEscrowAddress(host, partyId);
+    return this.prepare("cancel", escrowAddress, cancellerAddress, getCancelExpiredEscrowInstruction({
+      escrow: escrowAddress,
+      canceller: createNoopSigner(cancellerAddress),
+    }));
   }
 
   async fetchEscrow(host: string, partyId: string): Promise<EscrowAccountSnapshot | null> {
@@ -226,22 +257,31 @@ export class DevnetEscrowClient {
       { encoding: "base64", commitment: "confirmed", sigVerify: false },
     ).send();
     if (simulation.value.err) {
-      throw new Error("Escrow transaction simulation failed before signing.");
+      const detail = simulation.value.logs?.slice(-6).join(" ") ?? JSON.stringify(simulation.value.err);
+      throw new Error(`Escrow transaction simulation failed before signing. ${detail}`);
     }
     return simulation.value.unitsConsumed ?? null;
   }
 
-  async submitSignedTransaction(signedTransaction: Uint8Array): Promise<Signature> {
+  async sendSignedTransaction(signedTransaction: Uint8Array): Promise<Signature> {
     const decoded = getTransactionDecoder().decode(signedTransaction);
-    const signature = await this.connection.rpc.sendTransaction(
+    return this.connection.rpc.sendTransaction(
       getBase64EncodedWireTransaction(decoded),
       { encoding: "base64", preflightCommitment: "confirmed", skipPreflight: false },
     ).send();
-    await this.confirmByPolling(signature);
+  }
+
+  async submitSignedTransaction(
+    signedTransaction: Uint8Array,
+    onSubmitted?: (signature: Signature) => void,
+  ): Promise<Signature> {
+    const signature = await this.sendSignedTransaction(signedTransaction);
+    onSubmitted?.(signature);
+    await this.confirmSignature(signature);
     return signature;
   }
 
-  private async confirmByPolling(signature: Signature) {
+  async confirmSignature(signature: Signature) {
     for (let attempt = 0; attempt < 30; attempt += 1) {
       const result = await this.connection.rpc.getSignatureStatuses([signature]).send();
       const status = result.value[0];
@@ -256,12 +296,13 @@ export class DevnetEscrowClient {
     action: EscrowAction,
     escrowAddress: Address,
     feePayer: Address,
-    instruction: Parameters<typeof appendTransactionMessageInstruction>[0],
+    instruction: Instruction | readonly Instruction[],
   ): Promise<PreparedEscrowTransaction> {
+    const instructions = "programAddress" in instruction ? [instruction] : instruction;
     const message = pipe(
       createTransactionMessage({ version: 0 }),
       (value) => setTransactionMessageFeePayer(feePayer, value),
-      (value) => appendTransactionMessageInstruction(instruction, value),
+      (value) => appendTransactionMessageInstructions(instructions, value),
     );
     const prepared = await this.connection.prepareTransactionWithLatestBlockhash(message);
     return {
@@ -269,6 +310,12 @@ export class DevnetEscrowClient {
       escrowAddress,
       transaction: new Uint8Array(getTransactionEncoder().encode(compileTransaction(prepared))),
     };
+  }
+}
+
+function assertFundingDeadline(deadline: bigint) {
+  if (deadline <= 0n || deadline > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new Error("Funding deadline must be a positive Unix timestamp.");
   }
 }
 

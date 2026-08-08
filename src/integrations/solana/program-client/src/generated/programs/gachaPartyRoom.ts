@@ -7,7 +7,7 @@
  */
 
 import { containsBytes, fixEncoderSize, getBytesEncoder, type Address, type ReadonlyUint8Array } from '@solana/kit';
-import { type ParsedCastPrivateVoteInstruction, type ParsedCommitRoomInstruction, type ParsedDelegatePrivateVoteInstruction, type ParsedDelegateRoomInstruction, type ParsedDepositContributionInstruction, type ParsedInitializeEscrowInstruction, type ParsedInitializePrivateVoteInstruction, type ParsedInitializePrivateVotePermissionInstruction, type ParsedInitializeRoomInstruction, type ParsedJoinRoomInstruction, type ParsedLockEscrowInstruction, type ParsedMarkPurchasedInstruction, type ParsedMarkSettledInstruction, type ParsedOpenPrivateVoteInstruction, type ParsedProcessUndelegationInstruction, type ParsedReactInstruction, type ParsedRefundContributionInstruction, type ParsedRegisterEscrowParticipantInstruction, type ParsedReleaseToOperatorInstruction, type ParsedSetReadyInstruction, type ParsedStartOpeningInstruction, type ParsedUndelegatePrivateVoteInstruction, type ParsedUndelegateRoomInstruction } from '../instructions';
+import { type ParsedCancelExpiredEscrowInstruction, type ParsedCastPrivateVoteInstruction, type ParsedCommitRoomInstruction, type ParsedDelegatePrivateVoteInstruction, type ParsedDelegateRoomInstruction, type ParsedDepositContributionInstruction, type ParsedInitializeEscrowInstruction, type ParsedInitializePrivateVoteInstruction, type ParsedInitializePrivateVotePermissionInstruction, type ParsedInitializeRoomInstruction, type ParsedJoinRoomInstruction, type ParsedLockEscrowInstruction, type ParsedMarkPurchasedInstruction, type ParsedMarkSettledInstruction, type ParsedOpenPrivateVoteInstruction, type ParsedProcessUndelegationInstruction, type ParsedReactInstruction, type ParsedRefundContributionInstruction, type ParsedRegisterEscrowParticipantInstruction, type ParsedReleaseToOperatorInstruction, type ParsedSetReadyInstruction, type ParsedStartOpeningInstruction, type ParsedUndelegatePrivateVoteInstruction, type ParsedUndelegateRoomInstruction } from '../instructions';
 
 export const GACHA_PARTY_ROOM_PROGRAM_ADDRESS = 'BMKHnBM1oq1LyXFYyHq2gUdyugo1N8aGF6wtBnJNd6Nz' as Address<'BMKHnBM1oq1LyXFYyHq2gUdyugo1N8aGF6wtBnJNd6Nz'>;
 
@@ -22,10 +22,11 @@ if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Arr
 throw new Error("The provided account could not be identified as a gachaPartyRoom account.")
 }
 
-export enum GachaPartyRoomInstruction { CastPrivateVote, CommitRoom, DelegatePrivateVote, DelegateRoom, DepositContribution, InitializeEscrow, InitializePrivateVote, InitializePrivateVotePermission, InitializeRoom, JoinRoom, LockEscrow, MarkPurchased, MarkSettled, OpenPrivateVote, ProcessUndelegation, React, RefundContribution, RegisterEscrowParticipant, ReleaseToOperator, SetReady, StartOpening, UndelegatePrivateVote, UndelegateRoom }
+export enum GachaPartyRoomInstruction { CancelExpiredEscrow, CastPrivateVote, CommitRoom, DelegatePrivateVote, DelegateRoom, DepositContribution, InitializeEscrow, InitializePrivateVote, InitializePrivateVotePermission, InitializeRoom, JoinRoom, LockEscrow, MarkPurchased, MarkSettled, OpenPrivateVote, ProcessUndelegation, React, RefundContribution, RegisterEscrowParticipant, ReleaseToOperator, SetReady, StartOpening, UndelegatePrivateVote, UndelegateRoom }
 
 export function identifyGachaPartyRoomInstruction(instruction: { data: ReadonlyUint8Array } | ReadonlyUint8Array): GachaPartyRoomInstruction {
 const data = 'data' in instruction ? instruction.data : instruction;
+if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([8, 72, 226, 3, 6, 98, 149, 91])), 0)) { return GachaPartyRoomInstruction.CancelExpiredEscrow; }
 if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([125, 42, 59, 73, 246, 134, 233, 133])), 0)) { return GachaPartyRoomInstruction.CastPrivateVote; }
 if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([138, 145, 121, 138, 83, 230, 52, 13])), 0)) { return GachaPartyRoomInstruction.CommitRoom; }
 if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([147, 25, 112, 241, 112, 115, 118, 45])), 0)) { return GachaPartyRoomInstruction.DelegatePrivateVote; }
@@ -53,6 +54,7 @@ throw new Error("The provided instruction could not be identified as a gachaPart
 }
 
 export type ParsedGachaPartyRoomInstruction<TProgram extends string = 'BMKHnBM1oq1LyXFYyHq2gUdyugo1N8aGF6wtBnJNd6Nz'> =
+| { instructionType: GachaPartyRoomInstruction.CancelExpiredEscrow } & ParsedCancelExpiredEscrowInstruction<TProgram>
 | { instructionType: GachaPartyRoomInstruction.CastPrivateVote } & ParsedCastPrivateVoteInstruction<TProgram>
 | { instructionType: GachaPartyRoomInstruction.CommitRoom } & ParsedCommitRoomInstruction<TProgram>
 | { instructionType: GachaPartyRoomInstruction.DelegatePrivateVote } & ParsedDelegatePrivateVoteInstruction<TProgram>

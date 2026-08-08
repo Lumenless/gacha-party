@@ -25,7 +25,7 @@ pub const PRIVATE_VOTE_SEED: &[u8] = b"private-vote";
 pub const MAX_PLAYERS: usize = 4;
 pub const ROOM_VERSION: u8 = 2;
 pub const OPENING_LEAD_SECONDS: i64 = 4;
-pub const ESCROW_VERSION: u8 = 3;
+pub const ESCROW_VERSION: u8 = 4;
 pub const CONTRIBUTION_VERSION: u8 = 1;
 pub const PRIVATE_VOTE_VERSION: u8 = 1;
 pub const USDC_DECIMALS: u8 = 6;
@@ -264,13 +264,17 @@ pub mod gacha_party_room {
         ctx: Context<InitializeEscrow>,
         room_id: [u8; 8],
         funding_target: u64,
+        funding_deadline: i64,
         max_players: u8,
         operator: Pubkey,
     ) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
         EscrowState::validate_configuration(
             ctx.accounts.host.key(),
             funding_target,
+            funding_deadline,
             max_players,
+            now,
         )?;
         require!(operator != Pubkey::default(), EscrowError::InvalidOperator);
         require_eq!(
@@ -289,6 +293,7 @@ pub mod gacha_party_room {
         escrow.vault = ctx.accounts.vault.key();
         escrow.operator = operator;
         escrow.funding_target = funding_target;
+        escrow.funding_deadline = funding_deadline;
         escrow.total_contributed = 0;
         escrow.max_players = max_players;
         escrow.participant_count = 1;
@@ -305,6 +310,7 @@ pub mod gacha_party_room {
             mint: escrow.mint,
             operator,
             funding_target,
+            funding_deadline,
             max_players,
             participant_count: escrow.participant_count,
         });
@@ -317,7 +323,7 @@ pub mod gacha_party_room {
         participant: Pubkey,
     ) -> Result<()> {
         let escrow = &mut ctx.accounts.escrow;
-        escrow.require_status(EscrowStatus::Funding)?;
+        escrow.require_funding_open(Clock::get()?.unix_timestamp)?;
         if !escrow.register_participant(participant)? {
             return Ok(());
         }
@@ -331,7 +337,9 @@ pub mod gacha_party_room {
 
     /// Base-layer instruction: accepts one checked token deposit from each allowed participant.
     pub fn deposit_contribution(ctx: Context<DepositContribution>, amount: u64) -> Result<()> {
-        ctx.accounts.escrow.require_status(EscrowStatus::Funding)?;
+        ctx.accounts
+            .escrow
+            .require_funding_open(Clock::get()?.unix_timestamp)?;
         require!(amount > 0, EscrowError::InvalidContributionAmount);
         let contributor = ctx.accounts.contributor.key();
         ctx.accounts.escrow.require_participant(contributor)?;
@@ -383,9 +391,9 @@ pub mod gacha_party_room {
         Ok(())
     }
 
-    /// Base-layer instruction: contributors can recover their entire deposit until locking exists.
+    /// Base-layer instruction: contributors recover their entire deposit before lock or after expiry.
     pub fn refund_contribution(ctx: Context<RefundContribution>) -> Result<()> {
-        ctx.accounts.escrow.require_status(EscrowStatus::Funding)?;
+        ctx.accounts.escrow.require_refundable()?;
         let amount = ctx.accounts.receipt.amount;
         let host = ctx.accounts.escrow.host;
         let room_id = ctx.accounts.escrow.room_id;
@@ -426,10 +434,29 @@ pub mod gacha_party_room {
         Ok(())
     }
 
+    /// Base-layer instruction: anyone can close an unlocked funding window after its deadline.
+    pub fn cancel_expired_escrow(ctx: Context<CancelExpiredEscrow>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let escrow = &mut ctx.accounts.escrow;
+        escrow.require_status(EscrowStatus::Funding)?;
+        require!(
+            now > escrow.funding_deadline,
+            EscrowError::FundingDeadlineNotReached
+        );
+        escrow.status = EscrowStatus::Cancelled;
+        emit!(EscrowCancelled {
+            escrow: escrow.key(),
+            cancelled_by: ctx.accounts.canceller.key(),
+            funding_deadline: escrow.funding_deadline,
+            cancelled_at: now,
+        });
+        Ok(())
+    }
+
     /// Freezes a fully funded escrow. The host authorizes the point of no return.
     pub fn lock_escrow(ctx: Context<LockEscrow>) -> Result<()> {
         let escrow = &mut ctx.accounts.escrow;
-        escrow.require_status(EscrowStatus::Funding)?;
+        escrow.require_funding_open(Clock::get()?.unix_timestamp)?;
         require_eq!(
             escrow.total_contributed,
             escrow.funding_target,
@@ -439,7 +466,10 @@ pub mod gacha_party_room {
             ctx.accounts.vault.amount >= escrow.funding_target,
             EscrowError::InvalidEscrowBalance
         );
-        require!(escrow.participant_count >= 2, EscrowError::NotEnoughParticipants);
+        require!(
+            escrow.participant_count >= 2,
+            EscrowError::NotEnoughParticipants
+        );
         escrow.status = EscrowStatus::Locked;
         emit!(EscrowLocked {
             escrow: escrow.key(),
@@ -697,7 +727,7 @@ pub struct UndelegatePrivateVote<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(room_id: [u8; 8], funding_target: u64, max_players: u8, operator: Pubkey)]
+#[instruction(room_id: [u8; 8], funding_target: u64, funding_deadline: i64, max_players: u8, operator: Pubkey)]
 pub struct InitializeEscrow<'info> {
     #[account(
         init,
@@ -809,6 +839,17 @@ pub struct RefundContribution<'info> {
     #[account(mut)]
     pub contributor: Signer<'info>,
     pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct CancelExpiredEscrow<'info> {
+    #[account(
+        mut,
+        seeds = [ESCROW_SEED, escrow.host.as_ref(), escrow.room_id.as_ref()],
+        bump = escrow.bump,
+    )]
+    pub escrow: Account<'info, EscrowState>,
+    pub canceller: Signer<'info>,
 }
 
 #[derive(Accounts)]
@@ -928,6 +969,7 @@ pub struct EscrowState {
     pub vault: Pubkey,
     pub operator: Pubkey,
     pub funding_target: u64,
+    pub funding_deadline: i64,
     pub total_contributed: u64,
     pub max_players: u8,
     pub participant_count: u8,
@@ -945,15 +987,19 @@ pub enum EscrowStatus {
     Released,
     Purchased,
     Settled,
+    Cancelled,
 }
 
 impl EscrowState {
     fn validate_configuration(
         host: Pubkey,
         funding_target: u64,
+        funding_deadline: i64,
         max_players: u8,
+        now: i64,
     ) -> Result<()> {
         require!(funding_target > 0, EscrowError::InvalidFundingTarget);
+        require!(funding_deadline > now, EscrowError::InvalidFundingDeadline);
         require!(
             (2..=MAX_PLAYERS as u8).contains(&max_players),
             EscrowError::InvalidParticipantCount
@@ -963,14 +1009,23 @@ impl EscrowState {
     }
 
     fn register_participant(&mut self, participant: Pubkey) -> Result<bool> {
-        require!(participant != Pubkey::default(), EscrowError::InvalidParticipant);
+        require!(
+            participant != Pubkey::default(),
+            EscrowError::InvalidParticipant
+        );
         if self.participants[..self.participant_count as usize].contains(&participant) {
             return Ok(false);
         }
-        require!(self.participant_count < self.max_players, EscrowError::EscrowParticipantLimitReached);
+        require!(
+            self.participant_count < self.max_players,
+            EscrowError::EscrowParticipantLimitReached
+        );
         let index = self.participant_count as usize;
         self.participants[index] = participant;
-        self.participant_count = self.participant_count.checked_add(1).ok_or(EscrowError::AmountOverflow)?;
+        self.participant_count = self
+            .participant_count
+            .checked_add(1)
+            .ok_or(EscrowError::AmountOverflow)?;
         Ok(true)
     }
 
@@ -984,6 +1039,23 @@ impl EscrowState {
 
     fn require_status(&self, expected: EscrowStatus) -> Result<()> {
         require!(self.status == expected, EscrowError::InvalidEscrowStatus);
+        Ok(())
+    }
+
+    fn require_funding_open(&self, now: i64) -> Result<()> {
+        self.require_status(EscrowStatus::Funding)?;
+        require!(
+            now <= self.funding_deadline,
+            EscrowError::FundingDeadlinePassed
+        );
+        Ok(())
+    }
+
+    fn require_refundable(&self) -> Result<()> {
+        require!(
+            self.status == EscrowStatus::Funding || self.status == EscrowStatus::Cancelled,
+            EscrowError::InvalidEscrowStatus
+        );
         Ok(())
     }
 }
@@ -1185,8 +1257,17 @@ pub struct EscrowInitialized {
     pub mint: Pubkey,
     pub operator: Pubkey,
     pub funding_target: u64,
+    pub funding_deadline: i64,
     pub max_players: u8,
     pub participant_count: u8,
+}
+
+#[event]
+pub struct EscrowCancelled {
+    pub escrow: Pubkey,
+    pub cancelled_by: Pubkey,
+    pub funding_deadline: i64,
+    pub cancelled_at: i64,
 }
 
 #[event]
@@ -1283,6 +1364,12 @@ pub enum RoomError {
 pub enum EscrowError {
     #[msg("The funding target must be greater than zero.")]
     InvalidFundingTarget,
+    #[msg("The funding deadline must be in the future.")]
+    InvalidFundingDeadline,
+    #[msg("The funding deadline has passed.")]
+    FundingDeadlinePassed,
+    #[msg("The funding deadline has not passed yet.")]
+    FundingDeadlineNotReached,
     #[msg("The escrow player limit must be between two and four.")]
     InvalidParticipantCount,
     #[msg("The host must be the first escrow participant.")]
@@ -1350,7 +1437,12 @@ mod tests {
         }
     }
 
-    fn escrow_state(host: Pubkey, total_contributed: u64, participant_count: u8, contributor_count: u8) -> EscrowState {
+    fn escrow_state(
+        host: Pubkey,
+        total_contributed: u64,
+        participant_count: u8,
+        contributor_count: u8,
+    ) -> EscrowState {
         let mut participants = [Pubkey::default(); MAX_PLAYERS];
         participants[0] = host;
         EscrowState {
@@ -1363,6 +1455,7 @@ mod tests {
             vault: Pubkey::new_unique(),
             operator: Pubkey::new_unique(),
             funding_target: 10_000_000,
+            funding_deadline: 200,
             total_contributed,
             max_players: 4,
             participant_count,
@@ -1461,7 +1554,7 @@ mod tests {
     fn escrow_configuration_and_dynamic_roster_are_bounded() {
         let host = Pubkey::new_unique();
         let player = Pubkey::new_unique();
-        assert!(EscrowState::validate_configuration(host, 10_000_000, 2).is_ok());
+        assert!(EscrowState::validate_configuration(host, 10_000_000, 200, 2, 100).is_ok());
         let mut state = escrow_state(host, 0, 1, 0);
         state.max_players = 2;
         assert!(state.register_participant(player).unwrap());
@@ -1472,9 +1565,26 @@ mod tests {
     #[test]
     fn escrow_configuration_rejects_invalid_targets_and_hosts() {
         let host = Pubkey::new_unique();
-        assert!(EscrowState::validate_configuration(host, 0, 2).is_err());
-        assert!(EscrowState::validate_configuration(host, 1_000_000, 1).is_err());
-        assert!(EscrowState::validate_configuration(Pubkey::default(), 1_000_000, 2).is_err());
+        assert!(EscrowState::validate_configuration(host, 0, 200, 2, 100).is_err());
+        assert!(EscrowState::validate_configuration(host, 1_000_000, 100, 2, 100).is_err());
+        assert!(EscrowState::validate_configuration(host, 1_000_000, 200, 1, 100).is_err());
+        assert!(
+            EscrowState::validate_configuration(Pubkey::default(), 1_000_000, 200, 2, 100).is_err()
+        );
+    }
+
+    #[test]
+    fn escrow_deadline_closes_funding_but_keeps_refunds_safe() {
+        let host = Pubkey::new_unique();
+        let mut state = escrow_state(host, 5_000_000, 2, 1);
+        assert!(state.require_funding_open(200).is_ok());
+        assert!(state.require_funding_open(201).is_err());
+        assert!(state.require_refundable().is_ok());
+        state.status = EscrowStatus::Cancelled;
+        assert!(state.require_refundable().is_ok());
+        assert!(state.require_funding_open(199).is_err());
+        state.status = EscrowStatus::Locked;
+        assert!(state.require_refundable().is_err());
     }
 
     #[test]
@@ -1492,6 +1602,7 @@ mod tests {
             vault: Pubkey::new_unique(),
             operator: Pubkey::new_unique(),
             funding_target: 10_000_000,
+            funding_deadline: 200,
             total_contributed: 0,
             max_players: 4,
             participant_count: 2,
@@ -1520,6 +1631,7 @@ mod tests {
             vault: Pubkey::new_unique(),
             operator: Pubkey::new_unique(),
             funding_target: 10_000_000,
+            funding_deadline: 200,
             total_contributed: 10_000_000,
             max_players: 4,
             participant_count: 2,

@@ -139,23 +139,30 @@ export function ChainTransactionReview({
   transaction,
   canSignTransactions,
   onConfirm,
+  onRecover,
   onCancel,
 }: {
   intent: ChainIntent;
   transaction: ChainTransactionState;
   canSignTransactions: boolean;
   onConfirm: () => void;
+  onRecover: () => void;
   onCancel: () => void;
 }) {
   const copy = intentCopy[intent];
-  const pending = transaction.action === intent && ["preparing", "simulating", "signing", "submitting"].includes(transaction.stage);
+  const pending = transaction.action === intent && ["preparing", "simulating", "signing", "submitting", "confirming", "recovering"].includes(transaction.stage);
   const confirmed = transaction.action === intent && transaction.stage === "confirmed" && transaction.signature;
+  const submitted = transaction.action === intent ? transaction.signature : null;
   const actionError = transaction.action === intent ? transaction.error : null;
   const pendingLabel = transaction.stage === "preparing"
     ? "Preparing transaction…"
-    : transaction.stage === "simulating"
+      : transaction.stage === "simulating"
       ? "Checking transaction…"
-      : transaction.stage === "signing" ? "Confirm in wallet…" : "Confirming on devnet…";
+      : transaction.stage === "signing"
+        ? "Confirm in wallet…"
+        : transaction.stage === "submitting"
+          ? "Submitting…"
+          : transaction.stage === "recovering" ? "Checking status…" : "Confirming on devnet…";
 
   return (
     <div className="rounded-xl border border-primary/40 bg-card p-5 sm:p-6" aria-live="polite">
@@ -171,20 +178,22 @@ export function ChainTransactionReview({
       </dl>
 
       {actionError && <p role="alert" className="mt-4 text-sm text-destructive">{actionError}</p>}
-      {confirmed && (
+      {submitted && (
         <a
-          href={explorerTransaction(confirmed)}
+          href={explorerTransaction(submitted)}
           target="_blank"
           rel="noreferrer"
           className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-md text-sm font-semibold text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          Transaction confirmed <ExternalLink className="size-4" aria-hidden="true" />
+          {confirmed ? "Transaction confirmed" : "View submitted transaction"} <ExternalLink className="size-4" aria-hidden="true" />
         </a>
       )}
 
       <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button type="button" variant="ghost" onClick={onCancel} disabled={pending}>{confirmed ? "Done" : "Cancel"}</Button>
-        {canSignTransactions ? (
+        <Button type="button" variant="ghost" onClick={onCancel} disabled={pending || Boolean(submitted && !confirmed)}>{confirmed ? "Done" : "Cancel"}</Button>
+        {submitted && !confirmed ? (
+          <Button type="button" onClick={onRecover} loading={pending}>Check transaction status</Button>
+        ) : canSignTransactions ? (
           <Button type="button" onClick={onConfirm} loading={pending} disabled={Boolean(confirmed)}>
             {!pending && !confirmed && <WalletCards className="size-4" aria-hidden="true" />}
             {pending ? pendingLabel : confirmed ? "Confirmed" : "Confirm and sign"}

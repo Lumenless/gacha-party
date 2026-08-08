@@ -8,6 +8,7 @@
 
 export * from './contributionDeposited';
 export * from './contributionRefunded';
+export * from './escrowCancelled';
 export * from './escrowInitialized';
 export * from './escrowLocked';
 export * from './escrowParticipantRegistered';

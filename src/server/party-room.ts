@@ -21,6 +21,12 @@ function activity(kind: PartyActivity["kind"], message: string): PartyActivity {
   return { id: randomUUID(), kind, message, createdAt: new Date().toISOString() };
 }
 
+function assertFundingDeadlineOpen(party: Party) {
+  if (Date.now() > new Date(party.fundingDeadline).getTime()) {
+    throw new Error("The funding deadline has passed. Mark the party expired and reclaim any deposit.");
+  }
+}
+
 async function saveAndPublish(party: Party, realtime: RealtimePartyAdapter): Promise<Party> {
   const nextParty = { ...party, revision: party.revision + 1 };
   await partyRepository.save(nextParty, party.revision);
@@ -35,6 +41,7 @@ export async function joinParty(
 ): Promise<Party> {
   const input = joinPartySchema.parse(rawInput);
   const party = await requireParty(partyId);
+  assertFundingDeadlineOpen(party);
   if (party.status !== "FUNDING" && party.status !== "FUNDED") {
     throw new Error("This party is no longer accepting players.");
   }
@@ -63,6 +70,7 @@ export async function contributeToParty(
 ): Promise<Party> {
   const input = contributeSchema.parse(rawInput);
   const party = await requireParty(partyId);
+  assertFundingDeadlineOpen(party);
   if (party.status !== "FUNDING") throw new Error("Funding is closed for this party.");
   const participant = party.participants.find(({ wallet }) => wallet === input.wallet);
   if (!participant) throw new Error("Join the party before contributing.");
@@ -106,9 +114,10 @@ export async function syncOnchainContributions(
   onchainTarget: bigint,
   roster: readonly string[],
   realtime: RealtimePartyAdapter,
+  expired = false,
 ): Promise<Party> {
   const party = await requireParty(partyId);
-  if (party.status !== "FUNDING" && party.status !== "FUNDED") {
+  if (party.status !== "FUNDING" && party.status !== "FUNDED" && party.status !== "EXPIRED") {
     throw new Error("On-chain funding can no longer be synchronized for this party.");
   }
   const partyRoster = party.participants.map(({ wallet }) => wallet);
@@ -128,7 +137,7 @@ export async function syncOnchainContributions(
     throw new Error("Contribution receipts do not match the escrow total.");
   }
 
-  const nextStatus = onchainTotal === target ? "FUNDED" : "FUNDING";
+  const nextStatus = expired ? "EXPIRED" : onchainTotal === target ? "FUNDED" : "FUNDING";
   const unchanged = party.status === nextStatus && party.participants.every(
     (participant) => BigInt(participant.contributionBaseUnits) === (amountsByWallet.get(participant.wallet) ?? 0n),
   );
@@ -144,7 +153,12 @@ export async function syncOnchainContributions(
     })),
     activity: [
       ...party.activity,
-      activity("CONTRIBUTED", `On-chain funding synced at ${onchainTotal.toString()} base units`),
+      activity(
+        expired ? "EXPIRED" : "CONTRIBUTED",
+        expired
+          ? `Funding expired; ${onchainTotal.toString()} base units remain refundable`
+          : `On-chain funding synced at ${onchainTotal.toString()} base units`,
+      ),
     ],
   }, realtime);
 }
@@ -156,6 +170,7 @@ export async function markPartyReady(
 ): Promise<Party> {
   const input = walletActionSchema.parse(rawInput);
   const party = await requireParty(partyId);
+  assertFundingDeadlineOpen(party);
   if (party.status !== "FUNDED") throw new Error("The party must be fully funded first.");
   const participant = party.participants.find(({ wallet }) => wallet === input.wallet);
   if (!participant) throw new Error("Only party members can ready up.");

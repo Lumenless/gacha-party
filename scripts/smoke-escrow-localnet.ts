@@ -15,6 +15,7 @@ import {
   DevnetEscrowClient,
   type PreparedEscrowTransaction,
 } from "../src/integrations/solana/escrow-client";
+import { EscrowStatus } from "../src/integrations/solana/program-client/src/generated";
 
 async function main() {
   const mint = requiredEnvironment("TEST_TOKEN_MINT");
@@ -28,6 +29,7 @@ async function main() {
     rpcUrl: process.env.SOLANA_RPC_URL || "http://127.0.0.1:8899",
   });
   const partyId = randomBytes(4).toString("hex");
+  const fundingDeadline = BigInt(Math.floor(Date.now() / 1_000) + 10);
 
   async function signAndSubmit(prepared: PreparedEscrowTransaction) {
     await client.simulateTransaction(prepared);
@@ -42,6 +44,7 @@ async function main() {
     signer.address,
     partyId,
     5_000_000n,
+    fundingDeadline,
     2,
   ));
   await signAndSubmit(await client.prepareDeposit(
@@ -58,16 +61,17 @@ async function main() {
     throw new Error("Escrow deposit did not produce the expected state and receipt.");
   }
 
+  await new Promise((resolve) => setTimeout(resolve, 11_000));
   await signAndSubmit(await client.prepareRefund(
     signer.address,
     signer.address,
     partyId,
-    contributorToken,
+    true,
   ));
   const refunded = await client.fetchEscrow(signer.address, partyId);
   const closedReceipt = await client.fetchReceipt(signer.address, partyId, signer.address);
-  if (!refunded || refunded.totalContributed !== 0n || closedReceipt) {
-    throw new Error("Escrow refund did not restore accounting and close the receipt.");
+  if (!refunded || refunded.status !== EscrowStatus.Cancelled || refunded.totalContributed !== 0n || closedReceipt) {
+    throw new Error("Expired escrow refund did not cancel, restore accounting, and close the receipt.");
   }
 
   console.log(`escrow: ${funded.address}`);

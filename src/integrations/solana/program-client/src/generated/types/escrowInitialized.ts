@@ -6,18 +6,18 @@
  * @see https://github.com/codama-idl/codama
  */
 
-import { combineCodec, getAddressDecoder, getAddressEncoder, getStructDecoder, getStructEncoder, getU64Decoder, getU64Encoder, getU8Decoder, getU8Encoder, type Address, type FixedSizeCodec, type FixedSizeDecoder, type FixedSizeEncoder } from '@solana/kit';
+import { combineCodec, getAddressDecoder, getAddressEncoder, getI64Decoder, getI64Encoder, getStructDecoder, getStructEncoder, getU64Decoder, getU64Encoder, getU8Decoder, getU8Encoder, type Address, type FixedSizeCodec, type FixedSizeDecoder, type FixedSizeEncoder } from '@solana/kit';
 
-export type EscrowInitialized = { escrow: Address; host: Address; mint: Address; operator: Address; fundingTarget: bigint; maxPlayers: number; participantCount: number;  };
+export type EscrowInitialized = { escrow: Address; host: Address; mint: Address; operator: Address; fundingTarget: bigint; fundingDeadline: bigint; maxPlayers: number; participantCount: number;  };
 
-export type EscrowInitializedArgs = { escrow: Address; host: Address; mint: Address; operator: Address; fundingTarget: number | bigint; maxPlayers: number; participantCount: number;  };
+export type EscrowInitializedArgs = { escrow: Address; host: Address; mint: Address; operator: Address; fundingTarget: number | bigint; fundingDeadline: number | bigint; maxPlayers: number; participantCount: number;  };
 
 export function getEscrowInitializedEncoder(): FixedSizeEncoder<EscrowInitializedArgs> {
-    return getStructEncoder([['escrow', getAddressEncoder()], ['host', getAddressEncoder()], ['mint', getAddressEncoder()], ['operator', getAddressEncoder()], ['fundingTarget', getU64Encoder()], ['maxPlayers', getU8Encoder()], ['participantCount', getU8Encoder()]]);
+    return getStructEncoder([['escrow', getAddressEncoder()], ['host', getAddressEncoder()], ['mint', getAddressEncoder()], ['operator', getAddressEncoder()], ['fundingTarget', getU64Encoder()], ['fundingDeadline', getI64Encoder()], ['maxPlayers', getU8Encoder()], ['participantCount', getU8Encoder()]]);
 }
 
 export function getEscrowInitializedDecoder(): FixedSizeDecoder<EscrowInitialized> {
-    return getStructDecoder([['escrow', getAddressDecoder()], ['host', getAddressDecoder()], ['mint', getAddressDecoder()], ['operator', getAddressDecoder()], ['fundingTarget', getU64Decoder()], ['maxPlayers', getU8Decoder()], ['participantCount', getU8Decoder()]]);
+    return getStructDecoder([['escrow', getAddressDecoder()], ['host', getAddressDecoder()], ['mint', getAddressDecoder()], ['operator', getAddressDecoder()], ['fundingTarget', getU64Decoder()], ['fundingDeadline', getI64Decoder()], ['maxPlayers', getU8Decoder()], ['participantCount', getU8Decoder()]]);
 }
 
 export function getEscrowInitializedCodec(): FixedSizeCodec<EscrowInitializedArgs, EscrowInitialized> {
