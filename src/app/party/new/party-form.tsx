@@ -262,22 +262,23 @@ export function CreatePartyForm({ packs, exactPackPrice = false }: { packs: Pack
             </div>
           )}
 
-          {walletAuth.enabled && (!walletAuth.walletAddress || (activationRequired && !walletAuth.canSignTransactions)) && (
+          {walletAuth.enabled && !walletAuth.walletAddress && (
             <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
               <div>
-                <p className="text-sm font-semibold">{walletAuth.walletAddress ? "Enable signing" : "Connect host wallet"}</p>
+                <p className="text-sm font-semibold">Connect host wallet</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">Required to activate the room.</p>
               </div>
               <WalletAuthButton compact />
             </div>
           )}
 
-          {(!walletAuth.enabled || (walletAuth.walletAddress && (!activationRequired || walletAuth.canSignTransactions))) && (
+          {(!walletAuth.enabled || walletAuth.walletAddress) && (
             <Button
               type="submit"
               className="mt-4 w-full active:translate-y-px"
               loading={isSubmitting}
-              disabled={!selectedPack}
+              disabled={!selectedPack || (activationRequired && !walletAuth.canSignTransactions)}
+              title={activationRequired && !walletAuth.canSignTransactions ? "Reconnect the host wallet from the header to enable signing." : undefined}
             >
               {pendingLabel ?? (activationStage === "error" && createdPartyId ? "Retry activation" : activationRequired ? "Create & activate" : "Create room")}
               {!isSubmitting && (activationRequired ? <WalletCards className="size-4" aria-hidden="true" /> : <ArrowRight className="size-4" aria-hidden="true" />)}
