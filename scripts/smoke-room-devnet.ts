@@ -34,6 +34,7 @@ async function main() {
   });
   const erClient = await MagicRouterRoomClient.create(process.env.NEXT_PUBLIC_MAGICBLOCK_ER_RPC_URL || MAGICBLOCK_DEVNET_ER_URL);
   const partyId = randomBytes(4).toString("hex");
+  const fundingDeadlineSeconds = Math.floor(Date.now() / 1_000) + 60;
   console.log(`party id: ${partyId}`);
 
   async function signAndSubmit(prepared: PreparedRoomTransaction) {
@@ -51,7 +52,7 @@ async function main() {
     signer.address,
     partyId,
     50_000_000n,
-    BigInt(Math.floor(Date.now() / 1_000) + 60),
+    BigInt(fundingDeadlineSeconds),
     2,
   );
   await signAndSubmit(await client.prepareInitializeAndDelegation(
@@ -77,7 +78,7 @@ async function main() {
     packImageUrl: "/packs/spark.svg",
     maxPlayers: 2,
     fundingTargetBaseUnits: "50000000",
-    fundingDeadline: new Date(Date.now() + 60_000).toISOString(),
+    fundingDeadline: new Date(fundingDeadlineSeconds * 1_000).toISOString(),
     decisionRule: "SIMPLE_MAJORITY",
     status: "FUNDING",
     createdAt: new Date().toISOString(),

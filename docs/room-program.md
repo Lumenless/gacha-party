@@ -44,7 +44,7 @@ The escrow PDA is derived from `party-escrow`, the host wallet, and the same eig
 - `mark_purchased`: records the confirmed Collector Crypt signature and memo hash.
 - `mark_settled`: final replay guard, executed atomically with proportional participant payouts.
 
-The lifecycle is `FUNDING → LOCKED → RELEASED → PURCHASED → SETTLED`; instructions reject every out-of-order or repeated transition.
+The successful lifecycle is `FUNDING → LOCKED → RELEASED → PURCHASED → SETTLED`; an expired unlocked escrow instead follows `FUNDING → CANCELLED`, after which contributors refund independently. Instructions reject every out-of-order or repeated transition.
 
 ## Toolchain
 
@@ -94,3 +94,5 @@ The Private ER account upgrade deployed on 2026-08-04; the final permission-vali
 The deadline-release upgrade deployed on 2026-08-04 with signature [`5sLd4ghH2v21wBHDKk2Bw686aoVE47j2M8Nw2dm2mzxEtY187RSmExBygrB3xWVaYKXmp9s5PkicyrcMk81ncfU4`](https://explorer.solana.com/tx/5sLd4ghH2v21wBHDKk2Bw686aoVE47j2M8Nw2dm2mzxEtY187RSmExBygrB3xWVaYKXmp9s5PkicyrcMk81ncfU4?cluster=devnet). The end-to-end proof used vote `35KkruNuqbURduCmgsaYNgYzf2nQjMtVcGTq6yFYwwX5` (party ID `01a105be`): an unauthenticated read and an early release were rejected, the vote became public only after expiry, and undelegation committed the exact SELL choice and cast timestamp to devnet.
 
 The dynamic escrow v3 upgrade deployed on 2026-08-08 with signature [`586N3E9iC3NLzqgGXBgzSozKJz9opPaoi3dzFiu7PtvFptq89tk1LXK2AAWfWvQJEmPzRy3GtSyUwXfMoh23DNLg`](https://explorer.solana.com/tx/586N3E9iC3NLzqgGXBgzSozKJz9opPaoi3dzFiu7PtvFptq89tk1LXK2AAWfWvQJEmPzRy3GtSyUwXfMoh23DNLg?cluster=devnet). Existing v2 escrow accounts are intentionally incompatible; create a new party for v3 funding. The post-upgrade smoke created room `HrRJsZwwG6rtpyT4rVV3QZkbs1BYjYJQiitqngfV5rVi` and escrow `BcMZ1XWQciNyiNJqqXA4sXaY1UJUsdKZH6R2GUCgKR4r` (party ID `33178163`) in one transaction, then verified operator registration of participant two.
+
+The deadline/refund escrow v4 upgrade deployed on 2026-08-08 with signature [`2Vtfrb1pZyfm8N5rL7rSe8GGgDkpB4pJnCPDqvrsPzecEUBqgduoAwsFu18Fti7cjAVms4nf4L1X3HTcKdiMdbtj`](https://explorer.solana.com/tx/2Vtfrb1pZyfm8N5rL7rSe8GGgDkpB4pJnCPDqvrsPzecEUBqgduoAwsFu18Fti7cjAVms4nf4L1X3HTcKdiMdbtj?cluster=devnet). Existing v2/v3 escrow accounts are intentionally incompatible; create a new party for v4 funding. The post-upgrade smoke created room `GquCXvBkuZa115QDmRewkkJghZH78xqDwtDwfrrKEZH7` and escrow `2fgU9j8vMkDpXmkH7XTfuRuGcGVEsgaWVwUQRAGFA8JD` (party ID `80cd8fc0`), registered participant two, applied ready/countdown updates on the ER, and committed the room back to devnet.

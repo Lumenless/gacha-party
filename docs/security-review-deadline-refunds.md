@@ -1,6 +1,6 @@
 # Escrow v4 review brief
 
-Status: implemented and self-reviewed; independent review required before deployment.
+Status: deployed to devnet under explicit hackathon release authorization; independent review required before mainnet or production-value funds.
 
 ## Change boundary
 
@@ -24,6 +24,7 @@ Status: implemented and self-reviewed; independent review required before deploy
 - Rust unit tests cover future-deadline validation, the exact deadline boundary, post-deadline funding rejection, refundability after cancellation, and locked-state rejection.
 - App tests cover expired Supabase reconciliation and malformed persisted recovery state.
 - A local-validator smoke used real SPL Token instructions to initialize, deposit, cross the deadline, atomically cancel/refund, close the receipt, and verify zero accounted balance.
+- Devnet upgrade `2Vtfrb1pZyfm8N5rL7rSe8GGgDkpB4pJnCPDqvrsPzecEUBqgduoAwsFu18Fti7cjAVms4nf4L1X3HTcKdiMdbtj` passed the combined MagicBlock/escrow smoke with room `GquCXvBkuZa115QDmRewkkJghZH78xqDwtDwfrrKEZH7` and escrow `2fgU9j8vMkDpXmkH7XTfuRuGcGVEsgaWVwUQRAGFA8JD` (party ID `80cd8fc0`).
 
 ## Review focus
 

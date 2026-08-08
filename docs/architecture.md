@@ -124,7 +124,7 @@ MagicBlock's eATA model is the later path if contribution balances themselves mu
 - The server reads every participant receipt and the escrow total directly from devnet. It mirrors exact amounts idempotently only when the host, mint, target, roster, receipt relationships, and summed total all match.
 - Connected participants automatically retry this proof synchronization when an on-chain receipt and SSE funding state diverge. This covers a confirmed transaction followed by an interrupted HTTP request.
 - Existing escrow v2/v3 accounts cannot be decoded as v4 and must be replaced with newly created demo parties after the devnet program upgrade. Room PDA derivation is unchanged.
-- Escrow v4 is locally validated but intentionally not deployed with the web client until the independent review in `docs/security-review-deadline-refunds.md` is complete.
+- Escrow v4 is deployed on devnet under explicit hackathon release authorization and passed the combined MagicBlock/escrow smoke. Independent review remains required before mainnet or production-value funds.
 
 ## Milestone 4G1 decision — private voting boundary
 

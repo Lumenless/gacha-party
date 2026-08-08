@@ -37,7 +37,6 @@ build_status:
   mvp_complete: false
   tests_passing: true
   devnet_deployed: true
-  pending_program_upgrade: escrow-v4-deadline-refunds
   program_id: BMKHnBM1oq1LyXFYyHq2gUdyugo1N8aGF6wtBnJNd6Nz
-  deployment_signature: 586N3E9iC3NLzqgGXBgzSozKJz9opPaoi3dzFiu7PtvFptq89tk1LXK2AAWfWvQJEmPzRy3GtSyUwXfMoh23DNLg
+  deployment_signature: 2Vtfrb1pZyfm8N5rL7rSe8GGgDkpB4pJnCPDqvrsPzecEUBqgduoAwsFu18Fti7cjAVms4nf4L1X3HTcKdiMdbtj
 ```
