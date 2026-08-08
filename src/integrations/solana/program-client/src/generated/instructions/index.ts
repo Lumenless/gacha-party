@@ -23,6 +23,7 @@ export * from './openPrivateVote';
 export * from './processUndelegation';
 export * from './react';
 export * from './refundContribution';
+export * from './registerEscrowParticipant';
 export * from './releaseToOperator';
 export * from './setReady';
 export * from './startOpening';

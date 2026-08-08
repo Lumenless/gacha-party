@@ -16,13 +16,22 @@ import {
   MagicRouterRoomClient,
   type PreparedRoomTransaction,
 } from "../src/integrations/magicblock/router-client";
+import { DevnetEscrowClient } from "../src/integrations/solana/escrow-client";
 import { RoomPhase } from "../src/integrations/solana/program-client/src/generated";
+import { registerPartyEscrowParticipant } from "../src/server/operator-escrow";
+import type { Party } from "../src/domain/party";
+
+const SECOND_PARTICIPANT = "H6ARHf6YXhGYeQYD5TwgJRaNtW7ZMq4ECzLoqLQPH2uH";
 
 async function main() {
   const walletPath = process.env.SOLANA_WALLET || resolve(homedir(), ".config/solana/id.json");
   const secretKey = Uint8Array.from(JSON.parse(readFileSync(walletPath, "utf8")) as number[]);
   const signer = await createKeyPairSignerFromBytes(secretKey);
   const client = await MagicRouterRoomClient.create();
+  const escrowClient = await DevnetEscrowClient.create({
+    mint: requiredEnvironment("USDC_MINT"),
+    operator: requiredEnvironment("GACHA_OPERATOR_ADDRESS"),
+  });
   const erClient = await MagicRouterRoomClient.create(process.env.NEXT_PUBLIC_MAGICBLOCK_ER_RPC_URL || MAGICBLOCK_DEVNET_ER_URL);
   const partyId = randomBytes(4).toString("hex");
   console.log(`party id: ${partyId}`);
@@ -38,13 +47,52 @@ async function main() {
     console.log(`${prepared.action}: ${signature}`);
   }
 
-  await signAndSubmit(await client.prepareInitializeAndDelegation(signer.address, partyId, 2));
+  const escrowInitialization = await escrowClient.buildInitializeInstruction(
+    signer.address,
+    partyId,
+    50_000_000n,
+    2,
+  );
+  await signAndSubmit(await client.prepareInitializeAndDelegation(
+    signer.address,
+    partyId,
+    2,
+    [escrowInitialization],
+  ));
   const initialized = await client.fetchRoom(signer.address, partyId);
   if (!initialized || initialized.participantCount !== 1 || initialized.revision !== 1n) {
     throw new Error("Initialized room did not decode to the expected state.");
   }
+  let escrow = await escrowClient.fetchEscrow(signer.address, partyId);
+  if (!escrow || escrow.version !== 3 || escrow.participantCount !== 1 || escrow.maxPlayers !== 2) {
+    throw new Error("Initialized escrow did not decode to the expected dynamic roster.");
+  }
+  const party = {
+    id: partyId,
+    name: "Dynamic escrow smoke",
+    hostWallet: signer.address,
+    packCode: "smoke",
+    packName: "Smoke pack",
+    packImageUrl: "/packs/spark.svg",
+    maxPlayers: 2,
+    fundingTargetBaseUnits: "50000000",
+    fundingDeadline: new Date(Date.now() + 60_000).toISOString(),
+    decisionRule: "SIMPLE_MAJORITY",
+    status: "FUNDING",
+    createdAt: new Date().toISOString(),
+    revision: 0,
+    activity: [],
+    participants: [{ wallet: signer.address, displayName: "Host", contributionBaseUnits: "0", ready: false }],
+  } satisfies Party;
+  const registrationSignature = await registerPartyEscrowParticipant(party, SECOND_PARTICIPANT);
+  console.log(`register: ${registrationSignature ?? "already registered"}`);
+  escrow = await escrowClient.fetchEscrow(signer.address, partyId);
+  if (!escrow || escrow.participantCount !== 2 || String(escrow.participants[1]) !== SECOND_PARTICIPANT) {
+    throw new Error("Operator registration did not append the expected participant.");
+  }
   const delegated = await erClient.fetchRoom(signer.address, partyId);
   console.log(`room: ${initialized.address}`);
+  console.log(`escrow: ${escrow.address}`);
   console.log(`ER host: ${delegated?.host ?? "missing"}`);
   console.log(`ER participant zero: ${delegated?.participants[0] ?? "missing"}`);
 
@@ -62,6 +110,12 @@ async function main() {
   console.log(`countdown ends at: ${opening.countdownEndsAt.toString()}`);
 
   await signAndSubmit(await client.prepareUndelegation(signer.address, partyId));
+}
+
+function requiredEnvironment(name: string) {
+  const value = process.env[name]?.trim();
+  if (!value) throw new Error(`${name} is required.`);
+  return value;
 }
 
 void main();

@@ -25,7 +25,7 @@ pub const PRIVATE_VOTE_SEED: &[u8] = b"private-vote";
 pub const MAX_PLAYERS: usize = 4;
 pub const ROOM_VERSION: u8 = 2;
 pub const OPENING_LEAD_SECONDS: i64 = 4;
-pub const ESCROW_VERSION: u8 = 2;
+pub const ESCROW_VERSION: u8 = 3;
 pub const CONTRIBUTION_VERSION: u8 = 1;
 pub const PRIVATE_VOTE_VERSION: u8 = 1;
 pub const USDC_DECIMALS: u8 = 6;
@@ -258,21 +258,19 @@ pub mod gacha_party_room {
         Ok(())
     }
 
-    /// Base-layer instruction: creates an immutable participant-scoped token escrow.
+    /// Base-layer instruction: creates a dynamic participant-scoped token escrow.
     /// The mint is supplied explicitly so deployments can select the canonical mint per cluster.
     pub fn initialize_escrow(
         ctx: Context<InitializeEscrow>,
         room_id: [u8; 8],
         funding_target: u64,
-        participant_count: u8,
-        participants: [Pubkey; MAX_PLAYERS],
+        max_players: u8,
         operator: Pubkey,
     ) -> Result<()> {
         EscrowState::validate_configuration(
             ctx.accounts.host.key(),
             funding_target,
-            participant_count,
-            &participants,
+            max_players,
         )?;
         require!(operator != Pubkey::default(), EscrowError::InvalidOperator);
         require_eq!(
@@ -292,12 +290,14 @@ pub mod gacha_party_room {
         escrow.operator = operator;
         escrow.funding_target = funding_target;
         escrow.total_contributed = 0;
-        escrow.participant_count = participant_count;
+        escrow.max_players = max_players;
+        escrow.participant_count = 1;
         escrow.contributor_count = 0;
         escrow.status = EscrowStatus::Funding;
         escrow.purchase_signature = [0; 64];
         escrow.purchase_memo_hash = [0; 32];
-        escrow.participants = participants;
+        escrow.participants = [Pubkey::default(); MAX_PLAYERS];
+        escrow.participants[0] = escrow.host;
 
         emit!(EscrowInitialized {
             escrow: escrow.key(),
@@ -305,7 +305,26 @@ pub mod gacha_party_room {
             mint: escrow.mint,
             operator,
             funding_target,
-            participant_count,
+            max_players,
+            participant_count: escrow.participant_count,
+        });
+        Ok(())
+    }
+
+    /// Base-layer instruction: the trusted devnet operator mirrors a verified MagicBlock join.
+    pub fn register_escrow_participant(
+        ctx: Context<RegisterEscrowParticipant>,
+        participant: Pubkey,
+    ) -> Result<()> {
+        let escrow = &mut ctx.accounts.escrow;
+        escrow.require_status(EscrowStatus::Funding)?;
+        if !escrow.register_participant(participant)? {
+            return Ok(());
+        }
+        emit!(EscrowParticipantRegistered {
+            escrow: escrow.key(),
+            participant,
+            participant_count: escrow.participant_count,
         });
         Ok(())
     }
@@ -420,6 +439,7 @@ pub mod gacha_party_room {
             ctx.accounts.vault.amount >= escrow.funding_target,
             EscrowError::InvalidEscrowBalance
         );
+        require!(escrow.participant_count >= 2, EscrowError::NotEnoughParticipants);
         escrow.status = EscrowStatus::Locked;
         emit!(EscrowLocked {
             escrow: escrow.key(),
@@ -677,13 +697,7 @@ pub struct UndelegatePrivateVote<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(
-    room_id: [u8; 8],
-    funding_target: u64,
-    participant_count: u8,
-    participants: [Pubkey; MAX_PLAYERS],
-    operator: Pubkey
-)]
+#[instruction(room_id: [u8; 8], funding_target: u64, max_players: u8, operator: Pubkey)]
 pub struct InitializeEscrow<'info> {
     #[account(
         init,
@@ -709,6 +723,18 @@ pub struct InitializeEscrow<'info> {
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
+pub struct RegisterEscrowParticipant<'info> {
+    #[account(
+        mut,
+        seeds = [ESCROW_SEED, escrow.host.as_ref(), escrow.room_id.as_ref()],
+        bump = escrow.bump,
+        has_one = operator @ EscrowError::InvalidOperator,
+    )]
+    pub escrow: Account<'info, EscrowState>,
+    pub operator: Signer<'info>,
 }
 
 #[derive(Accounts)]
@@ -903,6 +929,7 @@ pub struct EscrowState {
     pub operator: Pubkey,
     pub funding_target: u64,
     pub total_contributed: u64,
+    pub max_players: u8,
     pub participant_count: u8,
     pub contributor_count: u8,
     pub status: EscrowStatus,
@@ -924,38 +951,27 @@ impl EscrowState {
     fn validate_configuration(
         host: Pubkey,
         funding_target: u64,
-        participant_count: u8,
-        participants: &[Pubkey; MAX_PLAYERS],
+        max_players: u8,
     ) -> Result<()> {
         require!(funding_target > 0, EscrowError::InvalidFundingTarget);
         require!(
-            (2..=MAX_PLAYERS as u8).contains(&participant_count),
+            (2..=MAX_PLAYERS as u8).contains(&max_players),
             EscrowError::InvalidParticipantCount
         );
-        require_keys_eq!(
-            participants[0],
-            host,
-            EscrowError::HostMustBeFirstParticipant
-        );
-
-        for index in 0..MAX_PLAYERS {
-            if index < participant_count as usize {
-                require!(
-                    participants[index] != Pubkey::default(),
-                    EscrowError::InvalidParticipant
-                );
-                require!(
-                    !participants[..index].contains(&participants[index]),
-                    EscrowError::DuplicateParticipant
-                );
-            } else {
-                require!(
-                    participants[index] == Pubkey::default(),
-                    EscrowError::InvalidParticipant
-                );
-            }
-        }
+        require!(host != Pubkey::default(), EscrowError::InvalidParticipant);
         Ok(())
+    }
+
+    fn register_participant(&mut self, participant: Pubkey) -> Result<bool> {
+        require!(participant != Pubkey::default(), EscrowError::InvalidParticipant);
+        if self.participants[..self.participant_count as usize].contains(&participant) {
+            return Ok(false);
+        }
+        require!(self.participant_count < self.max_players, EscrowError::EscrowParticipantLimitReached);
+        let index = self.participant_count as usize;
+        self.participants[index] = participant;
+        self.participant_count = self.participant_count.checked_add(1).ok_or(EscrowError::AmountOverflow)?;
+        Ok(true)
     }
 
     fn require_participant(&self, contributor: Pubkey) -> Result<()> {
@@ -1169,6 +1185,14 @@ pub struct EscrowInitialized {
     pub mint: Pubkey,
     pub operator: Pubkey,
     pub funding_target: u64,
+    pub max_players: u8,
+    pub participant_count: u8,
+}
+
+#[event]
+pub struct EscrowParticipantRegistered {
+    pub escrow: Pubkey,
+    pub participant: Pubkey,
     pub participant_count: u8,
 }
 
@@ -1259,7 +1283,7 @@ pub enum RoomError {
 pub enum EscrowError {
     #[msg("The funding target must be greater than zero.")]
     InvalidFundingTarget,
-    #[msg("The escrow participant count must be between two and four.")]
+    #[msg("The escrow player limit must be between two and four.")]
     InvalidParticipantCount,
     #[msg("The host must be the first escrow participant.")]
     HostMustBeFirstParticipant,
@@ -1269,6 +1293,10 @@ pub enum EscrowError {
     DuplicateParticipant,
     #[msg("Only an escrow participant can contribute.")]
     NotEscrowParticipant,
+    #[msg("The escrow participant limit has been reached.")]
+    EscrowParticipantLimitReached,
+    #[msg("At least two participants must join before the escrow can be locked.")]
+    NotEnoughParticipants,
     #[msg("Contribution amount must be greater than zero.")]
     InvalidContributionAmount,
     #[msg("This contribution would exceed the funding target.")]
@@ -1318,6 +1346,30 @@ mod tests {
             countdown_ends_at: 0,
             revision: 1,
             last_activity_at: 100,
+            participants,
+        }
+    }
+
+    fn escrow_state(host: Pubkey, total_contributed: u64, participant_count: u8, contributor_count: u8) -> EscrowState {
+        let mut participants = [Pubkey::default(); MAX_PLAYERS];
+        participants[0] = host;
+        EscrowState {
+            version: ESCROW_VERSION,
+            bump: 1,
+            vault_bump: 2,
+            room_id: *b"ROOM0001",
+            host,
+            mint: Pubkey::new_unique(),
+            vault: Pubkey::new_unique(),
+            operator: Pubkey::new_unique(),
+            funding_target: 10_000_000,
+            total_contributed,
+            max_players: 4,
+            participant_count,
+            contributor_count,
+            status: EscrowStatus::Funding,
+            purchase_signature: [0; 64],
+            purchase_memo_hash: [0; 32],
             participants,
         }
     }
@@ -1406,28 +1458,23 @@ mod tests {
     }
 
     #[test]
-    fn escrow_configuration_requires_a_unique_static_roster() {
+    fn escrow_configuration_and_dynamic_roster_are_bounded() {
         let host = Pubkey::new_unique();
         let player = Pubkey::new_unique();
-        let valid = [host, player, Pubkey::default(), Pubkey::default()];
-        assert!(EscrowState::validate_configuration(host, 10_000_000, 2, &valid).is_ok());
-
-        let duplicate = [host, host, Pubkey::default(), Pubkey::default()];
-        assert!(EscrowState::validate_configuration(host, 10_000_000, 2, &duplicate).is_err());
-
-        let dirty_unused_slot = [host, player, Pubkey::new_unique(), Pubkey::default()];
-        assert!(
-            EscrowState::validate_configuration(host, 10_000_000, 2, &dirty_unused_slot).is_err()
-        );
+        assert!(EscrowState::validate_configuration(host, 10_000_000, 2).is_ok());
+        let mut state = escrow_state(host, 0, 1, 0);
+        state.max_players = 2;
+        assert!(state.register_participant(player).unwrap());
+        assert!(!state.register_participant(player).unwrap());
+        assert!(state.register_participant(Pubkey::new_unique()).is_err());
     }
 
     #[test]
     fn escrow_configuration_rejects_invalid_targets_and_hosts() {
         let host = Pubkey::new_unique();
-        let player = Pubkey::new_unique();
-        let participants = [host, player, Pubkey::default(), Pubkey::default()];
-        assert!(EscrowState::validate_configuration(host, 0, 2, &participants).is_err());
-        assert!(EscrowState::validate_configuration(player, 1_000_000, 2, &participants).is_err());
+        assert!(EscrowState::validate_configuration(host, 0, 2).is_err());
+        assert!(EscrowState::validate_configuration(host, 1_000_000, 1).is_err());
+        assert!(EscrowState::validate_configuration(Pubkey::default(), 1_000_000, 2).is_err());
     }
 
     #[test]
@@ -1446,6 +1493,7 @@ mod tests {
             operator: Pubkey::new_unique(),
             funding_target: 10_000_000,
             total_contributed: 0,
+            max_players: 4,
             participant_count: 2,
             contributor_count: 0,
             status: EscrowStatus::Funding,
@@ -1473,6 +1521,7 @@ mod tests {
             operator: Pubkey::new_unique(),
             funding_target: 10_000_000,
             total_contributed: 10_000_000,
+            max_players: 4,
             participant_count: 2,
             contributor_count: 2,
             status: EscrowStatus::Funding,

@@ -5,6 +5,10 @@ import { DevnetEscrowClient } from "@/integrations/solana/escrow-client";
 import { EscrowStatus } from "@/integrations/solana/program-client/src/generated";
 import { partyRepository } from "./party-repository";
 import { syncOnchainContributions } from "./party-room";
+import { assertMagicBlockJoin } from "./onchain-room";
+import { registerPartyEscrowParticipant } from "./operator-escrow";
+
+const ESCROW_VERSION_WITH_DYNAMIC_ROSTER = 3;
 
 let clientPromise: Promise<DevnetEscrowClient> | null = null;
 let clientMint: string | null = null;
@@ -44,6 +48,9 @@ async function verifiedEscrow(party: Party) {
   const client = await escrowClient();
   const escrow = await client.fetchEscrow(party.hostWallet, party.id);
   if (!escrow) return null;
+  if (escrow.version !== ESCROW_VERSION_WITH_DYNAMIC_ROSTER) {
+    throw new Error("This escrow predates dynamic funding. Create a new demo party.");
+  }
   if (String(escrow.host) !== party.hostWallet) throw new Error("The escrow host does not match this party.");
   if (String(escrow.mint) !== verifiedMint()) throw new Error("The escrow mint does not match this deployment.");
   if (String(escrow.operator) !== process.env.GACHA_OPERATOR_ADDRESS?.trim()) {
@@ -52,6 +59,7 @@ async function verifiedEscrow(party: Party) {
   if (escrow.fundingTarget !== BigInt(party.fundingTargetBaseUnits)) {
     throw new Error("The escrow funding target does not match this party.");
   }
+  if (escrow.maxPlayers !== party.maxPlayers) throw new Error("The escrow player limit does not match this party.");
   const roster = escrow.participants.slice(0, escrow.participantCount).map(String);
   const partyRoster = party.participants.map(({ wallet }) => wallet);
   if (roster.length !== partyRoster.length || roster.some((wallet, index) => wallet !== partyRoster[index])) {
@@ -70,12 +78,14 @@ export async function assertPartyEscrowLocked(partyId: string) {
   }
 }
 
-export async function assertEscrowAllowsJoin(partyId: string) {
+export async function registerVerifiedEscrowParticipant(partyId: string, wallet: string) {
   if (!realFundsEnabled()) return;
   const party = await requireParty(partyId);
-  if (await verifiedEscrow(party)) {
-    throw new Error("The on-chain funding roster is already locked. This party cannot accept more players.");
+  if (party.participants.some(({ wallet: existing }) => existing === wallet)) {
+    throw new Error("This wallet has already joined the party.");
   }
+  await assertMagicBlockJoin(partyId, wallet);
+  await registerPartyEscrowParticipant(party, wallet);
 }
 
 export async function syncVerifiedOnchainContributions(

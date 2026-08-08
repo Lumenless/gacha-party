@@ -13,6 +13,12 @@ architecture:
   shape: single deployable web application with isolated domain and adapter layers
   cluster: devnet
   money: bigint base units internally, decimal strings over JSON
+defi:
+  protocol_type: custom
+  program_id: BMKHnBM1oq1LyXFYyHq2gUdyugo1N8aGF6wtBnJNd6Nz
+  security_review: self
+  oracle_integration: none
+  emergency_pause: false
 build_status:
   milestones:
     - foundation-and-create-invite
@@ -26,9 +32,10 @@ build_status:
     - opt-in-escrow-funding-ui
     - private-voting-adapter-boundary
     - vercel-supabase-runtime
+    - dynamic-devnet-funding-escrow
   mvp_complete: false
   tests_passing: true
   devnet_deployed: true
   program_id: BMKHnBM1oq1LyXFYyHq2gUdyugo1N8aGF6wtBnJNd6Nz
-  deployment_signature: 2kMFuJtroRM6nrgDJ4LRgZbHiGoXPboRidUpxBQU7zbayo3NXdr7CH8RrWmEVKW2TNtDpuJa4ZYDf8rMEUm6BKNZ
+  deployment_signature: 586N3E9iC3NLzqgGXBgzSozKJz9opPaoi3dzFiu7PtvFptq89tk1LXK2AAWfWvQJEmPzRy3GtSyUwXfMoh23DNLg
 ```

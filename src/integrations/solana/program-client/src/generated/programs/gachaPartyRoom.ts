@@ -7,7 +7,7 @@
  */
 
 import { containsBytes, fixEncoderSize, getBytesEncoder, type Address, type ReadonlyUint8Array } from '@solana/kit';
-import { type ParsedCastPrivateVoteInstruction, type ParsedCommitRoomInstruction, type ParsedDelegatePrivateVoteInstruction, type ParsedDelegateRoomInstruction, type ParsedDepositContributionInstruction, type ParsedInitializeEscrowInstruction, type ParsedInitializePrivateVoteInstruction, type ParsedInitializePrivateVotePermissionInstruction, type ParsedInitializeRoomInstruction, type ParsedJoinRoomInstruction, type ParsedLockEscrowInstruction, type ParsedMarkPurchasedInstruction, type ParsedMarkSettledInstruction, type ParsedOpenPrivateVoteInstruction, type ParsedProcessUndelegationInstruction, type ParsedReactInstruction, type ParsedRefundContributionInstruction, type ParsedReleaseToOperatorInstruction, type ParsedSetReadyInstruction, type ParsedStartOpeningInstruction, type ParsedUndelegatePrivateVoteInstruction, type ParsedUndelegateRoomInstruction } from '../instructions';
+import { type ParsedCastPrivateVoteInstruction, type ParsedCommitRoomInstruction, type ParsedDelegatePrivateVoteInstruction, type ParsedDelegateRoomInstruction, type ParsedDepositContributionInstruction, type ParsedInitializeEscrowInstruction, type ParsedInitializePrivateVoteInstruction, type ParsedInitializePrivateVotePermissionInstruction, type ParsedInitializeRoomInstruction, type ParsedJoinRoomInstruction, type ParsedLockEscrowInstruction, type ParsedMarkPurchasedInstruction, type ParsedMarkSettledInstruction, type ParsedOpenPrivateVoteInstruction, type ParsedProcessUndelegationInstruction, type ParsedReactInstruction, type ParsedRefundContributionInstruction, type ParsedRegisterEscrowParticipantInstruction, type ParsedReleaseToOperatorInstruction, type ParsedSetReadyInstruction, type ParsedStartOpeningInstruction, type ParsedUndelegatePrivateVoteInstruction, type ParsedUndelegateRoomInstruction } from '../instructions';
 
 export const GACHA_PARTY_ROOM_PROGRAM_ADDRESS = 'BMKHnBM1oq1LyXFYyHq2gUdyugo1N8aGF6wtBnJNd6Nz' as Address<'BMKHnBM1oq1LyXFYyHq2gUdyugo1N8aGF6wtBnJNd6Nz'>;
 
@@ -22,7 +22,7 @@ if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Arr
 throw new Error("The provided account could not be identified as a gachaPartyRoom account.")
 }
 
-export enum GachaPartyRoomInstruction { CastPrivateVote, CommitRoom, DelegatePrivateVote, DelegateRoom, DepositContribution, InitializeEscrow, InitializePrivateVote, InitializePrivateVotePermission, InitializeRoom, JoinRoom, LockEscrow, MarkPurchased, MarkSettled, OpenPrivateVote, ProcessUndelegation, React, RefundContribution, ReleaseToOperator, SetReady, StartOpening, UndelegatePrivateVote, UndelegateRoom }
+export enum GachaPartyRoomInstruction { CastPrivateVote, CommitRoom, DelegatePrivateVote, DelegateRoom, DepositContribution, InitializeEscrow, InitializePrivateVote, InitializePrivateVotePermission, InitializeRoom, JoinRoom, LockEscrow, MarkPurchased, MarkSettled, OpenPrivateVote, ProcessUndelegation, React, RefundContribution, RegisterEscrowParticipant, ReleaseToOperator, SetReady, StartOpening, UndelegatePrivateVote, UndelegateRoom }
 
 export function identifyGachaPartyRoomInstruction(instruction: { data: ReadonlyUint8Array } | ReadonlyUint8Array): GachaPartyRoomInstruction {
 const data = 'data' in instruction ? instruction.data : instruction;
@@ -43,6 +43,7 @@ if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Arr
 if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([196, 28, 41, 206, 48, 37, 51, 167])), 0)) { return GachaPartyRoomInstruction.ProcessUndelegation; }
 if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([30, 51, 119, 72, 84, 37, 204, 207])), 0)) { return GachaPartyRoomInstruction.React; }
 if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([110, 148, 182, 9, 237, 155, 222, 1])), 0)) { return GachaPartyRoomInstruction.RefundContribution; }
+if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([130, 78, 143, 209, 142, 231, 182, 20])), 0)) { return GachaPartyRoomInstruction.RegisterEscrowParticipant; }
 if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([137, 177, 152, 116, 206, 154, 127, 80])), 0)) { return GachaPartyRoomInstruction.ReleaseToOperator; }
 if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([105, 78, 7, 162, 181, 167, 186, 43])), 0)) { return GachaPartyRoomInstruction.SetReady; }
 if (containsBytes(data, fixEncoderSize(getBytesEncoder(), 8).encode(new Uint8Array([163, 188, 186, 155, 218, 134, 94, 173])), 0)) { return GachaPartyRoomInstruction.StartOpening; }
@@ -69,6 +70,7 @@ export type ParsedGachaPartyRoomInstruction<TProgram extends string = 'BMKHnBM1o
 | { instructionType: GachaPartyRoomInstruction.ProcessUndelegation } & ParsedProcessUndelegationInstruction<TProgram>
 | { instructionType: GachaPartyRoomInstruction.React } & ParsedReactInstruction<TProgram>
 | { instructionType: GachaPartyRoomInstruction.RefundContribution } & ParsedRefundContributionInstruction<TProgram>
+| { instructionType: GachaPartyRoomInstruction.RegisterEscrowParticipant } & ParsedRegisterEscrowParticipantInstruction<TProgram>
 | { instructionType: GachaPartyRoomInstruction.ReleaseToOperator } & ParsedReleaseToOperatorInstruction<TProgram>
 | { instructionType: GachaPartyRoomInstruction.SetReady } & ParsedSetReadyInstruction<TProgram>
 | { instructionType: GachaPartyRoomInstruction.StartOpening } & ParsedStartOpeningInstruction<TProgram>

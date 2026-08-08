@@ -32,12 +32,13 @@ The safe expiry path requires each available voter to release their own vote; a 
 
 ## Base-layer escrow
 
-The escrow PDA is derived from `party-escrow`, the host wallet, and the same eight-byte room identifier. Its immutable roster is independent from the delegated room so token custody never depends on deserializing an account currently owned by MagicBlock's delegation program.
+The escrow PDA is derived from `party-escrow`, the host wallet, and the same eight-byte room identifier. Its bounded roster is independent from the delegated room so token custody never depends on deserializing an account currently owned by MagicBlock's delegation program.
 
-- `initialize_escrow`: freezes the 2–4 wallet roster, six-decimal SPL mint, integer funding target, fixed operator, and PDA-controlled token vault.
+- `initialize_escrow`: creates the vault immediately with the host as participant one, a 2–4 player limit, six-decimal SPL mint, integer funding target, and fixed operator.
+- `register_escrow_participant`: lets the fixed operator idempotently mirror a server-verified MagicBlock join while escrow remains in `FUNDING`.
 - `deposit_contribution`: accepts one checked deposit from an allowed wallet, rejects target overfunding, and creates a wallet-specific receipt PDA.
 - `refund_contribution`: returns the entire recorded amount while the escrow is in `FUNDING`.
-- `lock_escrow`: host-authorized, fully-funded transition that permanently disables deposits and refunds.
+- `lock_escrow`: host-authorized, fully-funded transition requiring at least two participants that permanently disables roster changes, deposits, and refunds.
 - `release_to_operator`: operator-authorized, one-time transfer of the exact target to the fixed operator token account.
 - `mark_purchased`: records the confirmed Collector Crypt signature and memo hash.
 - `mark_settled`: final replay guard, executed atomically with proportional participant payouts.
@@ -88,3 +89,5 @@ The room schema v2 opening upgrade deployed on 2026-08-04 with signature [`5JZD8
 The Private ER account upgrade deployed on 2026-08-04; the final permission-validation fix is signature [`5auYTrUPheee62j6M8FWJqXF621kLRGJQ7LaFzetCcsrs7aDbsApsD4vKDxKvsGCenJmkPLFPzBELVGfnQvJbYyx`](https://explorer.solana.com/tx/5auYTrUPheee62j6M8FWJqXF621kLRGJQ7LaFzetCcsrs7aDbsApsD4vKDxKvsGCenJmkPLFPzBELVGfnQvJbYyx?cluster=devnet). The verified TDX/authenticated smoke used private vote `ALh5zchQEHM4gdbA1ZTJYtieFhC1ZUEHkNi8rzczJem8` (party ID `8aa3b8f4`) and confirmed that an unauthenticated TEE request received no account data.
 
 The deadline-release upgrade deployed on 2026-08-04 with signature [`5sLd4ghH2v21wBHDKk2Bw686aoVE47j2M8Nw2dm2mzxEtY187RSmExBygrB3xWVaYKXmp9s5PkicyrcMk81ncfU4`](https://explorer.solana.com/tx/5sLd4ghH2v21wBHDKk2Bw686aoVE47j2M8Nw2dm2mzxEtY187RSmExBygrB3xWVaYKXmp9s5PkicyrcMk81ncfU4?cluster=devnet). The end-to-end proof used vote `35KkruNuqbURduCmgsaYNgYzf2nQjMtVcGTq6yFYwwX5` (party ID `01a105be`): an unauthenticated read and an early release were rejected, the vote became public only after expiry, and undelegation committed the exact SELL choice and cast timestamp to devnet.
+
+The dynamic escrow v3 upgrade deployed on 2026-08-08 with signature [`586N3E9iC3NLzqgGXBgzSozKJz9opPaoi3dzFiu7PtvFptq89tk1LXK2AAWfWvQJEmPzRy3GtSyUwXfMoh23DNLg`](https://explorer.solana.com/tx/586N3E9iC3NLzqgGXBgzSozKJz9opPaoi3dzFiu7PtvFptq89tk1LXK2AAWfWvQJEmPzRy3GtSyUwXfMoh23DNLg?cluster=devnet). Existing v2 escrow accounts are intentionally incompatible; create a new party for v3 funding. The post-upgrade smoke created room `HrRJsZwwG6rtpyT4rVV3QZkbs1BYjYJQiitqngfV5rVi` and escrow `BcMZ1XWQciNyiNJqqXA4sXaY1UJUsdKZH6R2GUCgKR4r` (party ID `33178163`) in one transaction, then verified operator registration of participant two.

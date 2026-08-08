@@ -7,7 +7,7 @@ import { ArrowRight, Check, Coins, RadioTower, ShieldCheck, Users, WalletCards }
 import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { createPartySchema, type CreatePartyInput } from "@/domain/party";
-import { formatUsdc } from "@/domain/money";
+import { formatUsdc, parseUsdc } from "@/domain/money";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { WalletAuthButton } from "@/components/wallet/wallet-auth-button";
@@ -103,6 +103,7 @@ export function CreatePartyForm({ packs, exactPackPrice = false }: { packs: Pack
           hostWallet: walletAuth.walletAddress,
           partyId,
           maxPlayers: values.maxPlayers,
+          fundingTargetBaseUnits: parseUsdc(values.fundingTarget).toString(),
           signTransaction: walletAuth.signTransaction,
           onStage: setActivationStage,
         });

@@ -12,6 +12,7 @@ import {
   pipe,
   setTransactionMessageFeePayer,
   type Address,
+  type Instruction,
   type Signature,
 } from "@solana/kit";
 import { Connection } from "@magicblock-labs/ephemeral-rollups-kit";
@@ -32,7 +33,6 @@ import { encodeRoomId, SOLANA_DEVNET_URL } from "@/integrations/magicblock/route
 const ESCROW_SEED = new TextEncoder().encode("party-escrow");
 const ESCROW_VAULT_SEED = new TextEncoder().encode("escrow-vault");
 const CONTRIBUTION_SEED = new TextEncoder().encode("contribution");
-const EMPTY_ADDRESS = address("11111111111111111111111111111111");
 const U64_MAX = 18_446_744_073_709_551_615n;
 
 export type EscrowAction = "initialize" | "deposit" | "refund" | "lock";
@@ -52,21 +52,6 @@ export type DevnetEscrowClientConfig = {
   operator?: string;
   rpcUrl?: string;
 };
-
-export function normalizeEscrowParticipants(host: string, participants: readonly string[]): Address[] {
-  const hostAddress = address(host);
-  const active = participants.map((participant) => address(participant));
-  if (active.length < 2 || active.length > 4) {
-    throw new Error("Escrow requires a frozen roster of 2 to 4 wallets.");
-  }
-  if (active[0] !== hostAddress) {
-    throw new Error("The host must be the first escrow participant.");
-  }
-  if (new Set(active).size !== active.length) {
-    throw new Error("Escrow participant wallets must be unique.");
-  }
-  return [...active, ...Array<Address>(4 - active.length).fill(EMPTY_ADDRESS)];
-}
 
 export async function findEscrowAddress(host: string, partyId: string): Promise<Address> {
   const [escrow] = await getProgramDerivedAddress({
@@ -121,25 +106,37 @@ export class DevnetEscrowClient {
     host: string,
     partyId: string,
     fundingTarget: bigint,
-    participants: readonly string[],
+    maxPlayers: number,
   ): Promise<PreparedEscrowTransaction> {
-    assertTokenAmount(fundingTarget, "Funding target");
     const hostAddress = address(host);
     const escrowAddress = await findEscrowAddress(host, partyId);
-    const roster = normalizeEscrowParticipants(host, participants);
+    const instruction = await this.buildInitializeInstruction(host, partyId, fundingTarget, maxPlayers);
+    return this.prepare("initialize", escrowAddress, hostAddress, instruction);
+  }
+
+  async buildInitializeInstruction(
+    host: string,
+    partyId: string,
+    fundingTarget: bigint,
+    maxPlayers: number,
+  ): Promise<Instruction> {
+    assertTokenAmount(fundingTarget, "Funding target");
+    if (!Number.isInteger(maxPlayers) || maxPlayers < 2 || maxPlayers > 4) {
+      throw new Error("Escrow must allow between 2 and 4 players.");
+    }
     if (!this.operator) throw new Error("A verified devnet operator address is required to initialize escrow.");
-    const instruction = await getInitializeEscrowInstructionAsync({
+    const hostAddress = address(host);
+    const escrowAddress = await findEscrowAddress(host, partyId);
+    return getInitializeEscrowInstructionAsync({
       escrow: escrowAddress,
       vault: await findEscrowVaultAddress(escrowAddress),
       mint: this.mint,
       host: createNoopSigner(hostAddress),
       roomId: encodeRoomId(partyId),
       fundingTarget,
-      participantCount: participants.length,
-      participants: roster,
+      maxPlayers,
       operator: this.operator,
     });
-    return this.prepare("initialize", escrowAddress, hostAddress, instruction);
   }
 
   async prepareLock(host: string, partyId: string): Promise<PreparedEscrowTransaction> {

@@ -653,7 +653,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
             </div>
           )}
 
-          {!currentParticipant && identity && party.status === "FUNDING" && party.participants.length < party.maxPlayers && escrow.status !== "active" && (
+          {!currentParticipant && identity && (party.status === "FUNDING" || party.status === "FUNDED") && party.participants.length < party.maxPlayers && escrow.snapshot?.status !== ProgramEscrowStatus.Locked && (
             <form onSubmit={join} className="rounded-xl border border-primary/30 bg-primary/5 p-5 sm:p-6">
               <div className="flex items-center gap-3">
                 <span className="grid size-10 place-items-center rounded-full bg-primary/15 text-primary"><WalletCards className="size-5" aria-hidden="true" /></span>
@@ -712,7 +712,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                 );
               })}
             </ul>
-            {party.participants.length < party.maxPlayers && party.status === "FUNDING" && escrow.status !== "active" && (
+            {party.participants.length < party.maxPlayers && (party.status === "FUNDING" || party.status === "FUNDED") && escrow.snapshot?.status !== ProgramEscrowStatus.Locked && (
               <div className="mt-3 flex min-h-14 items-center justify-between rounded-lg border border-dashed px-3 text-sm text-muted-foreground">
                 <span>Waiting for friends</span><Copy className="size-4" aria-hidden="true" />
               </div>

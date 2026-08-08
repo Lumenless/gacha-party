@@ -10,6 +10,7 @@ export * from './contributionDeposited';
 export * from './contributionRefunded';
 export * from './escrowInitialized';
 export * from './escrowLocked';
+export * from './escrowParticipantRegistered';
 export * from './escrowPurchaseRecorded';
 export * from './escrowReleased';
 export * from './escrowSettled';

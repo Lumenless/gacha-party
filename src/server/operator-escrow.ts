@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import {
+  address,
   appendTransactionMessageInstructions,
   compileTransaction,
   createTransactionMessage,
@@ -20,11 +21,46 @@ import {
   EscrowStatus,
   getMarkPurchasedInstruction,
   getMarkSettledInstruction,
+  getRegisterEscrowParticipantInstruction,
   getReleaseToOperatorInstruction,
 } from "@/integrations/solana/program-client/src/generated";
 import { DevnetEscrowClient } from "@/integrations/solana/escrow-client";
 import { SOLANA_DEVNET_URL } from "@/integrations/magicblock/router-client";
 import { getGachaOperatorSigner } from "./gacha-operator";
+
+const ESCROW_VERSION_WITH_DYNAMIC_ROSTER = 3;
+
+export async function registerPartyEscrowParticipant(party: Party, participant: string): Promise<Signature | null> {
+  const { client, connection, operator, mint } = await context();
+  const escrow = await client.fetchEscrow(party.hostWallet, party.id);
+  if (!escrow) throw new Error("The party escrow does not exist on devnet.");
+  if (escrow.version !== ESCROW_VERSION_WITH_DYNAMIC_ROSTER) {
+    throw new Error("This escrow predates dynamic funding. Create a new demo party.");
+  }
+  if (String(escrow.operator) !== operator.address || String(escrow.mint) !== mint) {
+    throw new Error("The escrow deployment configuration does not match this party.");
+  }
+  if (escrow.fundingTarget !== BigInt(party.fundingTargetBaseUnits) || escrow.maxPlayers !== party.maxPlayers) {
+    throw new Error("The escrow funding configuration does not match this party.");
+  }
+  const roster = escrow.participants.slice(0, escrow.participantCount).map(String);
+  const partyRoster = party.participants.map(({ wallet }) => wallet);
+  const expectedRegisteredRoster = [...partyRoster, participant];
+  if (
+    roster.length === expectedRegisteredRoster.length &&
+    roster.every((wallet, index) => wallet === expectedRegisteredRoster[index])
+  ) return null;
+  if (roster.length !== partyRoster.length || roster.some((wallet, index) => wallet !== partyRoster[index])) {
+    throw new Error("The escrow participant roster is out of sync with this party.");
+  }
+  if (escrow.status !== EscrowStatus.Funding) throw new Error("This escrow is no longer accepting participants.");
+  if (roster.length >= escrow.maxPlayers) throw new Error("This escrow is full.");
+  return sendOperatorInstruction(connection, getRegisterEscrowParticipantInstruction({
+    escrow: escrow.address,
+    operator,
+    participant: address(participant),
+  }));
+}
 
 export async function releasePartyEscrowToOperator(party: Party): Promise<Signature | null> {
   const { client, connection, operator, mint } = await context();

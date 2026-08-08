@@ -16,8 +16,6 @@ import {
   type PreparedEscrowTransaction,
 } from "../src/integrations/solana/escrow-client";
 
-const SECOND_PARTICIPANT = "H6ARHf6YXhGYeQYD5TwgJRaNtW7ZMq4ECzLoqLQPH2uH";
-
 async function main() {
   const mint = requiredEnvironment("TEST_TOKEN_MINT");
   const contributorToken = requiredEnvironment("TEST_TOKEN_ACCOUNT");
@@ -44,7 +42,7 @@ async function main() {
     signer.address,
     partyId,
     5_000_000n,
-    [signer.address, SECOND_PARTICIPANT],
+    2,
   ));
   await signAndSubmit(await client.prepareDeposit(
     signer.address,

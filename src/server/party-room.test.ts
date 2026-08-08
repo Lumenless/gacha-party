@@ -52,6 +52,17 @@ describe("multiplayer room service", () => {
     )).rejects.toThrow("already joined");
   });
 
+  it("allows a friend to join after the host fully funds but before opening", async () => {
+    await contributeToParty("party-1", { wallet: "DEMO_HOST_WALLET", amount: "50" }, realtime);
+    const joined = await joinParty(
+      "party-1",
+      { wallet: "DemoPlayerWallet0001", displayName: "Alice" },
+      realtime,
+    );
+    expect(joined.status).toBe("FUNDED");
+    expect(joined.participants).toHaveLength(2);
+  });
+
   it("funds exactly to target and blocks an over-contribution", async () => {
     await joinParty("party-1", { wallet: "DemoPlayerWallet0001", displayName: "Alice" }, realtime);
     await contributeToParty("party-1", { wallet: "DEMO_HOST_WALLET", amount: "20" }, realtime);

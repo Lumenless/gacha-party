@@ -102,7 +102,12 @@ export class MagicRouterRoomClient {
     }));
   }
 
-  async prepareInitializeAndDelegation(host: string, partyId: string, maxPlayers: number) {
+  async prepareInitializeAndDelegation(
+    host: string,
+    partyId: string,
+    maxPlayers: number,
+    baseLayerInstructions: readonly Instruction[] = [],
+  ) {
     if (!Number.isInteger(maxPlayers) || maxPlayers < 2 || maxPlayers > 4) {
       throw new Error("A room must allow between 2 and 4 players.");
     }
@@ -115,7 +120,7 @@ export class MagicRouterRoomClient {
       maxPlayers,
     });
     const delegation = await this.delegationInstruction(hostAddress, roomAddress, partyId, MAGICBLOCK_DEVNET_VALIDATOR);
-    return this.prepare("initialize", roomAddress, hostAddress, [initialization, delegation]);
+    return this.prepare("initialize", roomAddress, hostAddress, [initialization, ...baseLayerInstructions, delegation]);
   }
 
   async prepareJoin(player: string, host: string, partyId: string) {

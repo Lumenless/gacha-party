@@ -70,7 +70,7 @@ COLLECTOR_CRYPT_MODE=real
 COLLECTOR_CRYPT_API_BASE_URL=https://dev-gacha.collectorcrypt.com
 ```
 
-The host freezes the roster, participants sign checked deposits, everyone readies, and the host signs the irreversible lock. The operator then releases the exact target, signs Collector Crypt’s partially signed transaction, receives the NFT, and either keeps it for the party or signs buyback. SELL payouts and the final escrow marker share one atomic transaction, preventing double settlement.
+Party creation immediately creates a base-layer vault with the host registered, so the host can deposit before friends arrive. Each friend signs a MagicBlock join; the server verifies that membership before the devnet operator registers the wallet in escrow. Participants sign checked deposits, everyone readies, and the host signs the irreversible lock. The operator then releases the exact target, signs Collector Crypt’s partially signed transaction, receives the NFT, and either keeps it for the party or signs buyback. SELL payouts and the final escrow marker share one atomic transaction, preventing double settlement.
 
 `COLLECTOR_CRYPT_API_KEY` is optional and used only for partner attribution. Never place `GACHA_OPERATOR_SECRET_KEY` in a `NEXT_PUBLIC_` variable or commit it.
 

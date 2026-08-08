@@ -105,17 +105,15 @@ export function EscrowFundingPanel({
             <span className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/15 text-primary"><Landmark className="size-5" aria-hidden="true" /></span>
             <div>
               <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Base-layer custody</p>
-              <h2 className="mt-1 font-semibold">Freeze the funding roster</h2>
+              <h2 className="mt-1 font-semibold">Create the funding vault</h2>
               <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">
-                {participantCount < 2
-                  ? "Invite at least one friend before creating the escrow."
-                  : isHost
-                    ? `Creates a devnet token vault for the current ${participantCount} wallets. No tokens move during activation.`
-                    : "The host must create the escrow before participants can deposit."}
+                {isHost
+                  ? "Creates a devnet token vault with you as the first participant. Friends are registered as they join. No tokens move during activation."
+                  : "The host must create the escrow before participants can deposit."}
               </p>
             </div>
           </div>
-          {isHost && participantCount >= 2 && (canSignTransactions
+          {isHost && (canSignTransactions
             ? <Button type="button" onClick={onReviewInitialize}>Review escrow</Button>
             : <WalletAuthButton />)}
         </div>
@@ -140,7 +138,7 @@ export function EscrowFundingPanel({
           <div>
             <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">On-chain escrow active</p>
             <h2 className="mt-1 font-semibold">Deposits are verified from receipts</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Roster locked · {snapshot?.participantCount ?? 0} wallets · Solana devnet</p>
+            <p className="mt-1 text-sm text-muted-foreground">{snapshot?.participantCount ?? 0} registered wallet{snapshot?.participantCount === 1 ? "" : "s"} · Solana devnet</p>
           </div>
         </div>
         {snapshot && (
@@ -165,8 +163,8 @@ export function EscrowFundingPanel({
 
       {!isParticipant && (
         <div className="mt-4 rounded-lg border bg-muted/40 p-4 text-sm">
-          <p className="font-semibold">Funding roster locked</p>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">Only wallets included when the host activated this escrow can deposit.</p>
+          <p className="font-semibold">Join to fund this vault</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">Your wallet is registered after its MagicBlock join is confirmed. You can deposit immediately afterward.</p>
         </div>
       )}
 
@@ -193,10 +191,17 @@ export function EscrowFundingPanel({
         </div>
       )}
 
-      {isHost && fundingOpen && snapshot?.totalContributed === snapshot?.fundingTarget && (
+      {isHost && fundingOpen && participantCount >= 2 && snapshot?.totalContributed === snapshot?.fundingTarget && (
         <div className="mt-5 flex flex-col justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 p-4 sm:flex-row sm:items-center">
           <div><p className="font-semibold">Fully funded</p><p className="mt-1 text-xs text-muted-foreground">Locking permanently disables refunds and authorizes the devnet operator purchase.</p></div>
           <Button type="button" onClick={onReviewLock}>Review lock</Button>
+        </div>
+      )}
+
+      {isHost && fundingOpen && participantCount < 2 && snapshot?.totalContributed === snapshot?.fundingTarget && (
+        <div className="mt-5 rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm">
+          <p className="font-semibold">Fully funded — invite one friend</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">At least two registered players are required before the party can lock funds and open the pack.</p>
         </div>
       )}
 

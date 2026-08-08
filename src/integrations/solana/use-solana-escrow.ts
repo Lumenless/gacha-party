@@ -46,7 +46,7 @@ function transactionError(cause: unknown) {
   return message;
 }
 
-export function useSolanaEscrow(party: Pick<Party, "id" | "hostWallet" | "fundingTargetBaseUnits" | "participants">) {
+export function useSolanaEscrow(party: Pick<Party, "id" | "hostWallet" | "fundingTargetBaseUnits" | "maxPlayers" | "participants">) {
   const wallet = useWalletAuth();
   const fundsMode = process.env.NEXT_PUBLIC_FUNDS_MODE;
   const mint = process.env.NEXT_PUBLIC_USDC_MINT?.trim() ?? "";
@@ -124,9 +124,9 @@ export function useSolanaEscrow(party: Pick<Party, "id" | "hostWallet" | "fundin
       party.hostWallet,
       party.id,
       BigInt(party.fundingTargetBaseUnits),
-      party.participants.map(({ wallet: participant }) => participant),
+      party.maxPlayers,
     ));
-  }, [execute, mint, operator, party.fundingTargetBaseUnits, party.hostWallet, party.id, party.participants, snapshot]);
+  }, [execute, mint, operator, party.fundingTargetBaseUnits, party.hostWallet, party.id, party.maxPlayers, snapshot]);
 
   const deposit = useCallback((amount: bigint) => {
     if (!wallet.walletAddress || !tokenAccount) return Promise.resolve(false);

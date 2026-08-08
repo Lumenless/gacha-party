@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { activateMagicBlockRoom, roomActivationError } from "./activate-room";
 
 const mocks = vi.hoisted(() => ({
@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   prepareInitializeAndDelegation: vi.fn(),
   simulateTransaction: vi.fn(),
   submitSignedTransaction: vi.fn(),
+  fetchEscrow: vi.fn(),
+  buildInitializeInstruction: vi.fn(),
 }));
 
 vi.mock("./router-client", () => ({
@@ -14,9 +16,17 @@ vi.mock("./router-client", () => ({
   },
 }));
 
+vi.mock("@/integrations/solana/escrow-client", () => ({
+  DevnetEscrowClient: {
+    create: vi.fn(async () => mocks),
+  },
+}));
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.fetchRoom.mockResolvedValue(null);
+  mocks.fetchEscrow.mockResolvedValue(null);
+  mocks.buildInitializeInstruction.mockResolvedValue({ programAddress: "escrow-program", accounts: [], data: new Uint8Array() });
   mocks.prepareInitializeAndDelegation.mockResolvedValue({
     action: "initialize",
     roomAddress: "room",
@@ -25,6 +35,8 @@ beforeEach(() => {
   mocks.simulateTransaction.mockResolvedValue(10n);
   mocks.submitSignedTransaction.mockResolvedValue("confirmed-signature");
 });
+
+afterEach(() => vi.unstubAllEnvs());
 
 describe("new party MagicBlock activation", () => {
   it("simulates before wallet signing and submits the signed transaction", async () => {
@@ -35,6 +47,7 @@ describe("new party MagicBlock activation", () => {
       hostWallet: "host",
       partyId: "12345678",
       maxPlayers: 2,
+      fundingTargetBaseUnits: "50000000",
       signTransaction,
       onStage: (stage) => stages.push(stage),
     });
@@ -54,11 +67,34 @@ describe("new party MagicBlock activation", () => {
       hostWallet: "host",
       partyId: "12345678",
       maxPlayers: 2,
+      fundingTargetBaseUnits: "50000000",
       signTransaction,
     })).resolves.toBeNull();
 
     expect(signTransaction).not.toHaveBeenCalled();
     expect(mocks.prepareInitializeAndDelegation).not.toHaveBeenCalled();
+  });
+
+  it("adds escrow initialization to the host's room activation transaction in real funds mode", async () => {
+    vi.stubEnv("NEXT_PUBLIC_FUNDS_MODE", "solana");
+    vi.stubEnv("NEXT_PUBLIC_USDC_MINT", "mint");
+    vi.stubEnv("NEXT_PUBLIC_GACHA_OPERATOR_ADDRESS", "operator");
+
+    await activateMagicBlockRoom({
+      hostWallet: "host",
+      partyId: "12345678",
+      maxPlayers: 3,
+      fundingTargetBaseUnits: "75000000",
+      signTransaction: async () => new Uint8Array([4, 5, 6]),
+    });
+
+    expect(mocks.buildInitializeInstruction).toHaveBeenCalledWith("host", "12345678", 75_000_000n, 3);
+    expect(mocks.prepareInitializeAndDelegation).toHaveBeenCalledWith(
+      "host",
+      "12345678",
+      3,
+      [expect.objectContaining({ programAddress: "escrow-program" })],
+    );
   });
 
   it("turns wallet cancellation into a recoverable message", () => {

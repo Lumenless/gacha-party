@@ -35,7 +35,9 @@ export async function joinParty(
 ): Promise<Party> {
   const input = joinPartySchema.parse(rawInput);
   const party = await requireParty(partyId);
-  if (party.status !== "FUNDING") throw new Error("This party is no longer accepting players.");
+  if (party.status !== "FUNDING" && party.status !== "FUNDED") {
+    throw new Error("This party is no longer accepting players.");
+  }
   if (party.participants.some(({ wallet }) => wallet === input.wallet)) {
     throw new Error("This wallet has already joined the party.");
   }
