@@ -140,6 +140,7 @@ MagicBlock's eATA model is the later path if contribution balances themselves mu
 
 - Creating an invite and activating its MagicBlock room is one host action. The server reserves the party ID, then the browser prepares and simulates the initialize-and-delegate transaction, requests the wallet signature, waits for confirmation, and only then enters the room.
 - A rejected or failed activation keeps the reserved invite ID and retries that same room instead of creating duplicate parties. No token approval or asset transfer occurs during activation.
+- The create surface uses a pack-detail composition: horizontally browsable live inventory, a dominant collectible preview, and a compact sticky party-action panel. This borrows the information hierarchy of strong gacha storefronts while keeping original Gacha Party styling, multiplayer controls, and custody disclosures.
 
 ## Milestone 4H decision — Vercel-safe application state
 

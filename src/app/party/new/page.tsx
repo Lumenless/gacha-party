@@ -1,5 +1,6 @@
 import { collectorCryptAdapter, getCollectorCryptMode } from "@/integrations/collector-crypt/server";
 import { CreatePartyForm } from "./party-form";
+import { RadioTower, ShieldCheck, Users } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -7,23 +8,32 @@ export default async function NewPartyPage() {
   const packs = await collectorCryptAdapter().listPacks();
   const realFunds = process.env.NEXT_PUBLIC_WALLET_MODE === "wallet" && process.env.NEXT_PUBLIC_FUNDS_MODE === "solana";
   return (
-    <main className="mx-auto w-full max-w-7xl px-4 py-10 md:px-6 lg:px-8">
-      <div className="mx-auto grid max-w-5xl gap-10 lg:grid-cols-[.75fr_1.25fr]">
+    <main className="mx-auto w-full max-w-7xl px-4 pb-12 pt-5 md:px-6 lg:px-8">
+      <nav aria-label="Gacha Party sections" className="flex items-center gap-1 overflow-x-auto border-y py-2">
+        <span className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-md bg-primary/10 px-4 text-sm font-semibold text-primary">
+          <RadioTower className="size-4" aria-hidden="true" /> New party
+        </span>
+        <span className="inline-flex min-h-10 shrink-0 items-center gap-2 px-4 text-sm text-muted-foreground">
+          <Users className="size-4" aria-hidden="true" /> 2–4 players
+        </span>
+        <span className="inline-flex min-h-10 shrink-0 items-center gap-2 px-4 text-sm text-muted-foreground">
+          <ShieldCheck className="size-4" aria-hidden="true" /> Majority vote
+        </span>
+      </nav>
+
+      <div className="flex flex-col justify-between gap-3 py-6 sm:flex-row sm:items-end">
         <div>
-          <p className="font-mono text-xs uppercase tracking-[0.2em] text-primary">Create a room</p>
-          <h1 className="display-type mt-4 text-4xl font-semibold sm:text-5xl">Set the stakes.</h1>
-          <p className="mt-5 max-w-sm leading-7 text-muted-foreground">
-            Pick one pack and set the funding window. Your wallet activates the MagicBlock room before you invite the crew.
-          </p>
-          <div className="mt-8 rounded-lg border border-primary/25 bg-primary/5 p-4 text-sm leading-6 text-muted-foreground">
-            <strong className="text-primary">{realFunds ? "Devnet funding:" : "Safe demo:"}</strong>{" "}
-            {realFunds
-              ? `${getCollectorCryptMode() === "real" ? "Live Collector Crypt packs" : "Mock packs"} with an on-chain escrow, fixed devnet operator, and one-time purchase release.`
-              : "USDC contributions remain simulated. Wallet mode only requests a free ownership signature, never a transaction."}
-          </div>
+          <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Collector Crypt · shared pulls</p>
+          <h1 className="display-type mt-2 text-3xl font-semibold sm:text-4xl">Choose your party pack.</h1>
         </div>
-        <CreatePartyForm exactPackPrice={realFunds} packs={packs.map((pack) => ({ ...pack, priceBaseUnits: pack.priceBaseUnits.toString() }))} />
+        <p className="max-w-md text-sm leading-6 text-muted-foreground">
+          {realFunds
+            ? `${getCollectorCryptMode() === "real" ? "Live Collector Crypt inventory" : "Demo inventory"} · pooled devnet USDC · MagicBlock room.`
+            : "Safe demo inventory · simulated USDC · no tokens move."}
+        </p>
       </div>
+
+      <CreatePartyForm exactPackPrice={realFunds} packs={packs.map((pack) => ({ ...pack, priceBaseUnits: pack.priceBaseUnits.toString() }))} />
     </main>
   );
 }

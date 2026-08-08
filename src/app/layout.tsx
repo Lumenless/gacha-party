@@ -24,7 +24,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <span className="grid size-8 place-items-center rounded-md bg-primary text-primary-foreground">
               <Sparkles className="size-4" aria-hidden="true" />
             </span>
-            GACHA PARTY
+            <span className="hidden whitespace-nowrap sm:inline">GACHA PARTY</span>
           </Link>
           <div className="flex items-center gap-2">
             {process.env.NEXT_PUBLIC_WALLET_MODE === "wallet" ? (
@@ -33,7 +33,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
               <span className="rounded-full border border-primary/35 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary">Mock mode</span>
             )}
             {isDevnetLive ? (
-              <span className="rounded-full border border-primary/35 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary">Collector devnet</span>
+              <span className="whitespace-nowrap rounded-full border border-primary/35 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary">Collector devnet</span>
             ) : null}
             <span className="hidden rounded-full border px-3 py-1.5 text-xs text-muted-foreground sm:inline-flex">
               Devnet
