@@ -13,7 +13,7 @@ export default async function NewPartyPage() {
           <p className="font-mono text-xs uppercase tracking-[0.2em] text-primary">Create a room</p>
           <h1 className="display-type mt-4 text-4xl font-semibold sm:text-5xl">Set the stakes.</h1>
           <p className="mt-5 max-w-sm leading-7 text-muted-foreground">
-            Pick one pack, set the funding window, and send the room link to your crew.
+            Pick one pack and set the funding window. Your wallet activates the MagicBlock room before you invite the crew.
           </p>
           <div className="mt-8 rounded-lg border border-primary/25 bg-primary/5 p-4 text-sm leading-6 text-muted-foreground">
             <strong className="text-primary">{realFunds ? "Devnet funding:" : "Safe demo:"}</strong>{" "}

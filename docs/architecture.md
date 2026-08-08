@@ -136,6 +136,11 @@ MagicBlock's eATA model is the later path if contribution balances themselves mu
 - Expiry is voter-driven: available wallets release after the deadline and unavailable wallets abstain. This avoids granting the host or application server early read access. A future shared private coordinator may add an all-voted shortcut.
 - PER stays opt-in because it requires several wallet prompts and a fixed deadline. Commit-reveal remains the default demo mode; neither mode silently falls back to the other.
 
+## Room creation UX decision
+
+- Creating an invite and activating its MagicBlock room is one host action. The server reserves the party ID, then the browser prepares and simulates the initialize-and-delegate transaction, requests the wallet signature, waits for confirmation, and only then enters the room.
+- A rejected or failed activation keeps the reserved invite ID and retries that same room instead of creating duplicate parties. No token approval or asset transfer occurs during activation.
+
 ## Milestone 4H decision — Vercel-safe application state
 
 - Supabase is used in local and Vercel application runtimes; Vitest uses isolated in-memory adapters. This keeps development aligned with deployment without making unit tests network-dependent.

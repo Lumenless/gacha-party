@@ -3,8 +3,8 @@
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowRight } from "lucide-react";
-import { useEffect } from "react";
+import { ArrowRight, RadioTower, WalletCards } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { createPartySchema, type CreatePartyInput } from "@/domain/party";
 import { formatUsdc } from "@/domain/money";
@@ -12,6 +12,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { WalletAuthButton } from "@/components/wallet/wallet-auth-button";
 import { useWalletAuth } from "@/components/wallet/wallet-auth-provider";
+import {
+  activateMagicBlockRoom,
+  roomActivationError,
+  type RoomActivationStage,
+} from "@/integrations/magicblock/activate-room";
 
 type PackOption = {
   code: string;
@@ -32,11 +37,15 @@ function defaultDeadline() {
 export function CreatePartyForm({ packs, exactPackPrice = false }: { packs: PackOption[]; exactPackPrice?: boolean }) {
   const router = useRouter();
   const walletAuth = useWalletAuth();
+  const activationRequired = walletAuth.enabled && process.env.NEXT_PUBLIC_ROOM_STATE_MODE === "magicblock";
+  const [createdPartyId, setCreatedPartyId] = useState<string | null>(null);
+  const [activationStage, setActivationStage] = useState<RoomActivationStage | "creating" | "error" | null>(null);
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
     setError,
+    clearErrors,
     setValue,
     control,
   } = useForm<CreatePartyInput>({
@@ -59,28 +68,64 @@ export function CreatePartyForm({ packs, exactPackPrice = false }: { packs: Pack
   }, [exactPackPrice, packs, selectedPack, setValue]);
 
   async function onSubmit(values: CreatePartyInput) {
+    clearErrors("root");
+    let partyId = createdPartyId;
     try {
-      const response = await fetch("/api/parties", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(values),
-      });
-      const result = (await response.json()) as { id?: string; error?: string };
-      if (!response.ok || !result.id) throw new Error(result.error ?? "Party creation failed.");
-      router.push(`/party/${result.id}?host=1`);
+      if (!partyId) {
+        setActivationStage("creating");
+        const response = await fetch("/api/parties", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(values),
+        });
+        const result = (await response.json()) as { id?: string; error?: string };
+        if (!response.ok || !result.id) throw new Error(result.error ?? "Party creation failed.");
+        partyId = result.id;
+        setCreatedPartyId(partyId);
+      }
+
+      if (activationRequired) {
+        if (!walletAuth.walletAddress || !walletAuth.canSignTransactions) {
+          throw new Error("Reconnect the host wallet to activate the MagicBlock room.");
+        }
+        await activateMagicBlockRoom({
+          hostWallet: walletAuth.walletAddress,
+          partyId,
+          maxPlayers: values.maxPlayers,
+          signTransaction: walletAuth.signTransaction,
+          onStage: setActivationStage,
+        });
+      }
+      router.push(`/party/${partyId}?host=1`);
     } catch (error) {
-      setError("root", { message: error instanceof Error ? error.message : "Could not create the party." });
+      const message = partyId
+        ? roomActivationError(error)
+        : error instanceof Error ? error.message : "Could not create the party.";
+      setActivationStage("error");
+      setError("root", { message });
     }
   }
 
+  const pendingLabel = activationStage === "creating"
+    ? "Creating invite…"
+    : activationStage === "preparing"
+      ? "Preparing MagicBlock…"
+      : activationStage === "simulating"
+        ? "Checking transaction…"
+        : activationStage === "signing"
+          ? "Confirm in wallet…"
+          : activationStage === "submitting" ? "Activating room…" : null;
+
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="rounded-xl border bg-card p-5 sm:p-7" noValidate>
+    <form onSubmit={handleSubmit(onSubmit)} className="rounded-xl border bg-card p-5 sm:p-7" noValidate aria-busy={isSubmitting}>
       {errors.root && (
         <div role="alert" className="mb-6 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
           {errors.root.message}
         </div>
       )}
 
+      <fieldset disabled={isSubmitting || Boolean(createdPartyId)}>
+      <legend className="sr-only">Party settings</legend>
       <div className="space-y-1.5">
         <label htmlFor="name" className="text-sm font-medium">Party name</label>
         <Input id="name" autoComplete="off" spellCheck={false} aria-invalid={errors.name ? true : undefined} aria-describedby={errors.name ? "name-error" : undefined} {...register("name")} />
@@ -141,25 +186,46 @@ export function CreatePartyForm({ packs, exactPackPrice = false }: { packs: Pack
       </div>
 
       <input type="hidden" value="SIMPLE_MAJORITY" {...register("decisionRule")} />
-      {walletAuth.enabled && !walletAuth.walletAddress && (
+      </fieldset>
+      {walletAuth.enabled && (!walletAuth.walletAddress || (activationRequired && !walletAuth.canSignTransactions)) && (
         <div className="mt-7 flex flex-col justify-between gap-4 rounded-lg border border-primary/30 bg-primary/5 p-4 sm:flex-row sm:items-center">
           <div>
-            <p className="text-sm font-semibold">Verify the host wallet</p>
-            <p className="mt-1 text-xs text-muted-foreground">Party actions will be bound to this signed session.</p>
+            <p className="text-sm font-semibold">{walletAuth.walletAddress ? "Enable transaction signing" : "Verify the host wallet"}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {walletAuth.walletAddress
+                ? "Reconnect the same wallet so it can activate the MagicBlock room."
+                : "Party actions will be bound to this signed session."}
+            </p>
           </div>
           <WalletAuthButton />
         </div>
       )}
       <div className="mt-7 flex items-center justify-between border-t pt-5">
         <div>
-          <p className="text-sm font-medium">Decision rule</p>
-          <p className="text-xs text-muted-foreground">Simple majority</p>
+          <p className="text-sm font-medium">{activationRequired ? "On-chain activation" : "Decision rule"}</p>
+          <p className="max-w-sm text-xs leading-5 text-muted-foreground">
+            {activationRequired
+              ? "One devnet transaction creates and delegates the room. No assets move."
+              : "Simple majority"}
+          </p>
         </div>
-        <Button type="submit" loading={isSubmitting} disabled={!selectedPack || (walletAuth.enabled && !walletAuth.walletAddress)}>
-          {isSubmitting ? "Creating room…" : "Create room"}
-          {!isSubmitting && <ArrowRight className="size-4" aria-hidden="true" />}
+        <Button
+          type="submit"
+          loading={isSubmitting}
+          disabled={!selectedPack || (walletAuth.enabled && !walletAuth.walletAddress) || (activationRequired && !walletAuth.canSignTransactions)}
+        >
+          {pendingLabel ?? (activationStage === "error" && createdPartyId ? "Retry activation" : activationRequired ? "Create & activate" : "Create room")}
+          {!isSubmitting && (activationRequired ? <WalletCards className="size-4" aria-hidden="true" /> : <ArrowRight className="size-4" aria-hidden="true" />)}
         </Button>
       </div>
+      {activationRequired && (
+        <p className="mt-4 flex items-center gap-2 text-xs text-muted-foreground" aria-live="polite">
+          <RadioTower className="size-4 shrink-0 text-primary" aria-hidden="true" />
+          {createdPartyId && activationStage === "error"
+            ? "The invite is saved. Retrying will activate the same party, not create another one."
+            : "Your wallet will show the devnet program and network fee before you approve."}
+        </p>
+      )}
     </form>
   );
 }
