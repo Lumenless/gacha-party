@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, EyeOff, Radio, Users } from "lucide-react";
+import { YourParties } from "@/components/party/your-parties";
 
 const steps = [
   { icon: Users, number: "01", title: "Pool", copy: "Invite friends and fund one pack in USDC." },
@@ -13,6 +14,7 @@ export default function LandingPage() {
   const realFunds = process.env.NEXT_PUBLIC_FUNDS_MODE === "solana";
   return (
     <main>
+      <YourParties />
       <section className="mx-auto grid min-h-[calc(100vh-4.5rem)] max-w-7xl items-center gap-12 px-4 py-12 md:grid-cols-[1.05fr_.95fr] md:px-6 lg:px-8">
         <div className="max-w-2xl">
           <p className="mb-6 font-mono text-xs font-semibold uppercase tracking-[0.22em] text-primary">

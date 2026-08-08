@@ -39,6 +39,20 @@ class PartyRepository {
     return data ? data.state as Party : null;
   }
 
+  async listByWallet(wallet: string): Promise<Party[]> {
+    if (getServerStorageMode() === "memory") {
+      return [...memoryStore.values()].filter((party) =>
+        party.participants.some((participant) => participant.wallet === wallet));
+    }
+    const { data, error } = await getServerSupabase()
+      .from("parties")
+      .select("state")
+      .contains("state->participants", JSON.stringify([{ wallet }]))
+      .limit(100);
+    if (error) throw error;
+    return (data ?? []).map(({ state }) => state as Party);
+  }
+
   async save(party: Party, expectedRevision?: number): Promise<void> {
     if (getServerStorageMode() === "memory") {
       const current = memoryStore.get(party.id);
