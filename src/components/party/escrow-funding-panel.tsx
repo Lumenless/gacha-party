@@ -286,7 +286,11 @@ export function EscrowTransactionReview({
   const actionError = transaction.action === intent ? transaction.error : null;
   const stageLabel = transaction.stage === "preparing" ? "Preparing…" : transaction.stage === "simulating" ? "Simulating…" : transaction.stage === "signing" ? "Confirm in wallet…" : transaction.stage === "submitting" ? "Submitting…" : transaction.stage === "recovering" ? "Checking status…" : "Confirming…";
   const assets = intent === "initialize" || intent === "cancel" ? "None" : intent === "lock" ? "No transfer; refunds disabled" : `${formatUsdc(amount)} ${tokenLabel}`;
-  const confirmLabel = intent === "deposit" ? `Deposit ${formatUsdc(amount)} ${tokenLabel}` : "Confirm and sign";
+  const confirmLabel = intent === "deposit"
+    ? `Deposit ${formatUsdc(amount)} ${tokenLabel}`
+    : intent === "refund"
+      ? `Refund ${formatUsdc(amount)} ${tokenLabel}`
+      : "Confirm and sign";
 
   const review = (
     <div className={presentation === "card" ? "rounded-xl border border-primary/40 bg-card p-5 sm:p-6" : ""} aria-live="polite">
