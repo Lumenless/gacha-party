@@ -27,9 +27,10 @@ export type PrivateVoteTransactionState = {
   stage: PrivateVoteStage;
   signatures: string[];
   error: string | null;
+  failedStage: PrivateVoteStage | null;
 };
 
-const idleState: PrivateVoteTransactionState = { stage: "idle", signatures: [], error: null };
+const idleState: PrivateVoteTransactionState = { stage: "idle", signatures: [], error: null, failedStage: null };
 
 function transactionError(cause: unknown) {
   const message = cause instanceof Error ? cause.message : "The private vote transaction failed.";
@@ -64,7 +65,7 @@ export function useMagicBlockPrivateVote(partyId: string) {
     if (sessionRef.current && sessionRef.current.session.expiresAt > Date.now() + 30_000) {
       return sessionRef.current.client;
     }
-    setTransaction((current) => ({ ...current, stage: "authenticating", error: null }));
+    setTransaction((current) => ({ ...current, stage: "authenticating", error: null, failedStage: null }));
     const session = await createVerifiedTeeSession(
       process.env.NEXT_PUBLIC_MAGICBLOCK_TEE_RPC_URL || MAGICBLOCK_DEVNET_TEE_URL,
       wallet.walletAddress,
@@ -80,7 +81,7 @@ export function useMagicBlockPrivateVote(partyId: string) {
     prepared: PreparedPrivateVoteTransaction,
     stage: PrivateVoteStage,
   ) => {
-    setTransaction((current) => ({ ...current, stage, error: null }));
+    setTransaction((current) => ({ ...current, stage, error: null, failedStage: null }));
     await client.simulate(prepared);
     const signed = await wallet.signTransaction(prepared.transaction);
     const signature = await client.submit(prepared, signed);
@@ -92,7 +93,7 @@ export function useMagicBlockPrivateVote(partyId: string) {
     if (!enabled || !wallet.walletAddress || !wallet.canSignTransactions) {
       throw new Error("Private voting requires a connected transaction-signing wallet.");
     }
-    setTransaction({ stage: "authenticating", signatures: [], error: null });
+    setTransaction((current) => ({ stage: "authenticating", signatures: current.signatures, error: null, failedStage: null }));
     try {
       const client = await authenticatedClient();
       const revealAfter = Math.floor(new Date(deadline).getTime() / 1_000);
@@ -115,7 +116,7 @@ export function useMagicBlockPrivateVote(partyId: string) {
       }
       if (snapshot.choice !== PrivateVoteChoice.Uncast) {
         if (snapshot.choice !== expectedChoice(choice)) throw new Error("This wallet already sealed a different choice.");
-        setTransaction((current) => ({ ...current, stage: "sealed", error: null }));
+        setTransaction((current) => ({ ...current, stage: "sealed", error: null, failedStage: null }));
         return snapshot;
       }
 
@@ -128,11 +129,11 @@ export function useMagicBlockPrivateVote(partyId: string) {
       if (!sealed || sealed.choice !== expectedChoice(choice) || sealed.castAt <= 0n) {
         throw new Error("The verified TEE did not retain the selected private choice.");
       }
-      setTransaction((current) => ({ ...current, stage: "sealed", error: null }));
+      setTransaction((current) => ({ ...current, stage: "sealed", error: null, failedStage: null }));
       return sealed;
     } catch (cause) {
       const error = transactionError(cause);
-      setTransaction((current) => ({ ...current, stage: "error", error }));
+      setTransaction((current) => ({ ...current, stage: "error", error, failedStage: current.stage }));
       throw new Error(error);
     }
   }, [authenticatedClient, enabled, partyId, submit, wallet.canSignTransactions, wallet.walletAddress]);
@@ -146,7 +147,7 @@ export function useMagicBlockPrivateVote(partyId: string) {
       const expected = expectedChoice(choice);
       const alreadyReleased = await client.fetchBasePrivateVote(wallet.walletAddress, partyId);
       if (alreadyReleased?.choice === expected && alreadyReleased.castAt > 0n) {
-        setTransaction((current) => ({ ...current, stage: "released", error: null }));
+        setTransaction((current) => ({ ...current, stage: "released", error: null, failedStage: null }));
         return alreadyReleased;
       }
       const sealed = await client.fetchPrivateVote(wallet.walletAddress, partyId);
@@ -171,11 +172,11 @@ export function useMagicBlockPrivateVote(partyId: string) {
         20_000,
       );
       if (!released) throw new Error("The released vote did not finalize on Solana devnet in time.");
-      setTransaction((current) => ({ ...current, stage: "released", error: null }));
+      setTransaction((current) => ({ ...current, stage: "released", error: null, failedStage: null }));
       return released;
     } catch (cause) {
       const error = transactionError(cause);
-      setTransaction((current) => ({ ...current, stage: "error", error }));
+      setTransaction((current) => ({ ...current, stage: "error", error, failedStage: current.stage }));
       throw new Error(error);
     }
   }, [authenticatedClient, enabled, partyId, submit, wallet.canSignTransactions, wallet.walletAddress]);

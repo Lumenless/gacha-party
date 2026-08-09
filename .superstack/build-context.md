@@ -35,6 +35,7 @@ build_status:
     - dynamic-devnet-funding-escrow
     - deadline-cancellation-and-transaction-recovery
     - deposit-driven-automatic-membership
+    - resumable-private-vote-signing-ui
   mvp_complete: false
   tests_passing: true
   devnet_deployed: true
@@ -72,5 +73,8 @@ debug:
     - error: "A solo SELL choice left the wallet USDC balance unchanged."
       cause: Production party f2137ed9 had one sealed commitment but zero released votes. No buyback or payout transaction existed; the UI did not clearly distinguish a sealed vote from a completed sale.
       fix: Restore Private ER release for solo rooms, persist release recovery data across tabs until settlement, keep the opening dialog explicit that buyback waits for the deadline and release signature, and retain polling so the confirmed payout balance appears after atomic settlement.
-  last_debug_session: 2026-08-09T13:02:00+02:00
+    - error: "Private voting requested multiple unexplained wallet approvals and a canceled later approval restarted an opaque flow."
+      cause: The UI represented the entire Private ER lifecycle as one button and automatically initiated release at the deadline, even though setup, sealed casting, and release are separate resumable approvals.
+      fix: Show a six-step Private ER signing dialog, disclose the wallet message and transactions before signing, persist confirmed progress, resume from onchain account state, and require an explicit release-and-settle action instead of opening the wallet automatically.
+  last_debug_session: 2026-08-09T14:20:00+02:00
 ```

@@ -30,6 +30,7 @@ import { WalletAuthButton } from "@/components/wallet/wallet-auth-button";
 import { useWalletAuth } from "@/components/wallet/wallet-auth-provider";
 import { ChainRoomPanel, ChainTransactionReview } from "@/components/party/chain-room-panel";
 import { EscrowFundingPanel, EscrowTransactionReview } from "@/components/party/escrow-funding-panel";
+import { PrivateVoteTransactionDialog, type PrivateVoteFlowPhase } from "@/components/party/private-vote-transaction-dialog";
 import { useMagicBlockRoom, type ChainIntent } from "@/integrations/magicblock/use-magicblock-room";
 import { useMagicBlockPrivateVote } from "@/integrations/magicblock/use-magicblock-private-vote";
 import { useSolanaEscrow, type EscrowIntent } from "@/integrations/solana/use-solana-escrow";
@@ -100,9 +101,12 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
   const [openingError, setOpeningError] = useState<string | null>(null);
   const [openingDialogDismissed, setOpeningDialogDismissed] = useState(false);
   const [sellHeldDialogOpen, setSellHeldDialogOpen] = useState(false);
+  const [privateVoteFlow, setPrivateVoteFlow] = useState<{ phase: PrivateVoteFlowPhase; choice: VoteChoice } | null>(null);
+  const [privateVoteFlowError, setPrivateVoteFlowError] = useState<string | null>(null);
   const previousPartyStatus = useRef(initialParty.status);
   const revealRequested = useRef(false);
   const voteRevealRequested = useRef(false);
+  const voteReleasePrompted = useRef(false);
   const voteExpireRequested = useRef(false);
   const escrowSyncRequested = useRef<string | null>(null);
   const membershipSyncRequested = useRef<string | null>(null);
@@ -119,9 +123,9 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
   const realExecution = party.executionMode === "DEVNET";
 
   useEffect(() => {
-    const transactionError = escrow.transaction.error || chainRoom.transaction.error || privateVoteTransaction.error;
+    const transactionError = escrow.transaction.error || chainRoom.transaction.error;
     if (transactionError) showError(transactionError);
-  }, [chainRoom.transaction.error, escrow.transaction.error, privateVoteTransaction.error, showError]);
+  }, [chainRoom.transaction.error, escrow.transaction.error, showError]);
 
   useEffect(() => {
     if (!escrow.transaction.action || escrow.transaction.stage === "idle") return;
@@ -213,6 +217,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
 
   useEffect(() => {
     voteExpireRequested.current = false;
+    voteReleasePrompted.current = false;
   }, [party.voting?.deadline]);
 
   useEffect(() => {
@@ -362,39 +367,18 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
       !party.voting ||
       !identity ||
       !voteSecret ||
-      voteRevealRequested.current ||
+      voteReleasePrompted.current ||
       (privateVotingEnabled
         ? votingSeconds > 0
         : party.voting.phase === "COMMIT" && votingSeconds > 0)
     ) return;
     const timer = window.setTimeout(() => {
-      voteRevealRequested.current = true;
-      const release = privateVotingEnabled
-        ? releasePrivateVote(voteSecret.vote)
-        : Promise.resolve();
-      void release
-        .then(() => mutate("voteReveal", {
-          wallet: identity.wallet,
-          vote: voteSecret.vote,
-          nonce: voteSecret.nonce,
-        }))
-        .then((ok) => {
-          if (!ok) {
-            voteRevealRequested.current = false;
-            return;
-          }
-          const key = voteStorageKey(party.id, identity.wallet);
-          sessionStorage.removeItem(key);
-          localStorage.removeItem(key);
-          setVoteSecret(null);
-        })
-        .catch((cause) => {
-          showError(cause instanceof Error ? cause.message : "The private vote could not be released.");
-          voteRevealRequested.current = false;
-        });
+      voteReleasePrompted.current = true;
+      setPrivateVoteFlowError(null);
+      setPrivateVoteFlow({ phase: "release", choice: voteSecret.vote });
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [identity, mutate, party.id, party.status, party.voting, privateVotingEnabled, releasePrivateVote, showError, voteSecret, votingSeconds]);
+  }, [identity, party.status, party.voting, privateVotingEnabled, voteSecret, votingSeconds]);
 
   useEffect(() => {
     if (
@@ -557,17 +541,17 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
     }
   }
 
-  async function castVote(event: FormEvent) {
-    event.preventDefault();
-    if (!identity || !selectedVote) return;
+  async function sealAndCommitVote(choice: VoteChoice) {
+    if (!identity || !party.voting) return;
+    setPrivateVoteFlow({ phase: "seal", choice });
+    setPrivateVoteFlowError(null);
     const nonce = randomHex(24);
-    const secret = { vote: selectedVote, nonce };
-    const commitment = await voteCommitment(party.id, identity.wallet, selectedVote, nonce);
+    const secret = { vote: choice, nonce };
+    const commitment = await voteCommitment(party.id, identity.wallet, choice, nonce);
     if (privateVotingEnabled) {
       try {
-        await sealPrivateVote(selectedVote, party.voting!.deadline);
-      } catch (cause) {
-        showError(cause instanceof Error ? cause.message : "The private vote could not be sealed.");
+        await sealPrivateVote(choice, party.voting.deadline);
+      } catch {
         return;
       }
     }
@@ -576,10 +560,55 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
     localStorage.setItem(key, JSON.stringify(secret));
     setVoteSecret(secret);
     const committed = await mutate("voteCommit", { wallet: identity.wallet, commitment });
+    if (!committed) setPrivateVoteFlowError("Your private vote is safe, but its party receipt was not recorded. Retry resumes without repeating confirmed transactions.");
     if (!committed && !privateVotingEnabled) {
       setVoteSecret(null);
       sessionStorage.removeItem(key);
       localStorage.removeItem(key);
+    }
+  }
+
+  async function castVote(event: FormEvent) {
+    event.preventDefault();
+    if (!selectedVote) return;
+    await sealAndCommitVote(selectedVote);
+  }
+
+  async function continuePrivateVoteFlow() {
+    if (!privateVoteFlow || !identity) return;
+    setPrivateVoteFlowError(null);
+    if (privateVoteFlow.phase === "seal") {
+      if (voteSecret && privateVoteTransaction.stage === "sealed") {
+        const commitment = await voteCommitment(party.id, identity.wallet, voteSecret.vote, voteSecret.nonce);
+        const committed = await mutate("voteCommit", { wallet: identity.wallet, commitment });
+        if (!committed) setPrivateVoteFlowError("The party receipt still could not be recorded. Your confirmed private vote was not repeated.");
+        return;
+      }
+      await sealAndCommitVote(privateVoteFlow.choice);
+      return;
+    }
+    if (privateVoteFlow.phase !== "release" || !voteSecret || voteRevealRequested.current) return;
+    voteRevealRequested.current = true;
+    try {
+      if (privateVoteTransaction.stage !== "released") await releasePrivateVote(voteSecret.vote);
+      const released = await mutate("voteReveal", {
+        wallet: identity.wallet,
+        vote: voteSecret.vote,
+        nonce: voteSecret.nonce,
+      });
+      if (!released) {
+        setPrivateVoteFlowError("The vote was released, but settlement did not finish. Retry continues from the released vote.");
+        voteRevealRequested.current = false;
+        return;
+      }
+      const key = voteStorageKey(party.id, identity.wallet);
+      sessionStorage.removeItem(key);
+      localStorage.removeItem(key);
+      setVoteSecret(null);
+      setPrivateVoteFlow({ phase: "complete", choice: privateVoteFlow.choice });
+    } catch (cause) {
+      setPrivateVoteFlowError(cause instanceof Error ? cause.message : "The private vote could not be released.");
+      voteRevealRequested.current = false;
     }
   }
 
@@ -673,7 +702,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
 
       <Dialog
         open={
-          !openingDialogDismissed && (
+          !privateVoteFlow && !openingDialogDismissed && (
             party.status === "OPENING" ||
             (party.status === "VOTING" && Boolean(party.reveal && party.voting && currentParticipant))
           )
@@ -834,10 +863,24 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                 </div>
               )}
 
-              {privateVoteTransaction.error && (
+              {(privateVoteTransaction.error || privateVoteFlowError) && (
                 <div role="alert" className="mt-4 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
-                  {privateVoteTransaction.error}
+                  {privateVoteFlowError ?? privateVoteTransaction.error}
                 </div>
+              )}
+
+              {privateVotingEnabled && voteSecret && votingSeconds === 0 && privateVoteTransaction.stage !== "released" && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="mt-3 w-full"
+                  onClick={() => {
+                    setPrivateVoteFlowError(null);
+                    setPrivateVoteFlow({ phase: "release", choice: voteSecret.vote });
+                  }}
+                >
+                  Resume release and settlement
+                </Button>
               )}
 
               <div className="mt-4 flex items-center justify-between gap-4 border-t pt-4 text-xs text-muted-foreground">
@@ -851,6 +894,19 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
           </form>
         ) : null}
       </Dialog>
+
+      {privateVoteFlow && (
+        <PrivateVoteTransactionDialog
+          open
+          phase={privateVoteFlow.phase}
+          choice={privateVoteFlow.choice}
+          transaction={privateVoteTransaction}
+          actionPending={pending === "voteCommit" || pending === "voteReveal"}
+          flowError={privateVoteFlowError}
+          onContinue={() => void continuePrivateVoteFlow()}
+          onClose={() => setPrivateVoteFlow(null)}
+        />
+      )}
 
       <Dialog
         open={sellHeldDialogOpen}
@@ -1201,12 +1257,26 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                   <h2 className="mt-3 text-xl font-semibold">{voteSecret ? "Your vote is sealed" : "Your card is ready"}</h2>
                   <p className="mt-1 text-sm leading-6 text-muted-foreground">
                     {voteSecret
-                      ? "Open the reveal to follow the private vote and shared result."
+                      ? votingSeconds === 0 && privateVotingEnabled && privateVoteTransaction.stage !== "released"
+                        ? "Your choice is still sealed. Release it from the Private ER to finish the vote and settlement."
+                        : "Open the reveal to follow the private vote and shared result."
                       : "View the revealed card and choose whether the party should keep or sell it."}
                   </p>
                 </div>
-                <Button type="button" onClick={() => setOpeningDialogDismissed(false)}>
-                  {voteSecret ? "View sealed vote" : "View card & vote"}
+                <Button
+                  type="button"
+                  onClick={() => {
+                    if (voteSecret && votingSeconds === 0 && privateVotingEnabled && privateVoteTransaction.stage !== "released") {
+                      setPrivateVoteFlowError(null);
+                      setPrivateVoteFlow({ phase: "release", choice: voteSecret.vote });
+                      return;
+                    }
+                    setOpeningDialogDismissed(false);
+                  }}
+                >
+                  {voteSecret && votingSeconds === 0 && privateVotingEnabled && privateVoteTransaction.stage !== "released"
+                    ? "Release vote and settle"
+                    : voteSecret ? "View sealed vote" : "View card & vote"}
                 </Button>
               </div>
             </div>
