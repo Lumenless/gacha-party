@@ -7,7 +7,7 @@ import type { RealtimePartyAdapter, SealedVotingAdapter } from "@/integrations/c
 import { CommitRevealVotingAdapter, createVoteCommitment } from "@/integrations/voting/commit-reveal";
 import { partyRepository } from "./party-repository";
 import { settlementLock } from "./settlement-lock";
-import { commitPartyVote, revealPartyCard, revealPartyVote } from "./party-outcome";
+import { commitPartyVote, expirePartyVote, revealPartyCard, revealPartyVote, sellHeldPartyCard } from "./party-outcome";
 
 const realtime: RealtimePartyAdapter = {
   async publish() {},
@@ -158,5 +158,135 @@ describe("reveal, sealed voting and settlement", () => {
       custody,
       4_000,
     )).rejects.toThrow("remain sealed until the onchain deadline");
+  });
+
+  it("gives Private ER wallets enough time to initialize and seal", async () => {
+    const previousMode = process.env.VOTING_MODE;
+    process.env.VOTING_MODE = "magicblock-per";
+    try {
+      const revealed = await revealPartyCard(
+        "outcome-party",
+        { wallet: "DEMO_HOST_WALLET" },
+        realtime,
+        collector,
+        2_000,
+      );
+      expect(new Date(revealed.voting!.deadline).getTime()).toBe(92_000);
+    } finally {
+      process.env.VOTING_MODE = previousMode;
+    }
+  });
+
+  it("reopens an expired vote instead of settling an empty tally as KEEP", async () => {
+    const previousMode = process.env.VOTING_MODE;
+    process.env.VOTING_MODE = "magicblock-per";
+    try {
+      await revealPartyCard("outcome-party", { wallet: "DEMO_HOST_WALLET" }, realtime, collector, 2_000);
+      const reopened = await expirePartyVote(
+        "outcome-party",
+        { wallet: "DEMO_HOST_WALLET" },
+        realtime,
+        privateVoting,
+        collector,
+        custody,
+        122_001,
+      );
+      expect(reopened.status).toBe("VOTING");
+      expect(reopened.voting).toMatchObject({ phase: "COMMIT", commitCount: 0, revealCount: 0 });
+      expect(new Date(reopened.voting!.deadline).getTime()).toBe(212_001);
+      expect(reopened.settlement).toBeUndefined();
+    } finally {
+      process.env.VOTING_MODE = previousMode;
+    }
+  });
+
+  it("lets only a sole participant recover a legacy empty-vote KEEP card through buyback", async () => {
+    const original = (await partyRepository.get("outcome-party"))!;
+    await partyRepository.save({
+      ...original,
+      revision: original.revision + 1,
+      participants: [original.participants[0]!],
+    }, original.revision);
+    const revealed = await revealPartyCard(
+      "outcome-party",
+      { wallet: "DEMO_HOST_WALLET" },
+      realtime,
+      collector,
+      2_000,
+    );
+    const legacyCompleted: Party = {
+      ...revealed,
+      revision: revealed.revision + 1,
+      status: "COMPLETED",
+      voting: {
+        ...revealed.voting!,
+        phase: "COMPLETE",
+        result: { keep: 0, sell: 0, outcome: "KEEP" },
+      },
+      settlement: {
+        mode: "KEEP",
+        idempotencyKey: "legacy-empty-keep",
+        completedAt: new Date(123_000).toISOString(),
+        vaultAddress: "DemoPartyVault_outcome-party",
+      },
+    };
+    await partyRepository.save(legacyCompleted, revealed.revision);
+
+    const recovered = await sellHeldPartyCard(
+      "outcome-party",
+      { wallet: "DEMO_HOST_WALLET" },
+      realtime,
+      collector,
+      async () => ({
+        proceedsBaseUnits: parseUsdc("80"),
+        shares: [],
+        buybackSignature: "buyback-signature",
+        payoutSignature: "payout-signature",
+      }),
+    );
+
+    expect(recovered.status).toBe("COMPLETED");
+    expect(recovered.voting?.result).toEqual({ keep: 0, sell: 1, outcome: "SELL" });
+    expect(recovered.settlement).toMatchObject({
+      mode: "SELL",
+      proceedsBaseUnits: parseUsdc("80").toString(),
+      buybackSignature: "buyback-signature",
+      payoutSignature: "payout-signature",
+    });
+    expect(recovered.settlement?.shares?.[0]?.proceedsBaseUnits).toBe(parseUsdc("80").toString());
+  });
+
+  it("does not let a participant bypass voting for a multiplayer empty-vote card", async () => {
+    const revealed = await revealPartyCard(
+      "outcome-party",
+      { wallet: "DEMO_HOST_WALLET" },
+      realtime,
+      collector,
+      2_000,
+    );
+    const legacyCompleted: Party = {
+      ...revealed,
+      revision: revealed.revision + 1,
+      status: "COMPLETED",
+      voting: {
+        ...revealed.voting!,
+        phase: "COMPLETE",
+        result: { keep: 0, sell: 0, outcome: "KEEP" },
+      },
+      settlement: {
+        mode: "KEEP",
+        idempotencyKey: "legacy-multiplayer-empty-keep",
+        completedAt: new Date(123_000).toISOString(),
+        vaultAddress: "DemoPartyVault_outcome-party",
+      },
+    };
+    await partyRepository.save(legacyCompleted, revealed.revision);
+
+    await expect(sellHeldPartyCard(
+      "outcome-party",
+      { wallet: "DEMO_HOST_WALLET" },
+      realtime,
+      collector,
+    )).rejects.toThrow("sole party participant");
   });
 });

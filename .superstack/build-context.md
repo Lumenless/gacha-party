@@ -60,5 +60,8 @@ debug:
     - error: "Collector Crypt purchase contains a malformed token transfer."
       cause: Collector Crypt's current devnet TransferChecked instruction repeats the already-signing operator authority as a fifth account, while the local purchase validator accepted only the canonical four-account encoding.
       fix: Accept only the canonical encoding or Collector Crypt's exact duplicate-operator variant, retain all amount, mint, source, destination, memo, signature, and program checks, and cover both the live variant and an unexpected fifth account with regression tests.
-  last_debug_session: 2026-08-09T11:23:21+02:00
+    - error: "InvalidPrivateVoteDeadline (6013), followed by a completed 0 KEEP / 0 SELL result."
+      cause: The 30-second shared deadline could expire while a mobile wallet completed TEE authentication, vote-account delegation, permission activation, and casting. Expiry then treated the empty tally as a KEEP tie and marked the escrow settled.
+      fix: Give Private ER setup 90 seconds, reopen or preserve voting whenever zero choices were released, and provide a guarded sole-participant recovery buyback for the already-settled legacy 0–0 KEEP card while keeping multiplayer and non-empty settlements immutable.
+  last_debug_session: 2026-08-09T12:00:17+02:00
 ```

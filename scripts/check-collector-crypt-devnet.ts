@@ -43,6 +43,19 @@ async function main() {
   console.log(`Operator devnet USDC: ${tokenBalance?.value.uiAmountString ?? "0"}`);
   console.log(`Open packs: ${openPacks.map((pack) => `${pack.code} (${formatUsdc(pack.priceBaseUnits)} USDC)`).join(", ")}`);
 
+  const buybackIndex = process.argv.indexOf("--buyback");
+  if (buybackIndex >= 0) {
+    const nftAddress = process.argv[buybackIndex + 1];
+    if (!nftAddress) throw new Error("Use --buyback <nft-address>.");
+    const quote = await adapter.requestBuyback({
+      playerAddress: operator.address,
+      nftAddress,
+      proceedsRecipient: operator.address,
+    });
+    console.log(`Unsigned buyback quote prepared for ${formatUsdc(quote.proceedsBaseUnits)} USDC. It was not signed or submitted.`);
+    return;
+  }
+
   const prepareIndex = process.argv.indexOf("--prepare");
   if (prepareIndex < 0) {
     console.log("Read-only check complete. Use --prepare <pack-code> to validate an unsigned purchase without signing or submitting it.");

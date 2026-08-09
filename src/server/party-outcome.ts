@@ -8,7 +8,7 @@ import { settlementLock } from "./settlement-lock";
 import type { RealSellSettlement } from "./real-settlement";
 
 const COMMIT_REVEAL_WINDOW_MS = 20_000;
-const PRIVATE_ER_WINDOW_MS = 30_000;
+const PRIVATE_ER_WINDOW_MS = 90_000;
 const PRIVATE_ER_RELEASE_GRACE_MS = 30_000;
 
 function privateErVotingEnabled() {
@@ -258,7 +258,30 @@ export async function expirePartyVote(
   if (now < new Date(party.voting.deadline).getTime() + gracePeriod) {
     throw new Error("The reveal grace period is still running.");
   }
+  const commitCount = await votingAdapter.getCommitCount(partyId);
+  const revealCount = await votingAdapter.getRevealCount(partyId);
   const tally = await votingAdapter.getTally(partyId);
+  if (tally.keep + tally.sell === 0) {
+    if (commitCount > 0) {
+      return saveAndPublish(
+        { ...party, voting: { ...party.voting, phase: "REVEAL", commitCount, revealCount } },
+        realtime,
+      );
+    }
+    const reopenedDeadline = new Date(now + (
+      votingAdapter.privacyModel === "PRIVATE_EPHEMERAL_ROLLUP"
+        ? PRIVATE_ER_WINDOW_MS
+        : COMMIT_REVEAL_WINDOW_MS
+    )).toISOString();
+    return saveAndPublish(
+      {
+        ...party,
+        voting: { ...party.voting, phase: "COMMIT", deadline: reopenedDeadline, commitCount: 0, revealCount: 0 },
+        activity: [...party.activity, activity("VOTE", "Voting reopened because no choices were recorded")],
+      },
+      realtime,
+    );
+  }
   const outcome: VoteChoice = tally.sell > tally.keep ? "SELL" : "KEEP";
   const idempotencyKey = `${party.id}:${party.reveal?.mint ?? "missing"}:${outcome}:v1`;
   if (!await settlementLock.tryAcquire(partyId, idempotencyKey) && !await settlementLock.tryResume(partyId, idempotencyKey, now)) {
@@ -275,4 +298,67 @@ export async function expirePartyVote(
     // Fail closed for the same reason as the all-votes path above.
     throw error;
   }
+}
+
+export async function sellHeldPartyCard(
+  partyId: string,
+  rawInput: unknown,
+  realtime: RealtimePartyAdapter,
+  collectorCrypt: CollectorCryptAdapter,
+  realSell?: (party: Party, collectorCrypt: CollectorCryptAdapter) => Promise<RealSellSettlement>,
+): Promise<Party> {
+  const { wallet } = walletActionSchema.parse(rawInput);
+  const party = await requireParty(partyId);
+  const participant = requireParticipant(party, wallet);
+  if (party.status === "COMPLETED" && party.settlement?.mode === "SELL") return party;
+  if (
+    party.status !== "COMPLETED" ||
+    party.settlement?.mode !== "KEEP" ||
+    !party.voting?.result ||
+    party.voting.result.keep !== 0 ||
+    party.voting.result.sell !== 0
+  ) {
+    throw new Error("Only an empty-vote KEEP result can use held-card recovery.");
+  }
+  if (party.participants.length !== 1 || participant.wallet !== party.hostWallet) {
+    throw new Error("Held-card recovery requires the sole party participant.");
+  }
+  if (!party.reveal) throw new Error("The revealed card is missing.");
+
+  const realSettlement = realSell ? await realSell(party, collectorCrypt) : null;
+  const buyback = realSettlement ?? await collectorCrypt.requestBuyback({
+    playerAddress: party.hostWallet,
+    nftAddress: party.reveal.mint,
+    proceedsRecipient: `DemoSettlementVault_${party.id}`,
+  });
+  const proceedsBaseUnits = realSettlement?.proceedsBaseUnits ?? buyback.proceedsBaseUnits;
+  const shares = calculateSettlement(
+    party.participants.map(({ wallet: participantWallet, contributionBaseUnits }) => ({
+      wallet: participantWallet,
+      amount: BigInt(contributionBaseUnits),
+    })),
+    proceedsBaseUnits,
+  );
+  return saveAndPublish(
+    {
+      ...party,
+      voting: { ...party.voting, phase: "COMPLETE", result: { keep: 0, sell: 1, outcome: "SELL" } },
+      settlement: {
+        mode: "SELL",
+        idempotencyKey: `${party.id}:${party.reveal.mint}:SELL:empty-vote-recovery:v1`,
+        completedAt: new Date().toISOString(),
+        proceedsBaseUnits: proceedsBaseUnits.toString(),
+        buybackSignature: realSettlement?.buybackSignature,
+        payoutSignature: realSettlement?.payoutSignature,
+        shares: shares.map((share) => ({
+          wallet: share.wallet,
+          displayName: party.participants.find(({ wallet: participantWallet }) => participantWallet === share.wallet)?.displayName ?? "Player",
+          contributionBaseUnits: share.contribution.toString(),
+          proceedsBaseUnits: share.proceeds.toString(),
+        })),
+      },
+      activity: [...party.activity, activity("SETTLED", "The sole participant recovered the empty vote and sold the card")],
+    },
+    realtime,
+  );
 }

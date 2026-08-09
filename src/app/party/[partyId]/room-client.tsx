@@ -36,7 +36,7 @@ import { useSolanaEscrow, type EscrowIntent } from "@/integrations/solana/use-so
 import { EscrowStatus as ProgramEscrowStatus } from "@/integrations/solana/program-client/src/generated";
 
 type DemoIdentity = { wallet: string; displayName: string };
-type PendingAction = "join" | "contribute" | "syncContribution" | "ready" | "start" | "reveal" | "voteCommit" | "voteReveal" | "voteExpire" | null;
+type PendingAction = "join" | "contribute" | "syncContribution" | "ready" | "start" | "reveal" | "voteCommit" | "voteReveal" | "voteExpire" | "sellHeld" | null;
 type LiveState = "connecting" | "live" | "reconnecting";
 type VoteSecret = { vote: VoteChoice; nonce: string };
 
@@ -95,6 +95,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
   const [escrowAmount, setEscrowAmount] = useState(0n);
   const [openingError, setOpeningError] = useState<string | null>(null);
   const [openingDialogDismissed, setOpeningDialogDismissed] = useState(false);
+  const [sellHeldDialogOpen, setSellHeldDialogOpen] = useState(false);
   const previousPartyStatus = useRef(initialParty.status);
   const revealRequested = useRef(false);
   const voteRevealRequested = useRef(false);
@@ -197,6 +198,10 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
   }, [party.status]);
 
   useEffect(() => {
+    voteExpireRequested.current = false;
+  }, [party.voting?.deadline]);
+
+  useEffect(() => {
     if (!["FUNDING", "FUNDED", "READY", "OPENING", "VOTING"].includes(party.status)) return;
     const update = () => setClock(Date.now());
     const initial = window.setTimeout(update, 0);
@@ -260,7 +265,9 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
           ? "vote/reveal"
           : action === "voteExpire"
             ? "vote/expire"
-            : action === "syncContribution" ? "contribute/onchain" : action;
+            : action === "sellHeld"
+              ? "sell-held"
+              : action === "syncContribution" ? "contribute/onchain" : action;
       const response = await fetch(`/api/parties/${party.id}/${actionPath}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -540,6 +547,12 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
     }
   }
 
+  async function sellHeldCard() {
+    if (!identity) return;
+    const sold = await mutate("sellHeld", { wallet: identity.wallet });
+    if (sold) setSellHeldDialogOpen(false);
+  }
+
   async function copyInvite() {
     try {
       await navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}`);
@@ -801,6 +814,48 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
             </div>
           </form>
         ) : null}
+      </Dialog>
+
+      <Dialog
+        open={sellHeldDialogOpen}
+        ariaLabel="Sell the held card to Collector Crypt buyback"
+        dismissible={pending !== "sellHeld"}
+        onClose={() => setSellHeldDialogOpen(false)}
+      >
+        <div className="flex items-center gap-3">
+          <span className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/15 text-primary">
+            <Coins className="size-5" aria-hidden="true" />
+          </span>
+          <div>
+            <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Empty-vote recovery</p>
+            <h2 className="mt-1 text-xl font-semibold">Sell this card to buyback?</h2>
+          </div>
+        </div>
+        <p className="mt-4 text-sm leading-6 text-muted-foreground">
+          No vote was recorded because the private voting window failed. As the sole participant, you can send the card from the devnet operator vault to Collector Crypt buyback. Confirmed proceeds return to your wallet.
+        </p>
+        {party.reveal && (
+          <div className="mt-5 flex items-center gap-4 rounded-lg bg-background/50 p-4">
+            <div className="relative aspect-[5/7] w-16 shrink-0 overflow-hidden rounded-md bg-muted">
+              <Image src={party.reveal.imageUrl} alt={`${party.reveal.name} collectible card`} fill className="object-cover" />
+            </div>
+            <div>
+              <p className="font-semibold">{party.reveal.name}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{party.reveal.rarity} · {party.reveal.grade}</p>
+              <p className="mt-1 font-mono text-sm text-primary tabular-nums">
+                {formatUsdc(BigInt(party.reveal.insuredValueBaseUnits))} USDC insured value
+              </p>
+            </div>
+          </div>
+        )}
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button type="button" variant="ghost" onClick={() => setSellHeldDialogOpen(false)} disabled={pending === "sellHeld"}>
+            Cancel
+          </Button>
+          <Button type="button" onClick={() => void sellHeldCard()} loading={pending === "sellHeld"}>
+            Sell to buyback
+          </Button>
+        </div>
       </Dialog>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[.78fr_1.22fr]">
@@ -1159,6 +1214,11 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                   <Landmark className="mx-auto size-6 text-primary" aria-hidden="true" />
                   <p className="mt-3 font-semibold">Card held by the party</p>
                   <p className="mt-1 font-mono text-xs text-muted-foreground">{party.settlement.vaultAddress}</p>
+                  {party.voting.result.keep === 0 && party.voting.result.sell === 0 && party.participants.length === 1 && currentParticipant && (
+                    <Button type="button" className="mt-4" onClick={() => setSellHeldDialogOpen(true)}>
+                      Sell to buyback
+                    </Button>
+                  )}
                 </div>
               )}
 

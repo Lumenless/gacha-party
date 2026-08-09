@@ -123,6 +123,8 @@ Before enabling these values:
 
 Run `pnpm check:collector:devnet` locally with the same environment first. It only reads inventory and balances. `pnpm check:collector:devnet -- --prepare pokemon_50` additionally asks Collector Crypt for an unsigned purchase and validates every payment-critical field, but never signs or submits it.
 
+For a revealed asset already held by the operator, `pnpm check:collector:devnet -- --buyback <nft-address>` requests an unsigned buyback quote and prints only the proceeds. It never signs or submits the returned transaction.
+
 ## 6. Remaining limitation
 
 - MagicBlock PER voting fails closed until private accounts, permissions, TEE attestation, and wallet authorization are complete.

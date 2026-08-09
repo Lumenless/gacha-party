@@ -43,9 +43,14 @@ export type RealSellSettlement = {
   payoutSignature: string;
 };
 
+type RealSellSettlementOptions = {
+  allowAlreadySettledKeepRecovery?: boolean;
+};
+
 export async function executeRealSellSettlement(
   party: Party,
   collectorCrypt: CollectorCryptAdapter,
+  options: RealSellSettlementOptions = {},
 ): Promise<RealSellSettlement> {
   if (!party.reveal) throw new Error("The revealed card is missing.");
   const claim = await createRealSettlementOperation(party.id);
@@ -69,7 +74,11 @@ export async function executeRealSellSettlement(
   const { connection, client, operator } = await context();
   try {
     const escrow = await client.fetchEscrow(party.hostWallet, party.id);
-    if (!escrow || escrow.status !== EscrowStatus.Purchased) throw new Error("The onchain escrow is not ready for settlement.");
+    if (!escrow) throw new Error("The onchain escrow is not ready for settlement.");
+    const recoveringSettledKeep = options.allowAlreadySettledKeepRecovery && escrow.status === EscrowStatus.Settled;
+    if (escrow.status !== EscrowStatus.Purchased && !recoveringSettledKeep) {
+      throw new Error("The onchain escrow is not ready for settlement.");
+    }
     if (String(escrow.operator) !== operator.address) throw new Error("The settlement operator does not match the escrow.");
     const roster = escrow.participants.slice(0, escrow.participantCount).map(String);
     const partyRoster = party.participants.map(({ wallet }) => wallet);
@@ -130,7 +139,7 @@ export async function executeRealSellSettlement(
     );
 
     if (!operation.preparedPayout || !operation.payoutSignature) {
-      const prepared = await prepareAtomicPayout(connection, client, party, shares);
+      const prepared = await prepareAtomicPayout(connection, client, party, shares, !recoveringSettledKeep);
       operation = await updateRealSettlementOperation(party.id, {
         status: "PAYOUT_PREPARED",
         preparedPayout: prepared.base64,
@@ -163,6 +172,7 @@ async function prepareAtomicPayout(
   client: DevnetEscrowClient,
   party: Party,
   shares: SettlementShare[],
+  markEscrowSettled: boolean,
 ) {
   const operator = await getGachaOperatorSigner();
   const source = await client.fetchWalletTokenAccount(operator.address);
@@ -187,10 +197,12 @@ async function prepareAtomicPayout(
       decimals: 6,
     }));
   }
-  instructions.push(getMarkSettledInstruction({
-    escrow: await findEscrowAddress(party.hostWallet, party.id),
-    operator,
-  }));
+  if (markEscrowSettled) {
+    instructions.push(getMarkSettledInstruction({
+      escrow: await findEscrowAddress(party.hostWallet, party.id),
+      operator,
+    }));
+  }
 
   const message = pipe(
     createTransactionMessage({ version: 0 }),
