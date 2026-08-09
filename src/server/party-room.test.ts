@@ -119,6 +119,16 @@ describe("multiplayer room service", () => {
     expect(opening.status).toBe("OPENING");
     expect(opening.openingStartedAt).toBe(new Date(1_500).toISOString());
     expect(opening.countdownEndsAt).toBe(new Date(4_500).toISOString());
+
+    const duplicate = await startPartyCountdown(
+      "party-1",
+      { wallet: "DEMO_HOST_WALLET" },
+      realtime,
+      9_000,
+      20_000,
+    );
+    expect(duplicate.revision).toBe(opening.revision);
+    expect(duplicate.countdownEndsAt).toBe(opening.countdownEndsAt);
   });
 
   it("uses an authoritative MagicBlock countdown timestamp when supplied", async () => {

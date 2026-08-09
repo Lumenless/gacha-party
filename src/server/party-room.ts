@@ -214,6 +214,7 @@ export async function startPartyCountdown(
   const input = walletActionSchema.parse(rawInput);
   const party = await requireParty(partyId);
   if (input.wallet !== party.hostWallet) throw new Error("Only the host can start the opening.");
+  if (party.status === "OPENING" && party.countdownEndsAt) return party;
   if (party.status !== "READY") throw new Error("Everyone must be ready before the opening starts.");
 
   const countdownEndMs = authoritativeCountdownEndsAt ?? now + 3_500;
@@ -229,4 +230,14 @@ export async function startPartyCountdown(
     },
     realtime,
   );
+}
+
+export async function startedPartyCountdown(
+  partyId: string,
+  rawInput: unknown,
+): Promise<Party | null> {
+  const input = walletActionSchema.parse(rawInput);
+  const party = await requireParty(partyId);
+  if (input.wallet !== party.hostWallet) throw new Error("Only the host can start the opening.");
+  return party.status === "OPENING" && party.countdownEndsAt ? party : null;
 }
