@@ -99,6 +99,17 @@ export class CollectorCryptOpeningPendingError extends Error {
   }
 }
 
+export class CollectorCryptMachineUnavailableError extends Error {
+  readonly status = 503;
+  constructor(reason: "inventory" | "balance" | "offline") {
+    super(reason === "inventory"
+      ? "Collector Crypt devnet is out of prize inventory for this pack. This opening is saved and can be retried after restock; no duplicate payment will be submitted."
+      : reason === "balance"
+        ? "Collector Crypt devnet temporarily paused this machine to rebalance its prize pool. This opening is saved and can be retried shortly."
+        : "Collector Crypt devnet temporarily disabled this machine. This opening is saved and can be retried when it reopens.");
+  }
+}
+
 type RealCollectorCryptConfig = {
   apiKey?: string;
   baseUrl?: string;
@@ -129,6 +140,10 @@ export class RealCollectorCryptAdapter implements CollectorCryptAdapter {
     });
     if (!response.ok) {
       const detail = (await response.text()).slice(0, 300);
+      const machineReason = collectorMachineReason(detail);
+      if (response.status === 500 && machineReason) {
+        throw new CollectorCryptMachineUnavailableError(machineReason);
+      }
       throw new Error(`Collector Crypt request failed (${response.status})${detail ? `: ${detail}` : "."}`);
     }
     return response.json();
@@ -152,7 +167,7 @@ export class RealCollectorCryptAdapter implements CollectorCryptAdapter {
         isOpen: status.machineStatus === "running" &&
           statusByCode.get(machine.code)?.status === "open" &&
           statusByCode.get(machine.code)?.isOpen !== false &&
-          (!machine.stock || Object.values(machine.stock).some((count) => count > 0)),
+          (!machine.stock || (Object.keys(machine.stock).length > 0 && Object.values(machine.stock).every((count) => count > 0))),
       }));
   }
 
@@ -224,6 +239,13 @@ export class RealCollectorCryptAdapter implements CollectorCryptAdapter {
     if (!data.exists || data.status !== "complete") return null;
     return { signature: data.transactionSignature, proceedsBaseUnits: BigInt(data.buybackAmount) };
   }
+}
+
+function collectorMachineReason(detail: string): "inventory" | "balance" | "offline" | null {
+  if (/Machine is (empty|low)/i.test(detail)) return "inventory";
+  if (/Machine is off balance/i.test(detail)) return "balance";
+  if (/Machine is off/i.test(detail)) return "offline";
+  return null;
 }
 
 function decimalUsdc(value: number): string {

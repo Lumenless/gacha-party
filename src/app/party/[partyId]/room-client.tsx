@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  AlertCircle,
   Check,
   Clock3,
   Coins,
@@ -90,6 +91,8 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
   const [chainIntent, setChainIntent] = useState<ChainIntent | null>(null);
   const [escrowIntent, setEscrowIntent] = useState<EscrowIntent | null>(null);
   const [escrowAmount, setEscrowAmount] = useState(0n);
+  const [openingError, setOpeningError] = useState<string | null>(null);
+  const [openingDialogDismissed, setOpeningDialogDismissed] = useState(false);
   const revealRequested = useRef(false);
   const voteRevealRequested = useRef(false);
   const voteExpireRequested = useRef(false);
@@ -231,6 +234,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
     : 20;
 
   const mutate = useCallback(async (action: Exclude<PendingAction, null>, body: object) => {
+    if (action === "reveal") setOpeningError(null);
     setPending(action);
     try {
       const actionPath = action === "voteCommit"
@@ -250,9 +254,12 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
         throw new Error("error" in result ? result.error : "The room could not be updated.");
       }
       setParty(result);
+      if (action === "reveal") setOpeningError(null);
       return true;
     } catch (cause) {
-      showError(cause instanceof Error ? cause.message : "The room could not be updated.");
+      const message = cause instanceof Error ? cause.message : "The room could not be updated.";
+      if (action === "reveal") setOpeningError(message);
+      else showError(message);
       return false;
     } finally {
       setPending(null);
@@ -298,17 +305,17 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
       !party.countdownEndsAt ||
       !identity ||
       !currentParticipant ||
+      (realExecution && identity.wallet !== party.hostWallet) ||
+      openingError ||
       Date.now() < new Date(party.countdownEndsAt).getTime() ||
       revealRequested.current
     ) return;
     const timer = window.setTimeout(() => {
       revealRequested.current = true;
-      void mutate("reveal", { wallet: identity.wallet }).then((ok) => {
-        if (!ok) revealRequested.current = false;
-      });
+      void mutate("reveal", { wallet: identity.wallet });
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [currentParticipant, identity, mutate, party.countdownEndsAt, party.status, clock]);
+  }, [currentParticipant, identity, mutate, openingError, party.countdownEndsAt, party.hostWallet, party.status, realExecution, clock]);
 
   useEffect(() => {
     if (
@@ -431,7 +438,20 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
     if (!confirmed) return;
     if (chainIntent === "join") await finishJoin();
     if (chainIntent === "ready") await mutate("ready", { wallet: identity.wallet });
-    if (chainIntent === "start") await mutate("start", { wallet: identity.wallet });
+    if (chainIntent === "start") {
+      const started = await mutate("start", { wallet: identity.wallet });
+      if (started) {
+        chainRoom.resetTransaction();
+        setChainIntent(null);
+      }
+    }
+  }
+
+  function retryOpening() {
+    if (!identity || !currentParticipant || pending === "reveal") return;
+    revealRequested.current = true;
+    setOpeningDialogDismissed(false);
+    void mutate("reveal", { wallet: identity.wallet });
   }
 
   async function contribute(event: FormEvent) {
@@ -579,6 +599,65 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
           )}
         </div>
       )}
+
+      <Dialog
+        open={party.status === "OPENING" && !openingDialogDismissed}
+        ariaLabel="Opening the shared pack"
+        dismissible={Boolean(openingError)}
+        onClose={() => {
+          if (openingError) setOpeningDialogDismissed(true);
+        }}
+      >
+        <div aria-live="polite">
+          <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Synchronized opening</p>
+          <h2 className="mt-2 text-xl font-semibold">
+            {openingError ? "Opening paused" : countdownLabel === "OPEN" ? "Opening pack…" : "Pull together"}
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            {openingError
+              ? "The room and purchase progress are saved. Retrying resumes the same operation without charging the party twice."
+              : `Every player sees the same ${chainRoom.enabled ? "MagicBlock" : "server"} countdown.`}
+          </p>
+
+          <div className="mt-5 grid gap-5 sm:grid-cols-[9rem_1fr] sm:items-center">
+            <div className="relative mx-auto aspect-[4/5] w-32 overflow-hidden rounded-xl bg-muted sm:w-36">
+              <Image src={party.packImageUrl} alt={`${party.packName} pack`} fill className="object-cover" />
+            </div>
+            <div className="text-center sm:text-left">
+              <p className="text-sm font-semibold">{party.packName}</p>
+              {!openingError && countdownLabel !== "OPEN" && (
+                <p className="display-type mt-3 text-7xl font-semibold tabular-nums text-primary">{countdownLabel}</p>
+              )}
+              {!openingError && countdownLabel === "OPEN" && (
+                <div className="mt-4 inline-flex min-h-11 items-center gap-3 text-sm font-semibold text-primary">
+                  <span className="size-5 animate-spin rounded-full border-2 border-current border-r-transparent" aria-hidden="true" />
+                  {realExecution ? "Opening with Collector Crypt…" : "Revealing the card…"}
+                </div>
+              )}
+              {openingError && (
+                <div role="alert" className="mt-4 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-left">
+                  <div className="flex items-center gap-2 text-destructive">
+                    <AlertCircle className="size-5 shrink-0" aria-hidden="true" />
+                    <p className="font-semibold">Couldn’t finish the opening</p>
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">{openingError}</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {openingError && (
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button type="button" variant="ghost" onClick={() => setOpeningDialogDismissed(true)}>Close</Button>
+              {identity?.wallet === party.hostWallet ? (
+                <Button type="button" onClick={retryOpening} loading={pending === "reveal"}>Retry opening</Button>
+              ) : (
+                <span className="inline-flex min-h-11 items-center text-sm text-muted-foreground">Waiting for the host to retry</span>
+              )}
+            </div>
+          )}
+        </div>
+      </Dialog>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[.78fr_1.22fr]">
         <section className="h-fit rounded-xl border bg-card p-5">
@@ -870,6 +949,11 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
               <p className="mt-2 text-sm text-muted-foreground">
                 Every connected browser is counting down from the same {chainRoom.enabled ? "MagicBlock ER" : "server"} timestamp.
               </p>
+              {openingDialogDismissed && (
+                <Button type="button" variant="secondary" className="mt-4" onClick={() => setOpeningDialogDismissed(false)}>
+                  View opening
+                </Button>
+              )}
             </div>
           )}
 

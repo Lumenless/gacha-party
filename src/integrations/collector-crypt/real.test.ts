@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CollectorCryptOpeningPendingError, RealCollectorCryptAdapter } from "./real";
+import {
+  CollectorCryptMachineUnavailableError,
+  CollectorCryptOpeningPendingError,
+  RealCollectorCryptAdapter,
+} from "./real";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -18,7 +22,7 @@ describe("RealCollectorCryptAdapter", () => {
               price: 50,
               instantBuyback: 85,
               public: true,
-              stock: { common: 1, uncommon: 0, rare: 0, epic: 0 },
+              stock: { common: 1, uncommon: 1, rare: 1, epic: 1 },
             }],
           },
     ), { status: 200 }));
@@ -58,5 +62,39 @@ describe("RealCollectorCryptAdapter", () => {
       memo: "memo-1",
     }), { status: 200 })));
     await expect(new RealCollectorCryptAdapter().openPack("memo-1")).rejects.toBeInstanceOf(CollectorCryptOpeningPendingError);
+  });
+
+  it("translates an empty machine into a safe retryable error", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      error: "Internal server error",
+      details: "Machine is empty",
+    }), { status: 500 })));
+
+    await expect(new RealCollectorCryptAdapter().preparePurchase({
+      playerAddress: "operator",
+      packCode: "pokemon_25",
+    })).rejects.toBeInstanceOf(CollectorCryptMachineUnavailableError);
+  });
+
+  it("does not advertise a machine with an empty prize tier", async () => {
+    const fetchMock = vi.fn().mockImplementation(async (url: string) => new Response(JSON.stringify(
+      url.endsWith("/api/status")
+        ? { machineStatus: "running", gachas: [{ code: "pokemon_25", status: "open", isOpen: true }] }
+        : {
+            machines: [{
+              code: "pokemon_25",
+              name: "Starter Pokémon Gacha Pack",
+              shortName: "Starter",
+              price: 25,
+              instantBuyback: 85,
+              public: true,
+              stock: { common: 10, uncommon: 0, rare: 3, epic: 1 },
+            }],
+          },
+    ), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const [pack] = await new RealCollectorCryptAdapter().listPacks();
+    expect(pack.isOpen).toBe(false);
   });
 });

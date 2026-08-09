@@ -51,5 +51,8 @@ debug:
     - error: "Onchain funding can no longer be synchronized for this party after every player readied up."
       cause: A successful escrow lock triggered an unnecessary contribution sync after the party had already transitioned to READY, and late identical sync requests were rejected instead of treated idempotently.
       fix: Do not synchronize contributions after locking, and safely accept exact unchanged funding mirrors after the funding lifecycle has closed while rejecting any attempted changes.
-  last_debug_session: 2026-08-09T12:15:00+02:00
+    - error: "Collector Crypt request failed (500): Machine is empty after the opening transaction."
+      cause: The selected devnet machine had an empty prize tier. The orchestrator released escrow before asking Collector Crypt to generate and validate the pack purchase, leaving a retryable RELEASED operation without a submitted purchase.
+      fix: Generate and validate the exact purchase before releasing escrow, hide machines with any empty prize tier, preserve retry-safe operation state, and show manual recovery inside the synchronized opening dialog.
+  last_debug_session: 2026-08-09T12:45:00+02:00
 ```

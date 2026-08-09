@@ -32,15 +32,6 @@ export async function executeRealCollectorOpening(
       throw new Error("The live Collector Crypt pack price no longer matches the escrow target.");
     }
 
-    if (!operation.releaseSignature) {
-      const releaseSignature = await releasePartyEscrowToOperator(party);
-      operation = await updateCollectorOperation(party.id, {
-        status: "RELEASED",
-        releaseSignature: releaseSignature ?? "confirmed-onchain",
-        error: null,
-      });
-    }
-
     if (!operation.memo || !operation.preparedTransaction) {
       const prepared = await collectorCrypt.preparePurchase({
         playerAddress: operator.address,
@@ -55,13 +46,25 @@ export async function executeRealCollectorOpening(
       });
     }
 
-    if (!operation.purchaseSignature) {
-      const preparedTransaction = required(operation.preparedTransaction, "prepared transaction");
-      await validateCollectorCryptPurchaseTransaction(preparedTransaction, {
-        memo: required(operation.memo, "purchase memo"),
-        mint: required(process.env.USDC_MINT ?? null, "devnet USDC mint"),
-        amountBaseUnits: pack.priceBaseUnits,
+    const preparedTransaction = required(operation.preparedTransaction, "prepared transaction");
+    await validateCollectorCryptPurchaseTransaction(preparedTransaction, {
+      memo: required(operation.memo, "purchase memo"),
+      mint: required(process.env.USDC_MINT ?? null, "devnet USDC mint"),
+      amountBaseUnits: pack.priceBaseUnits,
+    });
+
+    // Reserve and validate the exact Collector Crypt purchase before pooled funds
+    // leave escrow. Retrying an older RELEASED operation remains idempotent.
+    if (!operation.releaseSignature) {
+      const releaseSignature = await releasePartyEscrowToOperator(party);
+      operation = await updateCollectorOperation(party.id, {
+        status: "RELEASED",
+        releaseSignature: releaseSignature ?? "confirmed-onchain",
+        error: null,
       });
+    }
+
+    if (!operation.purchaseSignature) {
       const signed = await signCollectorCryptTransaction(preparedTransaction);
       const submitted = await collectorCrypt.submitPurchase(signed);
       operation = await updateCollectorOperation(party.id, {
