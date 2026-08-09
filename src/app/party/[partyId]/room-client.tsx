@@ -95,6 +95,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
   const [escrowAmount, setEscrowAmount] = useState(0n);
   const [openingError, setOpeningError] = useState<string | null>(null);
   const [openingDialogDismissed, setOpeningDialogDismissed] = useState(false);
+  const previousPartyStatus = useRef(initialParty.status);
   const revealRequested = useRef(false);
   const voteRevealRequested = useRef(false);
   const voteExpireRequested = useRef(false);
@@ -188,6 +189,12 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
     events.onerror = () => setLiveState("reconnecting");
     return () => events.close();
   }, [initialParty.id]);
+
+  useEffect(() => {
+    const enteredVoting = previousPartyStatus.current !== "VOTING" && party.status === "VOTING";
+    previousPartyStatus.current = party.status;
+    if (enteredVoting) setOpeningDialogDismissed(false);
+  }, [party.status]);
 
   useEffect(() => {
     if (!["FUNDING", "FUNDED", "READY", "OPENING", "VOTING"].includes(party.status)) return;
@@ -616,62 +623,184 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
       )}
 
       <Dialog
-        open={party.status === "OPENING" && !openingDialogDismissed}
-        ariaLabel="Opening the shared pack"
-        dismissible={Boolean(openingError)}
+        open={
+          !openingDialogDismissed && (
+            party.status === "OPENING" ||
+            (party.status === "VOTING" && Boolean(party.reveal && party.voting && currentParticipant))
+          )
+        }
+        ariaLabel={party.status === "VOTING" ? "Card reveal and sealed decision" : "Opening the shared pack"}
+        dismissible={party.status === "VOTING" || Boolean(openingError)}
+        panelClassName={party.status === "VOTING" ? "sm:max-w-2xl" : undefined}
         onClose={() => {
-          if (openingError) setOpeningDialogDismissed(true);
+          if (party.status === "VOTING" || openingError) setOpeningDialogDismissed(true);
         }}
       >
-        <div aria-live="polite">
-          <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Synchronized opening</p>
-          <h2 className="mt-2 text-xl font-semibold">
-            {openingError ? "Opening paused" : countdownLabel === "OPEN" ? "Opening pack…" : "Pull together"}
-          </h2>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            {openingError
-              ? "The room and purchase progress are saved. Retrying resumes the same operation without charging the party twice."
-              : `Every player sees the same ${chainRoom.enabled ? "MagicBlock" : "server"} countdown.`}
-          </p>
+        {party.status === "OPENING" ? (
+          <div aria-live="polite">
+            <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Synchronized opening</p>
+            <h2 className="mt-2 text-xl font-semibold">
+              {openingError ? "Opening paused" : countdownLabel === "OPEN" ? "Opening pack…" : "Pull together"}
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              {openingError
+                ? "The room and purchase progress are saved. Retrying resumes the same operation without charging the party twice."
+                : `Every player sees the same ${chainRoom.enabled ? "MagicBlock" : "server"} countdown.`}
+            </p>
 
-          <div className="mt-5 grid gap-5 sm:grid-cols-[9rem_1fr] sm:items-center">
-            <div className="relative mx-auto aspect-[4/5] w-32 overflow-hidden rounded-xl bg-muted sm:w-36">
-              <Image src={party.packImageUrl} alt={`${party.packName} pack`} fill className="object-cover" />
-            </div>
-            <div className="text-center sm:text-left">
-              <p className="text-sm font-semibold">{party.packName}</p>
-              {!openingError && countdownLabel !== "OPEN" && (
-                <p className="display-type mt-3 text-7xl font-semibold tabular-nums text-primary">{countdownLabel}</p>
-              )}
-              {!openingError && countdownLabel === "OPEN" && (
-                <div className="mt-4 inline-flex min-h-11 items-center gap-3 text-sm font-semibold text-primary">
-                  <span className="size-5 animate-spin rounded-full border-2 border-current border-r-transparent" aria-hidden="true" />
-                  {realExecution ? "Opening with Collector Crypt…" : "Revealing the card…"}
-                </div>
-              )}
-              {openingError && (
-                <div role="alert" className="mt-4 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-left">
-                  <div className="flex items-center gap-2 text-destructive">
-                    <AlertCircle className="size-5 shrink-0" aria-hidden="true" />
-                    <p className="font-semibold">Couldn’t finish the opening</p>
+            <div className="mt-5 grid gap-5 sm:grid-cols-[9rem_1fr] sm:items-center">
+              <div className="relative mx-auto aspect-[4/5] w-32 overflow-hidden rounded-xl bg-muted sm:w-36">
+                <Image src={party.packImageUrl} alt={`${party.packName} pack`} fill className="object-cover" />
+              </div>
+              <div className="text-center sm:text-left">
+                <p className="text-sm font-semibold">{party.packName}</p>
+                {!openingError && countdownLabel !== "OPEN" && (
+                  <p className="display-type mt-3 text-7xl font-semibold tabular-nums text-primary">{countdownLabel}</p>
+                )}
+                {!openingError && countdownLabel === "OPEN" && (
+                  <div className="mt-4 inline-flex min-h-11 items-center gap-3 text-sm font-semibold text-primary">
+                    <span className="size-5 animate-spin rounded-full border-2 border-current border-r-transparent motion-reduce:animate-none" aria-hidden="true" />
+                    {realExecution ? "Opening with Collector Crypt…" : "Revealing the card…"}
                   </div>
-                  <p className="mt-2 text-sm leading-6 text-muted-foreground">{openingError}</p>
+                )}
+                {openingError && (
+                  <div role="alert" className="mt-4 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-left">
+                    <div className="flex items-center gap-2 text-destructive">
+                      <AlertCircle className="size-5 shrink-0" aria-hidden="true" />
+                      <p className="font-semibold">Couldn’t finish the opening</p>
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">{openingError}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {openingError && (
+              <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <Button type="button" variant="ghost" onClick={() => setOpeningDialogDismissed(true)}>Close</Button>
+                {identity?.wallet === party.hostWallet ? (
+                  <Button type="button" onClick={retryOpening} loading={pending === "reveal"}>Retry opening</Button>
+                ) : (
+                  <span className="inline-flex min-h-11 items-center text-sm text-muted-foreground">Waiting for the host to retry</span>
+                )}
+              </div>
+            )}
+          </div>
+        ) : party.status === "VOTING" && party.reveal && party.voting && currentParticipant ? (
+          <form onSubmit={castVote}>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Card revealed</p>
+                <h2 className="mt-2 text-xl font-semibold">Your party pulled this card</h2>
+              </div>
+              <span className="shrink-0 rounded-full border px-3 py-1.5 font-mono text-xs text-primary tabular-nums">
+                {votingSeconds}s
+              </span>
+            </div>
+
+            <div className="mt-5 grid gap-5 sm:grid-cols-[11rem_1fr] sm:items-center">
+              <div className="relative mx-auto aspect-[5/7] w-40 overflow-hidden rounded-xl bg-muted sm:w-44">
+                <Image src={party.reveal.imageUrl} alt={`${party.reveal.name} collectible card`} fill priority className="object-cover" />
+              </div>
+              <div className="text-center sm:text-left">
+                <p className="text-xs text-muted-foreground">{party.reveal.rarity} · {party.reveal.grade}</p>
+                <h3 className="mt-1 text-2xl font-semibold">{party.reveal.name}</h3>
+                <p className="mt-2 font-mono text-base font-semibold text-primary tabular-nums">
+                  {formatUsdc(BigInt(party.reveal.insuredValueBaseUnits))} USDC insured value
+                </p>
+                <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                  Choose privately. Votes stay sealed until everyone votes or the timer ends.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 border-t pt-5">
+              <div className="flex items-center gap-2 text-primary">
+                <EyeOff className="size-4" aria-hidden="true" />
+                <p className="font-mono text-xs uppercase tracking-[0.18em]">Sealed decision</p>
+              </div>
+              <h3 className="mt-2 text-lg font-semibold">Keep it or sell it?</h3>
+
+              {!voteSecret ? (
+                <>
+                  <fieldset className="mt-4">
+                    <legend className="sr-only">Choose what the party should do with the card</legend>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {(["KEEP", "SELL"] as const).map((choice) => (
+                        <label key={choice} className="cursor-pointer">
+                          <input
+                            type="radio"
+                            name="party-vote"
+                            value={choice}
+                            checked={selectedVote === choice}
+                            onChange={() => setSelectedVote(choice)}
+                            className="peer sr-only"
+                          />
+                          <span className="flex min-h-24 items-center gap-4 rounded-lg border bg-background/50 p-4 peer-checked:border-primary peer-checked:bg-primary/5 peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-card">
+                            <span className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+                              {choice === "KEEP" ? <Landmark className="size-5" aria-hidden="true" /> : <Coins className="size-5" aria-hidden="true" />}
+                            </span>
+                            <span>
+                              <span className="block font-semibold">{choice === "KEEP" ? "Keep the card" : "Sell to buyback"}</span>
+                              <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                                {choice === "KEEP"
+                                  ? (realExecution ? "Hold it in the devnet operator vault" : "Hold it in the demo party vault")
+                                  : (realExecution ? "Distribute confirmed devnet USDC" : "Split mock USDC by contribution")}
+                              </span>
+                            </span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                  <Button
+                    type="submit"
+                    className="mt-4 w-full"
+                    disabled={!selectedVote || (privateVotingEnabled && !walletAuth.canSignTransactions)}
+                    loading={pending === "voteCommit" || ["authenticating", "initializing", "permissioning", "casting"].includes(privateVoteTransaction.stage)}
+                  >
+                    <LockKeyhole className="size-4" aria-hidden="true" /> Seal my vote
+                  </Button>
+                  {privateVotingEnabled && (
+                    <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                      Your wallet verifies the MagicBlock TEE and seals the vote. No tokens move.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <div className="mt-4 flex items-center gap-3 rounded-lg bg-primary/5 p-4 text-sm">
+                  <span className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/15 text-primary"><Check className="size-5" aria-hidden="true" /></span>
+                  <div>
+                    <p className="font-semibold">Vote sealed</p>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                      {privateVotingEnabled && privateVoteTransaction.stage !== "released"
+                        ? votingSeconds > 0
+                          ? `Private in the verified TEE. Release opens in ${votingSeconds}s.`
+                          : ["opening", "undelegating"].includes(privateVoteTransaction.stage) ? "Releasing the expired vote to devnet…" : "Ready to release on devnet."
+                        : party.voting.phase === "COMMIT"
+                          ? `Waiting for ${party.participants.length - party.voting.commitCount} more vote${party.participants.length - party.voting.commitCount === 1 ? "" : "s"}.`
+                          : pending === "voteReveal" ? "Unsealing votes…" : "Everyone voted. Unsealing now…"}
+                    </p>
+                  </div>
                 </div>
               )}
-            </div>
-          </div>
 
-          {openingError && (
-            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <Button type="button" variant="ghost" onClick={() => setOpeningDialogDismissed(true)}>Close</Button>
-              {identity?.wallet === party.hostWallet ? (
-                <Button type="button" onClick={retryOpening} loading={pending === "reveal"}>Retry opening</Button>
-              ) : (
-                <span className="inline-flex min-h-11 items-center text-sm text-muted-foreground">Waiting for the host to retry</span>
+              {privateVoteTransaction.error && (
+                <div role="alert" className="mt-4 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+                  {privateVoteTransaction.error}
+                </div>
               )}
+
+              <div className="mt-4 flex items-center justify-between gap-4 border-t pt-4 text-xs text-muted-foreground">
+                <span>{party.voting.commitCount} / {party.participants.length} votes sealed</span>
+                <span>{party.voting.revealCount} {privateVotingEnabled ? "released on devnet" : "revealed"}</span>
+              </div>
+              <Button type="button" variant="ghost" className="mt-2 w-full" onClick={() => setOpeningDialogDismissed(true)}>
+                Close
+              </Button>
             </div>
-          )}
-        </div>
+          </form>
+        ) : null}
       </Dialog>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[.78fr_1.22fr]">
@@ -971,89 +1100,25 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
           )}
 
           {party.status === "VOTING" && party.voting && currentParticipant && (
-            <form onSubmit={castVote} className="rounded-xl border border-primary/30 bg-card p-5 sm:p-6">
+            <div className="rounded-xl border border-primary/30 bg-primary/5 p-5 sm:p-6">
               <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
                 <div>
                   <div className="flex items-center gap-2 text-primary">
                     <EyeOff className="size-4" aria-hidden="true" />
                     <p className="font-mono text-xs uppercase tracking-[0.18em]">Sealed decision</p>
                   </div>
-                  <h2 className="mt-3 text-xl font-semibold">Keep it or sell it?</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {privateVotingEnabled
-                      ? "Your choice is written to a wallet-only MagicBlock TEE account, then released to devnet after the shared deadline."
-                      : "Commitments hide choices during voting. Choices are revealed for the final tally."}
+                  <h2 className="mt-3 text-xl font-semibold">{voteSecret ? "Your vote is sealed" : "Your card is ready"}</h2>
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                    {voteSecret
+                      ? "Open the reveal to follow the private vote and shared result."
+                      : "View the revealed card and choose whether the party should keep or sell it."}
                   </p>
                 </div>
-                <span className="font-mono text-sm text-primary tabular-nums">{votingSeconds}s</span>
+                <Button type="button" onClick={() => setOpeningDialogDismissed(false)}>
+                  {voteSecret ? "View sealed vote" : "View card & vote"}
+                </Button>
               </div>
-
-              {!voteSecret ? (
-                <>
-                  <fieldset className="mt-5">
-                    <legend className="sr-only">Choose what the party should do with the card</legend>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      {(["KEEP", "SELL"] as const).map((choice) => (
-                        <label key={choice} className="cursor-pointer">
-                          <input
-                            type="radio"
-                            name="party-vote"
-                            value={choice}
-                            checked={selectedVote === choice}
-                            onChange={() => setSelectedVote(choice)}
-                            className="peer sr-only"
-                          />
-                          <span className="flex min-h-24 items-center gap-4 rounded-lg border bg-background/50 p-4 peer-checked:border-primary peer-checked:bg-primary/5 peer-focus-visible:ring-2 peer-focus-visible:ring-ring">
-                            <span className="grid size-10 place-items-center rounded-full bg-primary/10 text-primary">
-                              {choice === "KEEP" ? <Landmark className="size-5" aria-hidden="true" /> : <Coins className="size-5" aria-hidden="true" />}
-                            </span>
-                            <span><span className="block font-semibold">{choice === "KEEP" ? "Keep the card" : "Sell to buyback"}</span><span className="mt-1 block text-xs text-muted-foreground">{choice === "KEEP" ? (realExecution ? "Hold it in the devnet operator vault" : "Hold it in the demo party vault") : (realExecution ? "Distribute confirmed devnet USDC" : "Split mock USDC by contribution")}</span></span>
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  </fieldset>
-                  <Button
-                    type="submit"
-                    className="mt-4 w-full sm:w-auto"
-                    disabled={!selectedVote || (privateVotingEnabled && !walletAuth.canSignTransactions)}
-                    loading={pending === "voteCommit" || ["authenticating", "initializing", "permissioning", "casting"].includes(privateVoteTransaction.stage)}
-                  >
-                    <LockKeyhole className="size-4" aria-hidden="true" /> Seal my vote
-                  </Button>
-                  {privateVotingEnabled && (
-                    <p className="mt-3 text-xs leading-5 text-muted-foreground">
-                      Wallet flow: verify TEE integrity, create the voter account, activate private access, then cast. No tokens move.
-                    </p>
-                  )}
-                </>
-              ) : (
-                <div className="mt-5 flex items-center gap-3 rounded-lg bg-primary/5 p-4 text-sm">
-                  <span className="grid size-10 place-items-center rounded-full bg-primary/15 text-primary"><Check className="size-5" aria-hidden="true" /></span>
-                  <div>
-                    <p className="font-semibold">Vote sealed</p>
-                    <p className="text-xs text-muted-foreground">
-                      {privateVotingEnabled && privateVoteTransaction.stage !== "released"
-                        ? votingSeconds > 0
-                          ? `Private in the verified TEE. Release opens in ${votingSeconds}s.`
-                          : ["opening", "undelegating"].includes(privateVoteTransaction.stage) ? "Releasing the expired vote to devnet…" : "Ready to release on devnet."
-                        : party.voting.phase === "COMMIT"
-                          ? `Waiting for ${party.participants.length - party.voting.commitCount} more vote${party.participants.length - party.voting.commitCount === 1 ? "" : "s"}.`
-                        : pending === "voteReveal" ? "Unsealing votes…" : "Everyone voted. Unsealing now…"}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {privateVoteTransaction.error && (
-                <p role="alert" className="mt-4 text-sm text-destructive">{privateVoteTransaction.error}</p>
-              )}
-
-              <div className="mt-4 flex items-center justify-between border-t pt-4 text-xs text-muted-foreground">
-                <span>{party.voting.commitCount} / {party.participants.length} votes sealed</span>
-                <span>{party.voting.revealCount} {privateVotingEnabled ? "released on devnet" : "revealed"}</span>
-              </div>
-            </form>
+            </div>
           )}
 
           {party.status === "COMPLETED" && party.voting?.result && party.settlement && (

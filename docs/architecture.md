@@ -177,4 +177,5 @@ MagicBlock's eATA model is the later path if contribution balances themselves mu
 - `altPlayerAddress` sends the NFT to the dedicated operator. The UI labels this honestly as a custodial devnet demo.
 - SELL verifies that confirmed buyback proceeds reached the operator USDC account. Proportional payouts use integer base units and deterministic remainder allocation.
 - All participant payout transfers and `mark_settled` share one Solana transaction. A retry after completion fails the terminal marker and atomically rolls back every repeated transfer.
+- The synchronized opening dialog remains mounted across the `OPENING → VOTING` transition. It replaces the countdown with the revealed card and its metadata, then hosts the existing sealed KEEP/SELL flow; closing it leaves a room-level recovery action so voting is never trapped inside a dismissed overlay.
 - Private ER voting remains separate. Commit-reveal is still the accurate operational privacy claim until permissioned per-wallet TEE accounts are deployed.

@@ -2,17 +2,20 @@
 
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { cn } from "@/lib/cn";
 
 export function Dialog({
   open,
   ariaLabel,
   dismissible = true,
+  panelClassName,
   onClose,
   children,
 }: {
   open: boolean;
   ariaLabel: string;
   dismissible?: boolean;
+  panelClassName?: string;
   onClose: () => void;
   children: React.ReactNode;
 }) {
@@ -83,7 +86,10 @@ export function Dialog({
         aria-modal="true"
         aria-label={ariaLabel}
         tabIndex={-1}
-        className="relative z-10 max-h-[calc(100dvh-2rem)] w-full overflow-y-auto rounded-t-xl border bg-card p-5 shadow-2xl focus-visible:outline-none sm:max-w-xl sm:rounded-xl sm:p-6"
+        className={cn(
+          "relative z-10 max-h-[calc(100dvh-2rem)] w-full overflow-y-auto rounded-t-xl border bg-card p-5 shadow-2xl focus-visible:outline-none sm:max-w-xl sm:rounded-xl sm:p-6",
+          panelClassName,
+        )}
       >
         {children}
       </div>
