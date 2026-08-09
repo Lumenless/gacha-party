@@ -45,5 +45,8 @@ debug:
     - error: "This room predates the current participant registration flow. Create a new demo party."
       cause: Server verification still required room schema v2 after the ten-player v3 deployment, and collaborative reads used the Router's last base-layer snapshot instead of the active ER state.
       fix: Centralized room/escrow account versions and changed active membership, readiness, recovery, and countdown reads to the configured MagicBlock ER endpoint.
-  last_debug_session: 2026-08-09T06:32:00+02:00
+    - error: "Solana error #-32604 after depositing the final party contribution."
+      cause: The deposit and operator membership transaction succeeded, but server-side confirmation used a MagicBlock Router WebSocket signature subscription that returned JSON-RPC Params not found after the state had already landed.
+      fix: Submit operator joins through the Router, then confirm the desired participant roster directly from the active Ephemeral Rollup over HTTP polling.
+  last_debug_session: 2026-08-09T12:00:00+02:00
 ```

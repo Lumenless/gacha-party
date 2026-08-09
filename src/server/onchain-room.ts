@@ -14,6 +14,8 @@ import { partyRepository } from "./party-repository";
 import { getGachaOperatorSigner } from "./gacha-operator";
 
 const MAX_CLOCK_SKEW_MS = 30_000;
+const OPERATOR_JOIN_CONFIRMATION_ATTEMPTS = 30;
+const OPERATOR_JOIN_CONFIRMATION_INTERVAL_MS = 400;
 
 let roomStateClientPromise: Promise<MagicRouterRoomClient> | null = null;
 
@@ -26,6 +28,34 @@ function roomStateClient() {
 
 function magicBlockRoomEnabled() {
   return process.env.NEXT_PUBLIC_ROOM_STATE_MODE === "magicblock";
+}
+
+function wait(milliseconds: number) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function waitForMagicBlockRoster(
+  client: MagicRouterRoomClient,
+  hostWallet: string,
+  partyId: string,
+  expected: readonly string[],
+) {
+  for (let attempt = 0; attempt < OPERATOR_JOIN_CONFIRMATION_ATTEMPTS; attempt += 1) {
+    try {
+      const room = await client.fetchRoom(hostWallet, partyId);
+      const roster = room?.participants.slice(0, room.participantCount).map(String);
+      if (roster?.length === expected.length && roster.every((participant, index) => participant === expected[index])) {
+        return;
+      }
+    } catch {
+      // A transient ER read must not turn a successfully submitted join into a false failure.
+    }
+    await wait(OPERATOR_JOIN_CONFIRMATION_INTERVAL_MS);
+  }
+
+  throw new Error(
+    "The MagicBlock membership transaction was submitted, but the room has not confirmed it yet. Please wait a moment and retry; no second deposit is required.",
+  );
 }
 
 export async function verifiedMagicBlockCountdown(partyId: string): Promise<number | undefined> {
@@ -115,5 +145,7 @@ export async function registerVerifiedMagicBlockParticipant(
   await router.simulateTransaction(prepared);
   const decoded = getTransactionDecoder().decode(prepared.transaction) as Transaction & TransactionWithinSizeLimit & TransactionWithBlockhashLifetime;
   const signed = await signTransaction([operator.keyPair], decoded);
-  return router.submitSignedTransaction(new Uint8Array(getTransactionEncoder().encode(signed)));
+  const signature = await router.sendSignedTransaction(new Uint8Array(getTransactionEncoder().encode(signed)));
+  await waitForMagicBlockRoster(client, party.hostWallet, party.id, expected);
+  return signature;
 }
