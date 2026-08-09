@@ -48,5 +48,8 @@ debug:
     - error: "Solana error #-32604 after depositing the final party contribution."
       cause: The deposit and operator membership transaction succeeded, but server-side confirmation used a MagicBlock Router WebSocket signature subscription that returned JSON-RPC Params not found after the state had already landed.
       fix: Submit operator joins through the Router, then confirm the desired participant roster directly from the active Ephemeral Rollup over HTTP polling.
-  last_debug_session: 2026-08-09T12:00:00+02:00
+    - error: "Onchain funding can no longer be synchronized for this party after every player readied up."
+      cause: A successful escrow lock triggered an unnecessary contribution sync after the party had already transitioned to READY, and late identical sync requests were rejected instead of treated idempotently.
+      fix: Do not synchronize contributions after locking, and safely accept exact unchanged funding mirrors after the funding lifecycle has closed while rejecting any attempted changes.
+  last_debug_session: 2026-08-09T12:15:00+02:00
 ```

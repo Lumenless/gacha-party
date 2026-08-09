@@ -118,9 +118,7 @@ export async function syncOnchainContributions(
   canonicalFundingDeadline?: string,
 ): Promise<Party> {
   const party = await requireParty(partyId);
-  if (party.status !== "FUNDING" && party.status !== "FUNDED" && party.status !== "EXPIRED") {
-    throw new Error("Onchain funding can no longer be synchronized for this party.");
-  }
+  const fundingCanChange = party.status === "FUNDING" || party.status === "FUNDED" || party.status === "EXPIRED";
   const partyRoster = party.participants.map(({ wallet }) => wallet);
   if (roster.length !== partyRoster.length || roster.some((wallet, index) => wallet !== partyRoster[index])) {
     throw new Error("The onchain escrow roster does not match this party.");
@@ -138,11 +136,17 @@ export async function syncOnchainContributions(
     throw new Error("Contribution receipts do not match the escrow total.");
   }
 
-  const nextStatus = expired ? "EXPIRED" : onchainTotal === target ? "FUNDED" : "FUNDING";
-  const deadlineUnchanged = !canonicalFundingDeadline || party.fundingDeadline === canonicalFundingDeadline;
-  const unchanged = deadlineUnchanged && party.status === nextStatus && party.participants.every(
+  const contributionsUnchanged = party.participants.every(
     (participant) => BigInt(participant.contributionBaseUnits) === (amountsByWallet.get(participant.wallet) ?? 0n),
   );
+  if (!fundingCanChange) {
+    if (!expired && onchainTotal === target && contributionsUnchanged) return party;
+    throw new Error("Onchain funding can no longer be synchronized for this party.");
+  }
+
+  const nextStatus = expired ? "EXPIRED" : onchainTotal === target ? "FUNDED" : "FUNDING";
+  const deadlineUnchanged = !canonicalFundingDeadline || party.fundingDeadline === canonicalFundingDeadline;
+  const unchanged = deadlineUnchanged && party.status === nextStatus && contributionsUnchanged;
   if (unchanged) return party;
 
   const status = party.status === nextStatus ? party.status : transitionParty(party.status, nextStatus);

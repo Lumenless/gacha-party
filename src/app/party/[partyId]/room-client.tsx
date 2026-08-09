@@ -469,7 +469,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
             ? await escrow.cancel()
             : await escrow.lock();
     if (!confirmed) return;
-    if (escrowIntent !== "initialize") {
+    if (escrowIntent === "deposit" || escrowIntent === "refund" || escrowIntent === "cancel") {
       const synced = await mutate("syncContribution", { wallet: identity.wallet });
       if (synced && escrowIntent === "deposit") setContribution("");
     }

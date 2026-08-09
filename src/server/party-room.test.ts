@@ -171,6 +171,60 @@ describe("multiplayer room service", () => {
     expect(refunded.participants[0]?.contributionBaseUnits).toBe("0");
   });
 
+  it("accepts an identical late funding sync after everyone is ready", async () => {
+    await joinParty("party-1", { wallet: "DemoPlayerWallet0001", displayName: "Alice" }, realtime);
+    const roster = ["DEMO_HOST_WALLET", "DemoPlayerWallet0001"];
+    const amounts = new Map([
+      ["DEMO_HOST_WALLET", parseUsdc("20")],
+      ["DemoPlayerWallet0001", parseUsdc("30")],
+    ]);
+    await syncOnchainContributions("party-1", amounts, parseUsdc("50"), parseUsdc("50"), roster, realtime);
+    await markPartyReady("party-1", { wallet: "DEMO_HOST_WALLET" }, realtime);
+    const ready = await markPartyReady("party-1", { wallet: "DemoPlayerWallet0001" }, realtime);
+
+    const unchanged = await syncOnchainContributions(
+      "party-1",
+      amounts,
+      parseUsdc("50"),
+      parseUsdc("50"),
+      roster,
+      realtime,
+    );
+
+    expect(unchanged.status).toBe("READY");
+    expect(unchanged.revision).toBe(ready.revision);
+  });
+
+  it("rejects a changed funding sync after everyone is ready", async () => {
+    await joinParty("party-1", { wallet: "DemoPlayerWallet0001", displayName: "Alice" }, realtime);
+    const roster = ["DEMO_HOST_WALLET", "DemoPlayerWallet0001"];
+    await syncOnchainContributions(
+      "party-1",
+      new Map([
+        ["DEMO_HOST_WALLET", parseUsdc("20")],
+        ["DemoPlayerWallet0001", parseUsdc("30")],
+      ]),
+      parseUsdc("50"),
+      parseUsdc("50"),
+      roster,
+      realtime,
+    );
+    await markPartyReady("party-1", { wallet: "DEMO_HOST_WALLET" }, realtime);
+    await markPartyReady("party-1", { wallet: "DemoPlayerWallet0001" }, realtime);
+
+    await expect(syncOnchainContributions(
+      "party-1",
+      new Map([
+        ["DEMO_HOST_WALLET", parseUsdc("21")],
+        ["DemoPlayerWallet0001", parseUsdc("29")],
+      ]),
+      parseUsdc("50"),
+      parseUsdc("50"),
+      roster,
+      realtime,
+    )).rejects.toThrow("can no longer be synchronized");
+  });
+
   it("rejects an onchain mirror whose receipts do not equal the escrow total", async () => {
     await joinParty("party-1", { wallet: "DemoPlayerWallet0001", displayName: "Alice" }, realtime);
     await expect(syncOnchainContributions(
