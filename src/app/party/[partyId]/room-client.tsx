@@ -832,7 +832,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                   </Button>
                 ) : identity.wallet === party.hostWallet && party.status === "READY" && escrow.snapshot?.status === ProgramEscrowStatus.Locked ? (
                   <Button type="button" onClick={() => void startOpening()} loading={pending === "start"}>
-                    {chainRoom.enabled && !chainRoom.isOpening ? "Review opening transaction" : "Start real opening"}
+                    Open pack
                   </Button>
                 ) : (
                   <span className="inline-flex min-h-11 items-center gap-2 rounded-md border border-primary/30 bg-primary/10 px-4 text-sm font-semibold text-primary"><Check className="size-4" aria-hidden="true" /> Ready</span>
@@ -855,7 +855,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                   </Button>
                 ) : identity.wallet === party.hostWallet && party.status === "READY" ? (
                   <Button type="button" onClick={() => void startOpening()} loading={pending === "start"}>
-                    {chainRoom.enabled && !chainRoom.isOpening ? "Review opening transaction" : "Start opening"}
+                    Open pack
                   </Button>
                 ) : (
                   <span className="inline-flex min-h-11 items-center gap-2 rounded-md border border-primary/30 bg-primary/10 px-4 text-sm font-semibold text-primary"><Check className="size-4" aria-hidden="true" /> Ready</span>
