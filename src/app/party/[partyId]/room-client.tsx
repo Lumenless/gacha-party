@@ -489,7 +489,13 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
             ? await escrow.cancel()
             : await escrow.lock();
     if (!confirmed) return;
-    if (escrowIntent === "deposit") setContribution("");
+    if (escrowIntent === "deposit") {
+      setContribution("");
+      const syncKey = `${identity.wallet}:${escrowAmount}`;
+      membershipSyncRequested.current = syncKey;
+      const synchronized = await mutate("syncContribution", { wallet: identity.wallet });
+      if (!synchronized) membershipSyncRequested.current = null;
+    }
   }
 
   async function castVote(event: FormEvent) {
@@ -736,7 +742,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                 receipt={escrow.receipt}
                 tokenAccount={escrow.tokenAccount}
                 error={escrow.error}
-                rosterMatchesParty={escrow.rosterMatchesParty}
+                rosterState={escrow.rosterState}
                 participantCount={party.participants.length}
                 isParticipant={Boolean(identity)}
                 isHost={identity?.wallet === party.hostWallet}

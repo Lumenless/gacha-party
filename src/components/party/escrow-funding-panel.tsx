@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { WalletAuthButton } from "@/components/wallet/wallet-auth-button";
 import type { EscrowIntent, EscrowStatus, EscrowTransactionState } from "@/integrations/solana/use-solana-escrow";
 import type { ContributionReceiptSnapshot, EscrowAccountSnapshot, WalletTokenAccountSnapshot } from "@/integrations/solana/escrow-client";
+import type { EscrowRosterState } from "@/integrations/solana/escrow-roster-state";
 import { EscrowStatus as ProgramEscrowStatus } from "@/integrations/solana/program-client/src/generated";
 
 const PROGRAM_ADDRESS = "BMKHnBM1oq1LyXFYyHq2gUdyugo1N8aGF6wtBnJNd6Nz";
@@ -31,7 +32,7 @@ export function EscrowFundingPanel({
   receipt,
   tokenAccount,
   error,
-  rosterMatchesParty,
+  rosterState,
   participantCount,
   isParticipant,
   isHost,
@@ -52,7 +53,7 @@ export function EscrowFundingPanel({
   receipt: ContributionReceiptSnapshot | null;
   tokenAccount: WalletTokenAccountSnapshot | null;
   error: string | null;
-  rosterMatchesParty: boolean;
+  rosterState: EscrowRosterState;
   participantCount: number;
   isParticipant: boolean;
   isHost: boolean;
@@ -126,11 +127,28 @@ export function EscrowFundingPanel({
     );
   }
 
-  if (!rosterMatchesParty) {
+  if (rosterState === "reconciling") {
+    return (
+      <div className="rounded-xl border border-primary/30 bg-primary/5 p-5 sm:p-6" role="status" aria-live="polite">
+        <div className="flex gap-3">
+          <RefreshCw className="mt-0.5 size-5 shrink-0 animate-spin text-primary motion-reduce:animate-none" aria-hidden="true" />
+          <div>
+            <h2 className="font-semibold">Adding player to party…</h2>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">The deposit is confirmed on Solana. Verifying its receipt and updating the MagicBlock room.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (rosterState === "mismatched") {
     return (
       <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-5" role="alert">
         <h2 className="font-semibold text-destructive">Funding roster mismatch</h2>
         <p className="mt-1 text-sm text-muted-foreground">This party changed after escrow activation. Deposits are disabled until the roster is reconciled.</p>
+        <Button type="button" variant="secondary" className="mt-4" onClick={onRefresh}>
+          <RefreshCw className="size-4" aria-hidden="true" /> Retry
+        </Button>
       </div>
     );
   }

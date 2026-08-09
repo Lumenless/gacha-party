@@ -17,6 +17,7 @@ import {
   pendingEscrowTransactionKey,
   type PendingEscrowTransaction,
 } from "./pending-escrow-transaction";
+import { escrowRosterState } from "./escrow-roster-state";
 
 export type EscrowStatus = "disabled" | "unconfigured" | "loading" | "missing" | "active" | "error";
 export type EscrowIntent = "initialize" | "deposit" | "refund" | "cancel" | "lock";
@@ -244,11 +245,12 @@ export function useSolanaEscrow(party: Pick<Party, "id" | "hostWallet" | "fundin
     await escrowClient(mint, operator)
   ).prepareLock(party.hostWallet, party.id)), [execute, mint, operator, party.hostWallet, party.id]);
 
-  const rosterMatchesParty = useMemo(() => {
-    if (!snapshot) return true;
+  const rosterState = useMemo(() => {
+    if (!snapshot) return "matched" as const;
     const onchain = snapshot.participants.slice(0, snapshot.participantCount).map(String);
-    return onchain.length === party.participants.length && onchain.every((participant, index) => participant === party.participants[index]?.wallet);
+    return escrowRosterState(onchain, party.participants.map(({ wallet: participant }) => participant));
   }, [party.participants, snapshot]);
+  const rosterMatchesParty = rosterState === "matched";
 
   return {
     enabled,
@@ -258,6 +260,7 @@ export function useSolanaEscrow(party: Pick<Party, "id" | "hostWallet" | "fundin
     snapshot,
     receipt,
     tokenAccount,
+    rosterState,
     rosterMatchesParty,
     error,
     transaction,
