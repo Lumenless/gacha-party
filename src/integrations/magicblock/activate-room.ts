@@ -50,6 +50,7 @@ export async function activateMagicBlockRoom(input: {
         input.hostWallet,
         input.partyId,
         input.maxPlayers,
+        operator || input.hostWallet,
         escrowInstruction ? [escrowInstruction] : [],
       );
   input.onStage?.("simulating");

@@ -17,6 +17,7 @@ export * from './initializePrivateVote';
 export * from './initializePrivateVotePermission';
 export * from './initializeRoom';
 export * from './joinRoom';
+export * from './joinRoomByOperator';
 export * from './lockEscrow';
 export * from './markPurchased';
 export * from './markSettled';

@@ -71,6 +71,10 @@ export const walletActionSchema = z.object({
   wallet: z.string().trim().min(12).max(64),
 });
 
+export const onchainContributionSyncSchema = walletActionSchema.extend({
+  displayName: z.string().trim().min(2).max(24).optional(),
+});
+
 export const voteCommitSchema = walletActionSchema.extend({
   commitment: z.string().regex(/^[a-f0-9]{64}$/, "Invalid vote commitment."),
 });

@@ -13,16 +13,16 @@ export const ROOM_STATE_DISCRIMINATOR = new Uint8Array([251, 176, 114, 29, 232, 
 
 export function getRoomStateDiscriminatorBytes() { return fixEncoderSize(getBytesEncoder(), 8).encode(ROOM_STATE_DISCRIMINATOR); }
 
-export type RoomState = { discriminator: ReadonlyUint8Array; version: number; bump: number; roomId: ReadonlyUint8Array; host: Address; maxPlayers: number; participantCount: number; readyMask: number; phase: RoomPhase; countdownEndsAt: bigint; revision: bigint; lastActivityAt: bigint; participants: Array<Address>;  };
+export type RoomState = { discriminator: ReadonlyUint8Array; version: number; bump: number; roomId: ReadonlyUint8Array; host: Address; operator: Address; maxPlayers: number; participantCount: number; readyMask: number; phase: RoomPhase; countdownEndsAt: bigint; revision: bigint; lastActivityAt: bigint; participants: Array<Address>;  };
 
-export type RoomStateArgs = { version: number; bump: number; roomId: ReadonlyUint8Array; host: Address; maxPlayers: number; participantCount: number; readyMask: number; phase: RoomPhaseArgs; countdownEndsAt: number | bigint; revision: number | bigint; lastActivityAt: number | bigint; participants: Array<Address>;  };
+export type RoomStateArgs = { version: number; bump: number; roomId: ReadonlyUint8Array; host: Address; operator: Address; maxPlayers: number; participantCount: number; readyMask: number; phase: RoomPhaseArgs; countdownEndsAt: number | bigint; revision: number | bigint; lastActivityAt: number | bigint; participants: Array<Address>;  };
 
 export function getRoomStateEncoder(): FixedSizeEncoder<RoomStateArgs> {
-    return transformEncoder(getStructEncoder([['discriminator', fixEncoderSize(getBytesEncoder(), 8)], ['version', getU8Encoder()], ['bump', getU8Encoder()], ['roomId', fixEncoderSize(getBytesEncoder(), 8)], ['host', getAddressEncoder()], ['maxPlayers', getU8Encoder()], ['participantCount', getU8Encoder()], ['readyMask', getU16Encoder()], ['phase', getRoomPhaseEncoder()], ['countdownEndsAt', getI64Encoder()], ['revision', getU64Encoder()], ['lastActivityAt', getI64Encoder()], ['participants', getArrayEncoder(getAddressEncoder(), { size: 10 })]]), (value) => ({ ...value, discriminator: ROOM_STATE_DISCRIMINATOR }));
+    return transformEncoder(getStructEncoder([['discriminator', fixEncoderSize(getBytesEncoder(), 8)], ['version', getU8Encoder()], ['bump', getU8Encoder()], ['roomId', fixEncoderSize(getBytesEncoder(), 8)], ['host', getAddressEncoder()], ['operator', getAddressEncoder()], ['maxPlayers', getU8Encoder()], ['participantCount', getU8Encoder()], ['readyMask', getU16Encoder()], ['phase', getRoomPhaseEncoder()], ['countdownEndsAt', getI64Encoder()], ['revision', getU64Encoder()], ['lastActivityAt', getI64Encoder()], ['participants', getArrayEncoder(getAddressEncoder(), { size: 10 })]]), (value) => ({ ...value, discriminator: ROOM_STATE_DISCRIMINATOR }));
 }
 
 export function getRoomStateDecoder(): FixedSizeDecoder<RoomState> {
-    return getStructDecoder([['discriminator', fixDecoderSize(getBytesDecoder(), 8)], ['version', getU8Decoder()], ['bump', getU8Decoder()], ['roomId', fixDecoderSize(getBytesDecoder(), 8)], ['host', getAddressDecoder()], ['maxPlayers', getU8Decoder()], ['participantCount', getU8Decoder()], ['readyMask', getU16Decoder()], ['phase', getRoomPhaseDecoder()], ['countdownEndsAt', getI64Decoder()], ['revision', getU64Decoder()], ['lastActivityAt', getI64Decoder()], ['participants', getArrayDecoder(getAddressDecoder(), { size: 10 })]]);
+    return getStructDecoder([['discriminator', fixDecoderSize(getBytesDecoder(), 8)], ['version', getU8Decoder()], ['bump', getU8Decoder()], ['roomId', fixDecoderSize(getBytesDecoder(), 8)], ['host', getAddressDecoder()], ['operator', getAddressDecoder()], ['maxPlayers', getU8Decoder()], ['participantCount', getU8Decoder()], ['readyMask', getU16Decoder()], ['phase', getRoomPhaseDecoder()], ['countdownEndsAt', getI64Decoder()], ['revision', getU64Decoder()], ['lastActivityAt', getI64Decoder()], ['participants', getArrayDecoder(getAddressDecoder(), { size: 10 })]]);
 }
 
 export function getRoomStateCodec(): FixedSizeCodec<RoomStateArgs, RoomState> {
@@ -74,5 +74,5 @@ export async function fetchAllMaybeRoomState(
 }
 
 export function getRoomStateSize(): number {
-  return 399;
+  return 431;
 }

@@ -94,6 +94,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
   const voteRevealRequested = useRef(false);
   const voteExpireRequested = useRef(false);
   const escrowSyncRequested = useRef<string | null>(null);
+  const membershipSyncRequested = useRef<string | null>(null);
   const chainRoom = useMagicBlockRoom(party);
   const privateVote = useMagicBlockPrivateVote(party.id);
   const {
@@ -257,6 +258,19 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
       setPending(null);
     }
   }, [party.id, showError]);
+
+  useEffect(() => {
+    if (!escrow.enabled || escrow.status !== "active" || !identity || currentParticipant || !escrow.receipt) return;
+    const syncKey = `${identity.wallet}:${escrow.receipt.amount}`;
+    if (membershipSyncRequested.current === syncKey) return;
+    membershipSyncRequested.current = syncKey;
+    const timer = window.setTimeout(() => {
+      void mutate("syncContribution", { wallet: identity.wallet }).then((ok) => {
+        if (!ok) membershipSyncRequested.current = null;
+      });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [currentParticipant, escrow.enabled, escrow.receipt, escrow.status, identity, mutate]);
 
   useEffect(() => {
     if (!escrow.enabled || escrow.status !== "active" || !identity || !currentParticipant || !escrow.snapshot) return;
@@ -430,7 +444,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
   function reviewEscrowDeposit() {
     try {
       const amount = parseUsdc(contribution);
-      if (amount <= 0n) throw new Error("Contribution must be greater than zero.");
+      if (amount < 1_000_000n) throw new Error("Contribution must be at least 1 USDC.");
       if (amount > remaining) throw new Error("Contribution exceeds the remaining funding target.");
       if (!escrow.tokenAccount || amount > escrow.tokenAccount.amount) {
         throw new Error(`This wallet does not have enough ${fundsTokenLabel}.`);
@@ -648,7 +662,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                 error={escrow.error}
                 rosterMatchesParty={escrow.rosterMatchesParty}
                 participantCount={party.participants.length}
-                isParticipant={Boolean(currentParticipant)}
+                isParticipant={Boolean(identity)}
                 isHost={identity?.wallet === party.hostWallet}
                 canSignTransactions={walletAuth.canSignTransactions}
                 tokenLabel={fundsTokenLabel}
@@ -699,7 +713,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
             </div>
           )}
 
-          {!currentParticipant && identity && !deadlinePassed && (party.status === "FUNDING" || party.status === "FUNDED") && party.participants.length < party.maxPlayers && escrow.snapshot?.status !== ProgramEscrowStatus.Locked && (
+          {!escrow.enabled && !currentParticipant && identity && !deadlinePassed && (party.status === "FUNDING" || party.status === "FUNDED") && party.participants.length < party.maxPlayers && escrow.snapshot?.status !== ProgramEscrowStatus.Locked && (
             <>
               <div className="flex flex-col justify-between gap-4 rounded-xl border border-primary/30 bg-primary/5 p-5 sm:flex-row sm:items-center sm:p-6">
                 <div className="flex items-center gap-3">

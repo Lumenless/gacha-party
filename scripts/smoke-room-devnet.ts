@@ -16,11 +16,10 @@ import {
   MagicRouterRoomClient,
   type PreparedRoomTransaction,
 } from "../src/integrations/magicblock/router-client";
-import { DevnetEscrowClient } from "../src/integrations/solana/escrow-client";
+import { DevnetEscrowClient, type PreparedEscrowTransaction } from "../src/integrations/solana/escrow-client";
 import { CURRENT_ESCROW_ACCOUNT_VERSION } from "../src/integrations/solana/program-versions";
 import { RoomPhase } from "../src/integrations/solana/program-client/src/generated";
-import { registerPartyEscrowParticipant } from "../src/server/operator-escrow";
-import type { Party } from "../src/domain/party";
+import { getGachaOperatorSigner } from "../src/server/gacha-operator";
 
 async function main() {
   const walletPath = process.env.SOLANA_WALLET || resolve(homedir(), ".config/solana/id.json");
@@ -29,12 +28,14 @@ async function main() {
   const secondSecretKey = Uint8Array.from(JSON.parse(readFileSync(secondWalletPath, "utf8")) as number[]);
   const signer = await createKeyPairSignerFromBytes(secretKey);
   const secondSigner = await createKeyPairSignerFromBytes(secondSecretKey);
+  const operator = await getGachaOperatorSigner();
   if (secondSigner.address === signer.address) throw new Error("The smoke test requires two distinct Solana wallets.");
   const client = await MagicRouterRoomClient.create();
   const escrowClient = await DevnetEscrowClient.create({
     mint: requiredEnvironment("USDC_MINT"),
     operator: requiredEnvironment("GACHA_OPERATOR_ADDRESS"),
   });
+  const operatorAddress = requiredEnvironment("GACHA_OPERATOR_ADDRESS");
   const erClient = await MagicRouterRoomClient.create(process.env.NEXT_PUBLIC_MAGICBLOCK_ER_RPC_URL || MAGICBLOCK_DEVNET_ER_URL);
   const partyId = randomBytes(4).toString("hex");
   const fundingDeadlineSeconds = Math.floor(Date.now() / 1_000) + 180;
@@ -48,6 +49,15 @@ async function main() {
     const signable = decoded as Transaction & TransactionWithinSizeLimit & TransactionWithBlockhashLifetime;
     const signed = await signTransaction([transactionSigner.keyPair], signable);
     const signature = await client.submitSignedTransaction(new Uint8Array(getTransactionEncoder().encode(signed)));
+    console.log(`${prepared.action}: ${signature}`);
+  }
+
+  async function signAndSubmitEscrow(prepared: PreparedEscrowTransaction, transactionSigner = signer) {
+    await escrowClient.simulateTransaction(prepared);
+    const decoded = getTransactionDecoder().decode(prepared.transaction);
+    const signable = decoded as Transaction & TransactionWithinSizeLimit & TransactionWithBlockhashLifetime;
+    const signed = await signTransaction([transactionSigner.keyPair], signable);
+    const signature = await escrowClient.submitSignedTransaction(new Uint8Array(getTransactionEncoder().encode(signed)));
     console.log(`${prepared.action}: ${signature}`);
   }
 
@@ -74,6 +84,7 @@ async function main() {
     signer.address,
     partyId,
     10,
+    operatorAddress,
     [escrowInitialization],
   ));
   const initialized = await waitForRoom(
@@ -84,34 +95,33 @@ async function main() {
   if (!escrow || escrow.version !== CURRENT_ESCROW_ACCOUNT_VERSION || escrow.participantCount !== 1 || escrow.maxPlayers !== 10) {
     throw new Error("Initialized escrow did not decode to the expected ten-player roster.");
   }
-  await signAndSubmit(await client.prepareJoin(secondSigner.address, signer.address, partyId), secondSigner);
+  const contributorToken = await escrowClient.fetchWalletTokenAccount(secondSigner.address);
+  if (!contributorToken || contributorToken.amount < 1_000_000n) {
+    throw new Error("The second smoke wallet needs at least one configured devnet USDC token.");
+  }
+  await signAndSubmitEscrow(await escrowClient.prepareDeposit(
+    secondSigner.address,
+    signer.address,
+    partyId,
+    contributorToken.address,
+    1_000_000n,
+  ), secondSigner);
+  escrow = await escrowClient.fetchEscrow(signer.address, partyId);
+  const receipt = await escrowClient.fetchReceipt(signer.address, partyId, secondSigner.address);
+  if (!escrow || escrow.participantCount !== 2 || String(escrow.participants[1]) !== secondSigner.address || receipt?.amount !== 1_000_000n) {
+    throw new Error("The first deposit did not atomically register its contributor and receipt.");
+  }
+
+  await signAndSubmit(await client.prepareOperatorJoin(
+    operator.address,
+    secondSigner.address,
+    signer.address,
+    partyId,
+  ), operator);
   await waitForRoom(
     (room) => Boolean(room && room.participantCount === 2 && String(room.participants[1]) === secondSigner.address && room.revision === 2n),
     "participant two to join",
   );
-  const party = {
-    id: partyId,
-    name: "Dynamic escrow smoke",
-    hostWallet: signer.address,
-    packCode: "smoke",
-    packName: "Smoke pack",
-    packImageUrl: "/packs/spark.svg",
-    maxPlayers: 10,
-    fundingTargetBaseUnits: "50000000",
-    fundingDeadline: new Date(fundingDeadlineSeconds * 1_000).toISOString(),
-    decisionRule: "SIMPLE_MAJORITY",
-    status: "FUNDING",
-    createdAt: new Date().toISOString(),
-    revision: 0,
-    activity: [],
-    participants: [{ wallet: signer.address, displayName: "Host", contributionBaseUnits: "0", ready: false }],
-  } satisfies Party;
-  const registrationSignature = await registerPartyEscrowParticipant(party, secondSigner.address);
-  console.log(`register: ${registrationSignature ?? "already registered"}`);
-  escrow = await escrowClient.fetchEscrow(signer.address, partyId);
-  if (!escrow || escrow.participantCount !== 2 || String(escrow.participants[1]) !== secondSigner.address) {
-    throw new Error("Operator registration did not append the expected participant.");
-  }
   const delegated = await erClient.fetchRoom(signer.address, partyId);
   console.log(`room: ${initialized.address}`);
   console.log(`escrow: ${escrow.address}`);

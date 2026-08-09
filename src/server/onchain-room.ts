@@ -1,7 +1,17 @@
+import {
+  getTransactionDecoder,
+  getTransactionEncoder,
+  signTransaction,
+  type Signature,
+  type Transaction,
+  type TransactionWithBlockhashLifetime,
+  type TransactionWithinSizeLimit,
+} from "@solana/kit";
 import { RoomPhase } from "@/integrations/solana/program-client/src/generated";
 import { MAGICBLOCK_DEVNET_ER_URL, MagicRouterRoomClient } from "@/integrations/magicblock/router-client";
 import { CURRENT_ROOM_ACCOUNT_VERSION } from "@/integrations/solana/program-versions";
 import { partyRepository } from "./party-repository";
+import { getGachaOperatorSigner } from "./gacha-operator";
 
 const MAX_CLOCK_SKEW_MS = 30_000;
 
@@ -68,4 +78,42 @@ export async function assertMagicBlockJoin(partyId: string, wallet: string) {
   if (roomRoster.length !== expected.length || roomRoster.some((participant, index) => participant !== expected[index])) {
     throw new Error("Sign the MagicBlock join transaction before joining this party.");
   }
+}
+
+export async function registerVerifiedMagicBlockParticipant(
+  partyId: string,
+  wallet: string,
+): Promise<Signature | null> {
+  if (!magicBlockRoomEnabled()) return null;
+  const party = await partyRepository.get(partyId);
+  if (!party) throw new Error("Party not found.");
+  const client = await roomStateClient();
+  const room = await client.fetchRoom(party.hostWallet, party.id);
+  if (!room) throw new Error("The host must activate the MagicBlock room first.");
+  if (room.version !== CURRENT_ROOM_ACCOUNT_VERSION) {
+    throw new Error("This room predates automatic deposit membership. Create a new party.");
+  }
+  const operator = await getGachaOperatorSigner();
+  if (String(room.operator) !== operator.address) {
+    throw new Error("The MagicBlock room operator does not match this deployment.");
+  }
+  if (String(room.host) !== party.hostWallet || room.maxPlayers !== party.maxPlayers) {
+    throw new Error("The MagicBlock room configuration does not match this party.");
+  }
+  const roomRoster = room.participants.slice(0, room.participantCount).map(String);
+  const partyRoster = party.participants.map(({ wallet: participant }) => participant);
+  const expected = [...partyRoster, wallet];
+  if (roomRoster.length === expected.length && roomRoster.every((participant, index) => participant === expected[index])) {
+    return null;
+  }
+  if (roomRoster.length !== partyRoster.length || roomRoster.some((participant, index) => participant !== partyRoster[index])) {
+    throw new Error("The MagicBlock participant roster is out of sync with this party.");
+  }
+
+  const router = await MagicRouterRoomClient.create();
+  const prepared = await router.prepareOperatorJoin(operator.address, wallet, party.hostWallet, party.id);
+  await router.simulateTransaction(prepared);
+  const decoded = getTransactionDecoder().decode(prepared.transaction) as Transaction & TransactionWithinSizeLimit & TransactionWithBlockhashLifetime;
+  const signed = await signTransaction([operator.keyPair], decoded);
+  return router.submitSignedTransaction(new Uint8Array(getTransactionEncoder().encode(signed)));
 }

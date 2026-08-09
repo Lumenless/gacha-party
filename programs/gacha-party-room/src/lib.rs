@@ -23,12 +23,13 @@ pub const ESCROW_VAULT_SEED: &[u8] = b"escrow-vault";
 pub const CONTRIBUTION_SEED: &[u8] = b"contribution";
 pub const PRIVATE_VOTE_SEED: &[u8] = b"private-vote";
 pub const MAX_PLAYERS: usize = 10;
-pub const ROOM_VERSION: u8 = 3;
+pub const ROOM_VERSION: u8 = 4;
 pub const OPENING_LEAD_SECONDS: i64 = 4;
-pub const ESCROW_VERSION: u8 = 5;
+pub const ESCROW_VERSION: u8 = 6;
 pub const CONTRIBUTION_VERSION: u8 = 1;
 pub const PRIVATE_VOTE_VERSION: u8 = 1;
 pub const USDC_DECIMALS: u8 = 6;
+pub const MIN_CONTRIBUTION_AMOUNT: u64 = 1_000_000;
 pub const MAX_PRIVATE_VOTE_WINDOW_SECONDS: i64 = 10 * 60;
 
 #[ephemeral]
@@ -40,17 +41,20 @@ pub mod gacha_party_room {
         ctx: Context<InitializeRoom>,
         room_id: [u8; 8],
         max_players: u8,
+        operator: Pubkey,
     ) -> Result<()> {
         require!(
             (2..=MAX_PLAYERS as u8).contains(&max_players),
             RoomError::InvalidPlayerLimit
         );
+        require!(operator != Pubkey::default(), RoomError::InvalidRoomOperator);
         let now = Clock::get()?.unix_timestamp;
         let room = &mut ctx.accounts.room;
         room.version = ROOM_VERSION;
         room.bump = ctx.bumps.room;
         room.room_id = room_id;
         room.host = ctx.accounts.host.key();
+        room.operator = operator;
         room.max_players = max_players;
         room.participant_count = 1;
         room.ready_mask = 0;
@@ -79,6 +83,26 @@ pub mod gacha_party_room {
         emit!(PlayerJoined {
             room: room.key(),
             player,
+            participant_count: room.participant_count,
+            revision: room.revision,
+        });
+        Ok(())
+    }
+
+    /// ER instruction: mirrors a contributor whose devnet escrow receipt was
+    /// verified by the trusted operator. The participant never signs a separate
+    /// room-join transaction.
+    pub fn join_room_by_operator(
+        ctx: Context<OperatorMutateRoom>,
+        participant: Pubkey,
+    ) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let room = &mut ctx.accounts.room;
+        room.join(participant, now)?;
+
+        emit!(PlayerJoined {
+            room: room.key(),
+            player: participant,
             participant_count: room.participant_count,
             revision: room.revision,
         });
@@ -340,9 +364,12 @@ pub mod gacha_party_room {
         ctx.accounts
             .escrow
             .require_funding_open(Clock::get()?.unix_timestamp)?;
-        require!(amount > 0, EscrowError::InvalidContributionAmount);
+        require!(
+            amount >= MIN_CONTRIBUTION_AMOUNT,
+            EscrowError::InvalidContributionAmount
+        );
         let contributor = ctx.accounts.contributor.key();
-        ctx.accounts.escrow.require_participant(contributor)?;
+        let participant_registered = ctx.accounts.escrow.register_participant(contributor)?;
         let next_total = ctx
             .accounts
             .escrow
@@ -381,6 +408,14 @@ pub mod gacha_party_room {
             .contributor_count
             .checked_add(1)
             .ok_or(EscrowError::AmountOverflow)?;
+
+        if participant_registered {
+            emit!(EscrowParticipantRegistered {
+                escrow: escrow.key(),
+                participant: contributor,
+                participant_count: escrow.participant_count,
+            });
+        }
 
         emit!(ContributionDeposited {
             escrow: escrow.key(),
@@ -627,6 +662,18 @@ pub struct MutateRoom<'info> {
     )]
     pub room: Account<'info, RoomState>,
     pub player: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct OperatorMutateRoom<'info> {
+    #[account(
+        mut,
+        seeds = [ROOM_SEED, room.host.as_ref(), room.room_id.as_ref()],
+        bump = room.bump,
+        has_one = operator @ RoomError::InvalidRoomOperator,
+    )]
+    pub room: Account<'info, RoomState>,
+    pub operator: Signer<'info>,
 }
 
 #[derive(Accounts)]
@@ -941,6 +988,7 @@ pub struct RoomState {
     pub bump: u8,
     pub room_id: [u8; 8],
     pub host: Pubkey,
+    pub operator: Pubkey,
     pub max_players: u8,
     pub participant_count: u8,
     pub ready_mask: u16,
@@ -1323,6 +1371,8 @@ pub struct EscrowSettled {
 pub enum RoomError {
     #[msg("Player limit must be between two and ten.")]
     InvalidPlayerLimit,
+    #[msg("The room operator is invalid.")]
+    InvalidRoomOperator,
     #[msg("This wallet already joined the room.")]
     AlreadyJoined,
     #[msg("The room is full.")]
@@ -1387,7 +1437,7 @@ pub enum EscrowError {
     EscrowParticipantLimitReached,
     #[msg("At least two participants must join before the escrow can be locked.")]
     NotEnoughParticipants,
-    #[msg("Contribution amount must be greater than zero.")]
+    #[msg("Contribution amount must be at least one USDC.")]
     InvalidContributionAmount,
     #[msg("This contribution would exceed the funding target.")]
     FundingTargetExceeded,
@@ -1429,6 +1479,7 @@ mod tests {
             bump: 255,
             room_id: *b"ROOM0001",
             host,
+            operator: Pubkey::new_unique(),
             max_players,
             participant_count: 1,
             ready_mask: 0,

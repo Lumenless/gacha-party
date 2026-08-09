@@ -34,11 +34,12 @@ build_status:
     - vercel-supabase-runtime
     - dynamic-devnet-funding-escrow
     - deadline-cancellation-and-transaction-recovery
+    - deposit-driven-automatic-membership
   mvp_complete: false
   tests_passing: true
   devnet_deployed: true
   program_id: BMKHnBM1oq1LyXFYyHq2gUdyugo1N8aGF6wtBnJNd6Nz
-  deployment_signature: 3T66Mhq2w6FSkUEx7XDx4eRYe85yuf2WQTT92rURRCX7AUSv89wTb9BrqPYPb6nUVFRonv72YVN9tJtgZA3ddk3j
+  deployment_signature: 39nhwH8ABAaqrdYejN5aJHR4mFVf9CKjhNfZ1oL4qpV4TXkAphA5AamV3JHxKMc8ejVmFqZydnkFrrDTxcz2K82P
 debug:
   issues_resolved:
     - error: "This room predates the current participant registration flow. Create a new demo party."

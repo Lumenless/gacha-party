@@ -35,6 +35,7 @@ const ESCROW_SEED = new TextEncoder().encode("party-escrow");
 const ESCROW_VAULT_SEED = new TextEncoder().encode("escrow-vault");
 const CONTRIBUTION_SEED = new TextEncoder().encode("contribution");
 const U64_MAX = 18_446_744_073_709_551_615n;
+const MIN_CONTRIBUTION_AMOUNT = 1_000_000n;
 
 export type EscrowAction = "initialize" | "deposit" | "refund" | "cancel" | "lock";
 
@@ -163,6 +164,7 @@ export class DevnetEscrowClient {
     amount: bigint,
   ): Promise<PreparedEscrowTransaction> {
     assertTokenAmount(amount, "Contribution");
+    if (amount < MIN_CONTRIBUTION_AMOUNT) throw new Error("Contribution must be at least 1 USDC.");
     const contributorAddress = address(contributor);
     const escrowAddress = await findEscrowAddress(host, partyId);
     const instruction = await getDepositContributionInstructionAsync({

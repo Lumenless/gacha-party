@@ -6,7 +6,7 @@
  * @see https://github.com/codama-idl/codama
  */
 
-import { combineCodec, fixDecoderSize, fixEncoderSize, getAddressEncoder, getBytesDecoder, getBytesEncoder, getProgramDerivedAddress, getStructDecoder, getStructEncoder, getU8Decoder, getU8Encoder, transformEncoder, type AccountMeta, type AccountSignerMeta, type Address, type FixedSizeCodec, type FixedSizeDecoder, type FixedSizeEncoder, type Instruction, type InstructionWithAccounts, type InstructionWithData, type ReadonlyAccount, type ReadonlyUint8Array, type TransactionSigner, type WritableAccount, type WritableSignerAccount } from '@solana/kit';
+import { combineCodec, fixDecoderSize, fixEncoderSize, getAddressDecoder, getAddressEncoder, getBytesDecoder, getBytesEncoder, getProgramDerivedAddress, getStructDecoder, getStructEncoder, getU8Decoder, getU8Encoder, transformEncoder, type AccountMeta, type AccountSignerMeta, type Address, type FixedSizeCodec, type FixedSizeDecoder, type FixedSizeEncoder, type Instruction, type InstructionWithAccounts, type InstructionWithData, type ReadonlyAccount, type ReadonlyUint8Array, type TransactionSigner, type WritableAccount, type WritableSignerAccount } from '@solana/kit';
 import { GACHA_PARTY_ROOM_PROGRAM_ADDRESS } from '../programs';
 import { expectAddress, expectSome, getAccountMetaFactory, type ResolvedAccount } from '../shared';
 
@@ -17,16 +17,16 @@ export function getInitializeRoomDiscriminatorBytes() { return fixEncoderSize(ge
 export type InitializeRoomInstruction<TProgram extends string = typeof GACHA_PARTY_ROOM_PROGRAM_ADDRESS, TAccountRoom extends string | AccountMeta<string> = string, TAccountHost extends string | AccountMeta<string> = string, TAccountSystemProgram extends string | AccountMeta<string> = "11111111111111111111111111111111", TRemainingAccounts extends readonly AccountMeta<string>[] = []> =
 Instruction<TProgram> & InstructionWithData<ReadonlyUint8Array> & InstructionWithAccounts<[TAccountRoom extends string ? WritableAccount<TAccountRoom> : TAccountRoom, TAccountHost extends string ? WritableSignerAccount<TAccountHost> & AccountSignerMeta<TAccountHost> : TAccountHost, TAccountSystemProgram extends string ? ReadonlyAccount<TAccountSystemProgram> : TAccountSystemProgram, ...TRemainingAccounts]>;
 
-export type InitializeRoomInstructionData = { discriminator: ReadonlyUint8Array; roomId: ReadonlyUint8Array; maxPlayers: number;  };
+export type InitializeRoomInstructionData = { discriminator: ReadonlyUint8Array; roomId: ReadonlyUint8Array; maxPlayers: number; operator: Address;  };
 
-export type InitializeRoomInstructionDataArgs = { roomId: ReadonlyUint8Array; maxPlayers: number;  };
+export type InitializeRoomInstructionDataArgs = { roomId: ReadonlyUint8Array; maxPlayers: number; operator: Address;  };
 
 export function getInitializeRoomInstructionDataEncoder(): FixedSizeEncoder<InitializeRoomInstructionDataArgs> {
-    return transformEncoder(getStructEncoder([['discriminator', fixEncoderSize(getBytesEncoder(), 8)], ['roomId', fixEncoderSize(getBytesEncoder(), 8)], ['maxPlayers', getU8Encoder()]]), (value) => ({ ...value, discriminator: INITIALIZE_ROOM_DISCRIMINATOR }));
+    return transformEncoder(getStructEncoder([['discriminator', fixEncoderSize(getBytesEncoder(), 8)], ['roomId', fixEncoderSize(getBytesEncoder(), 8)], ['maxPlayers', getU8Encoder()], ['operator', getAddressEncoder()]]), (value) => ({ ...value, discriminator: INITIALIZE_ROOM_DISCRIMINATOR }));
 }
 
 export function getInitializeRoomInstructionDataDecoder(): FixedSizeDecoder<InitializeRoomInstructionData> {
-    return getStructDecoder([['discriminator', fixDecoderSize(getBytesDecoder(), 8)], ['roomId', fixDecoderSize(getBytesDecoder(), 8)], ['maxPlayers', getU8Decoder()]]);
+    return getStructDecoder([['discriminator', fixDecoderSize(getBytesDecoder(), 8)], ['roomId', fixDecoderSize(getBytesDecoder(), 8)], ['maxPlayers', getU8Decoder()], ['operator', getAddressDecoder()]]);
 }
 
 export function getInitializeRoomInstructionDataCodec(): FixedSizeCodec<InitializeRoomInstructionDataArgs, InitializeRoomInstructionData> {
@@ -39,6 +39,7 @@ host: TransactionSigner<TAccountHost>;
 systemProgram?: Address<TAccountSystemProgram>;
 roomId: InitializeRoomInstructionDataArgs["roomId"];
 maxPlayers: InitializeRoomInstructionDataArgs["maxPlayers"];
+operator: InitializeRoomInstructionDataArgs["operator"];
 }
 
 export async function getInitializeRoomInstructionAsync<TAccountRoom extends string, TAccountHost extends string, TAccountSystemProgram extends string, TProgramAddress extends Address = typeof GACHA_PARTY_ROOM_PROGRAM_ADDRESS>(input: InitializeRoomAsyncInput<TAccountRoom, TAccountHost, TAccountSystemProgram>, config?: { programAddress?: TProgramAddress } ): Promise<InitializeRoomInstruction<TProgramAddress, TAccountRoom, TAccountHost, TAccountSystemProgram>> {
@@ -72,6 +73,7 @@ host: TransactionSigner<TAccountHost>;
 systemProgram?: Address<TAccountSystemProgram>;
 roomId: InitializeRoomInstructionDataArgs["roomId"];
 maxPlayers: InitializeRoomInstructionDataArgs["maxPlayers"];
+operator: InitializeRoomInstructionDataArgs["operator"];
 }
 
 export function getInitializeRoomInstruction<TAccountRoom extends string, TAccountHost extends string, TAccountSystemProgram extends string, TProgramAddress extends Address = typeof GACHA_PARTY_ROOM_PROGRAM_ADDRESS>(input: InitializeRoomInput<TAccountRoom, TAccountHost, TAccountSystemProgram>, config?: { programAddress?: TProgramAddress } ): InitializeRoomInstruction<TProgramAddress, TAccountRoom, TAccountHost, TAccountSystemProgram> {

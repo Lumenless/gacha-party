@@ -1,12 +1,12 @@
 import type { Party } from "@/domain/party";
-import { walletActionSchema } from "@/domain/party";
+import { onchainContributionSyncSchema } from "@/domain/party";
 import type { RealtimePartyAdapter } from "@/integrations/contracts";
 import { DevnetEscrowClient } from "@/integrations/solana/escrow-client";
 import { CURRENT_ESCROW_ACCOUNT_VERSION } from "@/integrations/solana/program-versions";
 import { EscrowStatus } from "@/integrations/solana/program-client/src/generated";
 import { partyRepository } from "./party-repository";
-import { syncOnchainContributions } from "./party-room";
-import { assertMagicBlockJoin } from "./onchain-room";
+import { joinParty, syncOnchainContributions } from "./party-room";
+import { assertMagicBlockJoin, registerVerifiedMagicBlockParticipant } from "./onchain-room";
 import { registerPartyEscrowParticipant } from "./operator-escrow";
 
 let clientPromise: Promise<DevnetEscrowClient> | null = null;
@@ -43,7 +43,7 @@ async function requireParty(partyId: string) {
   return party;
 }
 
-async function verifiedEscrow(party: Party) {
+async function verifiedEscrow(party: Party, allowPendingDepositors = false) {
   const client = await escrowClient();
   const escrow = await client.fetchEscrow(party.hostWallet, party.id);
   if (!escrow) return null;
@@ -61,7 +61,8 @@ async function verifiedEscrow(party: Party) {
   if (escrow.maxPlayers !== party.maxPlayers) throw new Error("The escrow player limit does not match this party.");
   const roster = escrow.participants.slice(0, escrow.participantCount).map(String);
   const partyRoster = party.participants.map(({ wallet }) => wallet);
-  if (roster.length !== partyRoster.length || roster.some((wallet, index) => wallet !== partyRoster[index])) {
+  const partyRosterMatchesPrefix = partyRoster.every((wallet, index) => roster[index] === wallet);
+  if (!partyRosterMatchesPrefix || (!allowPendingDepositors && roster.length !== partyRoster.length)) {
     throw new Error("The escrow roster does not match this party.");
   }
   return { client, escrow, roster };
@@ -96,13 +97,32 @@ export async function syncVerifiedOnchainContributions(
   realtime: RealtimePartyAdapter,
 ) {
   if (!realFundsEnabled()) throw new Error("Real onchain funding is not enabled.");
-  const input = walletActionSchema.parse(rawInput);
-  const party = await requireParty(partyId);
-  if (!party.participants.some(({ wallet }) => wallet === input.wallet)) {
-    throw new Error("Only an escrow participant can synchronize funding.");
-  }
-  const verified = await verifiedEscrow(party);
+  const input = onchainContributionSyncSchema.parse(rawInput);
+  let party = await requireParty(partyId);
+  let verified = await verifiedEscrow(party, true);
   if (!verified) throw new Error("The host must initialize the onchain escrow first.");
+
+  if (!verified.roster.includes(input.wallet)) {
+    throw new Error("Only a verified escrow participant can synchronize funding.");
+  }
+
+  const pendingWallets = verified.roster.slice(party.participants.length);
+  for (const wallet of pendingWallets) {
+    const receipt = await verified.client.fetchReceipt(party.hostWallet, party.id, wallet);
+    if (!receipt || receipt.amount < 1_000_000n) {
+      throw new Error("A pending participant does not have a valid one-USDC deposit receipt.");
+    }
+    await registerVerifiedMagicBlockParticipant(partyId, wallet);
+    party = await joinParty(partyId, {
+      wallet,
+      displayName: wallet === input.wallet && input.displayName
+        ? input.displayName
+        : `Player ${wallet.slice(0, 4)}`,
+    }, realtime);
+  }
+
+  verified = await verifiedEscrow(party);
+  if (!verified) throw new Error("The party escrow disappeared during synchronization.");
 
   const receipts = await Promise.all(verified.roster.map(async (wallet) => ({
     wallet,

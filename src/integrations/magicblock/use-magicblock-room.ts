@@ -190,10 +190,12 @@ export function useMagicBlockRoom(party: Pick<Party, "id" | "hostWallet" | "maxP
 
   const initialize = useCallback(async () => {
     if (snapshot) return true;
+    const operator = process.env.NEXT_PUBLIC_GACHA_OPERATOR_ADDRESS?.trim() || party.hostWallet;
     return execute("initialize", async () => (await roomClient()).prepareInitializeAndDelegation(
       party.hostWallet,
       party.id,
       party.maxPlayers,
+      operator,
     ));
   }, [execute, party.hostWallet, party.id, party.maxPlayers, snapshot]);
 

@@ -10,10 +10,11 @@ const empty = address("11111111111111111111111111111111");
 const room = {
   address: address("9x3R3GGdE2T4Huhpnwqu88ghD9DCfxfuJ2QJSj9xngFg"),
   discriminator: new Uint8Array(8),
-  version: 3,
+  version: 4,
   bump: 1,
   roomId: new TextEncoder().encode("a1b2c3d4"),
   host,
+  operator: host,
   maxPlayers: 10,
   participantCount: 2,
   readyMask: 2,

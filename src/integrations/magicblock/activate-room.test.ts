@@ -99,6 +99,7 @@ describe("new party MagicBlock activation", () => {
       "host",
       "12345678",
       3,
+      "operator",
       [expect.objectContaining({ programAddress: "escrow-program" })],
     );
   });

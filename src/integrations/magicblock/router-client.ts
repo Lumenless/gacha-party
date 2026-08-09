@@ -31,6 +31,7 @@ import {
   getDelegateRoomInstruction,
   getInitializeRoomInstruction,
   getJoinRoomInstruction,
+  getJoinRoomByOperatorInstruction,
   getReactInstruction,
   getSetReadyInstruction,
   getStartOpeningInstruction,
@@ -40,8 +41,8 @@ import {
 
 export const MAGICBLOCK_DEVNET_ROUTER_URL = "https://devnet-router.magicblock.app";
 export const SOLANA_DEVNET_URL = "https://api.devnet.solana.com";
-export const MAGICBLOCK_DEVNET_ER_URL = "https://devnet-us.magicblock.app";
-export const MAGICBLOCK_DEVNET_VALIDATOR = address("MUS3hc9TCw4cGC12vHNoYcCGzJG1txjgQLZWVoeNHNd");
+export const MAGICBLOCK_DEVNET_ER_URL = "https://devnet-as.magicblock.app";
+export const MAGICBLOCK_DEVNET_VALIDATOR = address("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57");
 export const ROOM_SEED = new TextEncoder().encode("party-room");
 
 export type RoomAction = "initialize" | "join" | "ready" | "start" | "react" | "delegate" | "commit" | "undelegate";
@@ -88,7 +89,7 @@ export class MagicRouterRoomClient {
     return new MagicRouterRoomClient(await Connection.create(routerUrl));
   }
 
-  async prepareInitialize(host: string, partyId: string, maxPlayers: number) {
+  async prepareInitialize(host: string, partyId: string, maxPlayers: number, operator: string) {
     if (!Number.isInteger(maxPlayers) || maxPlayers < 2 || maxPlayers > 10) {
       throw new Error("A room must allow between 2 and 10 players.");
     }
@@ -99,6 +100,7 @@ export class MagicRouterRoomClient {
       host: createNoopSigner(hostAddress),
       roomId: encodeRoomId(partyId),
       maxPlayers,
+      operator: address(operator),
     }));
   }
 
@@ -106,6 +108,7 @@ export class MagicRouterRoomClient {
     host: string,
     partyId: string,
     maxPlayers: number,
+    operator: string,
     baseLayerInstructions: readonly Instruction[] = [],
   ) {
     if (!Number.isInteger(maxPlayers) || maxPlayers < 2 || maxPlayers > 10) {
@@ -118,6 +121,7 @@ export class MagicRouterRoomClient {
       host: createNoopSigner(hostAddress),
       roomId: encodeRoomId(partyId),
       maxPlayers,
+      operator: address(operator),
     });
     const delegation = await this.delegationInstruction(hostAddress, roomAddress, partyId, MAGICBLOCK_DEVNET_VALIDATOR);
     return this.prepare("initialize", roomAddress, hostAddress, [initialization, ...baseLayerInstructions, delegation]);
@@ -129,6 +133,16 @@ export class MagicRouterRoomClient {
     return this.prepare("join", roomAddress, playerAddress, getJoinRoomInstruction({
       room: roomAddress,
       player: createNoopSigner(playerAddress),
+    }));
+  }
+
+  async prepareOperatorJoin(operator: string, participant: string, host: string, partyId: string) {
+    const operatorAddress = address(operator);
+    const roomAddress = await findRoomAddress(host, partyId);
+    return this.prepare("join", roomAddress, operatorAddress, getJoinRoomByOperatorInstruction({
+      room: roomAddress,
+      operator: createNoopSigner(operatorAddress),
+      participant: address(participant),
     }));
   }
 

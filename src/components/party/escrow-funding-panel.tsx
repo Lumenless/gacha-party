@@ -181,8 +181,8 @@ export function EscrowFundingPanel({
 
       {!isParticipant && (
         <div className="mt-4 rounded-lg border bg-muted/40 p-4 text-sm">
-          <p className="font-semibold">Join to fund this vault</p>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">Your wallet is registered after its MagicBlock join is confirmed. You can deposit immediately afterward.</p>
+          <p className="font-semibold">Connect a wallet to deposit</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">Your first deposit automatically adds the wallet to this party.</p>
         </div>
       )}
 
@@ -195,7 +195,7 @@ export function EscrowFundingPanel({
                 <Input id="onchain-contribution" value={contribution} onChange={(event) => onContributionChange(event.target.value)} inputMode="decimal" autoComplete="off" placeholder={formatUsdc(remaining)} className="pr-24 font-mono tabular-nums" aria-describedby="onchain-contribution-help" required />
                 <span className="pointer-events-none absolute right-3 top-3 text-xs text-muted-foreground">{tokenLabel}</span>
               </div>
-              <p id="onchain-contribution-help" className="text-xs text-muted-foreground">Up to {formatUsdc(remaining)} {tokenLabel} remains. You can deposit once.</p>
+              <p id="onchain-contribution-help" className="text-xs text-muted-foreground">Minimum 1 {tokenLabel}. Up to {formatUsdc(remaining)} remains. You can deposit once.</p>
             </div>
             <Button type="submit" className="w-full sm:mt-7 sm:w-auto">Deposit</Button>
           </div>
