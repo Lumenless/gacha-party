@@ -17,6 +17,7 @@ import {
   type PreparedRoomTransaction,
 } from "../src/integrations/magicblock/router-client";
 import { DevnetEscrowClient } from "../src/integrations/solana/escrow-client";
+import { CURRENT_ESCROW_ACCOUNT_VERSION } from "../src/integrations/solana/program-versions";
 import { RoomPhase } from "../src/integrations/solana/program-client/src/generated";
 import { registerPartyEscrowParticipant } from "../src/server/operator-escrow";
 import type { Party } from "../src/domain/party";
@@ -80,7 +81,7 @@ async function main() {
     "the initialized room",
   );
   let escrow = await escrowClient.fetchEscrow(signer.address, partyId);
-  if (!escrow || escrow.version !== 5 || escrow.participantCount !== 1 || escrow.maxPlayers !== 10) {
+  if (!escrow || escrow.version !== CURRENT_ESCROW_ACCOUNT_VERSION || escrow.participantCount !== 1 || escrow.maxPlayers !== 10) {
     throw new Error("Initialized escrow did not decode to the expected ten-player roster.");
   }
   await signAndSubmit(await client.prepareJoin(secondSigner.address, signer.address, partyId), secondSigner);

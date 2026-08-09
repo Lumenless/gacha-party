@@ -5,6 +5,7 @@ import type { Signature } from "@solana/kit";
 import type { Party } from "@/domain/party";
 import { useWalletAuth } from "@/components/wallet/wallet-auth-provider";
 import {
+  MAGICBLOCK_DEVNET_ER_URL,
   MagicRouterRoomClient,
   type PreparedRoomTransaction,
   type RoomAccountSnapshot,
@@ -36,10 +37,28 @@ const idleTransaction: ChainTransactionState = {
 const PENDING_TRANSACTION_EXPIRY_MS = 5 * 60 * 1_000;
 
 let roomClientPromise: Promise<MagicRouterRoomClient> | null = null;
+let roomStateClientPromise: Promise<MagicRouterRoomClient> | null = null;
 
 function roomClient() {
   roomClientPromise ??= MagicRouterRoomClient.create();
   return roomClientPromise;
+}
+
+function roomStateClient() {
+  roomStateClientPromise ??= MagicRouterRoomClient.create(
+    process.env.NEXT_PUBLIC_MAGICBLOCK_ER_RPC_URL || MAGICBLOCK_DEVNET_ER_URL,
+  );
+  return roomStateClientPromise;
+}
+
+async function fetchCurrentRoom(hostWallet: string, partyId: string) {
+  try {
+    const delegated = await (await roomStateClient()).fetchRoom(hostWallet, partyId);
+    if (delegated) return delegated;
+  } catch {
+    // Before delegation (or during ER maintenance), the base-layer snapshot remains useful for activation and recovery.
+  }
+  return (await roomClient()).fetchRoom(hostWallet, partyId);
 }
 
 function transactionError(cause: unknown) {
@@ -66,7 +85,7 @@ export function useMagicBlockRoom(party: Pick<Party, "id" | "hostWallet" | "maxP
     setStatus("loading");
     setError(null);
     try {
-      const next = await (await roomClient()).fetchRoom(party.hostWallet, party.id);
+      const next = await fetchCurrentRoom(party.hostWallet, party.id);
       if (sequence !== refreshSequence.current) return next;
       setSnapshot(next);
       setStatus(next ? "active" : "missing");
@@ -135,7 +154,7 @@ export function useMagicBlockRoom(party: Pick<Party, "id" | "hostWallet" | "maxP
     setTransaction({ action: pending.action, stage: "recovering", signature: pending.signature, error: null });
     try {
       const client = await roomClient();
-      const current = await client.fetchRoom(party.hostWallet, party.id);
+      const current = await fetchCurrentRoom(party.hostWallet, party.id);
       const stateConfirmsTransaction = pending.action === "initialize"
         ? Boolean(current)
         : pending.action === "join"

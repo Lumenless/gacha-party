@@ -156,6 +156,7 @@ MagicBlock's eATA model is the later path if contribution balances themselves mu
 - Room schema v3 expands the fixed participant array from four to ten and replaces the eight-bit ready mask with a 16-bit mask. Escrow schema v5 expands its independent base-layer roster to ten.
 - The fixed upper bound keeps account rent, transaction decoding, and readiness checks deterministic while removing an unnecessary creation decision. Existing room v2 and escrow v4 accounts are layout-incompatible and must be replaced with newly created demo parties after deployment.
 - New room delegation targets MagicBlock's US devnet validator. During the schema upgrade, the EU devnet validator continued executing its cached v2 program and rewrote v3 accounts at old offsets; a fresh US delegation loaded v3 correctly and passed the two-wallet join, ready, countdown, and undelegation smoke.
+- While a room is delegated, participant, ready, and countdown verification reads the configured ER directly. The Magic Router remains the transaction preparation/submission boundary and the base-layer snapshot remains the activation/discovery fallback; it is not treated as current collaborative state before commit or undelegation.
 
 ## Milestone 4H decision — Vercel-safe application state
 

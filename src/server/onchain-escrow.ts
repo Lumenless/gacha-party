@@ -2,13 +2,12 @@ import type { Party } from "@/domain/party";
 import { walletActionSchema } from "@/domain/party";
 import type { RealtimePartyAdapter } from "@/integrations/contracts";
 import { DevnetEscrowClient } from "@/integrations/solana/escrow-client";
+import { CURRENT_ESCROW_ACCOUNT_VERSION } from "@/integrations/solana/program-versions";
 import { EscrowStatus } from "@/integrations/solana/program-client/src/generated";
 import { partyRepository } from "./party-repository";
 import { syncOnchainContributions } from "./party-room";
 import { assertMagicBlockJoin } from "./onchain-room";
 import { registerPartyEscrowParticipant } from "./operator-escrow";
-
-const CURRENT_ESCROW_VERSION = 5;
 
 let clientPromise: Promise<DevnetEscrowClient> | null = null;
 let clientMint: string | null = null;
@@ -48,7 +47,7 @@ async function verifiedEscrow(party: Party) {
   const client = await escrowClient();
   const escrow = await client.fetchEscrow(party.hostWallet, party.id);
   if (!escrow) return null;
-  if (escrow.version !== CURRENT_ESCROW_VERSION) {
+  if (escrow.version !== CURRENT_ESCROW_ACCOUNT_VERSION) {
     throw new Error("This escrow predates the current ten-player layout. Create a new demo party.");
   }
   if (String(escrow.host) !== party.hostWallet) throw new Error("The escrow host does not match this party.");

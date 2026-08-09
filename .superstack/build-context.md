@@ -38,5 +38,11 @@ build_status:
   tests_passing: true
   devnet_deployed: true
   program_id: BMKHnBM1oq1LyXFYyHq2gUdyugo1N8aGF6wtBnJNd6Nz
-  deployment_signature: 2Vtfrb1pZyfm8N5rL7rSe8GGgDkpB4pJnCPDqvrsPzecEUBqgduoAwsFu18Fti7cjAVms4nf4L1X3HTcKdiMdbtj
+  deployment_signature: 3T66Mhq2w6FSkUEx7XDx4eRYe85yuf2WQTT92rURRCX7AUSv89wTb9BrqPYPb6nUVFRonv72YVN9tJtgZA3ddk3j
+debug:
+  issues_resolved:
+    - error: "This room predates the current participant registration flow. Create a new demo party."
+      cause: Server verification still required room schema v2 after the ten-player v3 deployment, and collaborative reads used the Router's last base-layer snapshot instead of the active ER state.
+      fix: Centralized room/escrow account versions and changed active membership, readiness, recovery, and countdown reads to the configured MagicBlock ER endpoint.
+  last_debug_session: 2026-08-09T06:32:00+02:00
 ```

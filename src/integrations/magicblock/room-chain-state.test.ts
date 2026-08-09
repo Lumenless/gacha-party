@@ -10,18 +10,18 @@ const empty = address("11111111111111111111111111111111");
 const room = {
   address: address("9x3R3GGdE2T4Huhpnwqu88ghD9DCfxfuJ2QJSj9xngFg"),
   discriminator: new Uint8Array(8),
-  version: 2,
+  version: 3,
   bump: 1,
   roomId: new TextEncoder().encode("a1b2c3d4"),
   host,
-  maxPlayers: 4,
+  maxPlayers: 10,
   participantCount: 2,
   readyMask: 2,
   phase: RoomPhase.Lobby,
   countdownEndsAt: 0n,
   revision: 3n,
   lastActivityAt: 0n,
-  participants: [host, player, empty, empty],
+  participants: [host, player, empty, empty, empty, empty, empty, empty, empty, empty],
 } satisfies RoomAccountSnapshot;
 
 describe("MagicBlock room chain state", () => {

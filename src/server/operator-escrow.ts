@@ -25,16 +25,15 @@ import {
   getReleaseToOperatorInstruction,
 } from "@/integrations/solana/program-client/src/generated";
 import { DevnetEscrowClient } from "@/integrations/solana/escrow-client";
+import { CURRENT_ESCROW_ACCOUNT_VERSION } from "@/integrations/solana/program-versions";
 import { SOLANA_DEVNET_URL } from "@/integrations/magicblock/router-client";
 import { getGachaOperatorSigner } from "./gacha-operator";
-
-const CURRENT_ESCROW_VERSION = 5;
 
 export async function registerPartyEscrowParticipant(party: Party, participant: string): Promise<Signature | null> {
   const { client, connection, operator, mint } = await context();
   const escrow = await client.fetchEscrow(party.hostWallet, party.id);
   if (!escrow) throw new Error("The party escrow does not exist on devnet.");
-  if (escrow.version !== CURRENT_ESCROW_VERSION) {
+  if (escrow.version !== CURRENT_ESCROW_ACCOUNT_VERSION) {
     throw new Error("This escrow predates the current ten-player layout. Create a new demo party.");
   }
   if (String(escrow.operator) !== operator.address || String(escrow.mint) !== mint) {
