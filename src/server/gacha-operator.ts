@@ -110,7 +110,7 @@ export async function validateCollectorCryptPurchaseTransaction(
     throw new Error("Collector Crypt purchase must contain only one checked token transfer.");
   }
   const transfer = tokenInstructions[0];
-  if (!transfer.data || transfer.data.length !== 10 || !transfer.accounts || transfer.accounts.length !== 4) {
+  if (!transfer.data || transfer.data.length !== 10 || !transfer.accounts || ![4, 5].includes(transfer.accounts.length)) {
     throw new Error("Collector Crypt purchase contains a malformed token transfer.");
   }
   const amount = decodeLittleEndianU64(transfer.data.subarray(1, 9));
@@ -124,7 +124,11 @@ export async function validateCollectorCryptPurchaseTransaction(
     transfer.accounts[0]?.role !== AccountRole.WRITABLE ||
     transfer.accounts[1]?.role !== AccountRole.READONLY ||
     transfer.accounts[2]?.role !== AccountRole.WRITABLE ||
-    transfer.accounts[3]?.role !== AccountRole.WRITABLE_SIGNER
+    transfer.accounts[3]?.role !== AccountRole.WRITABLE_SIGNER ||
+    (transfer.accounts.length === 5 && (
+      transfer.accounts[4]?.address !== operator.address ||
+      transfer.accounts[4]?.role !== AccountRole.WRITABLE_SIGNER
+    ))
   ) {
     throw new Error("Collector Crypt purchase token accounts have unexpected permissions.");
   }

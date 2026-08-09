@@ -74,6 +74,53 @@ describe("devnet operator signer", () => {
     })).resolves.toBeUndefined();
   });
 
+  it("accepts Collector Crypt's duplicate operator authority account", async () => {
+    const operator = await configureOperator();
+    const server = await randomSigner();
+    const mint = await randomSigner();
+    const destination = await randomSigner();
+    const memo = "cc-duplicate-authority";
+    const amountBaseUnits = 50_000_000n;
+    const transactionBase64 = await collectorPurchase({
+      operator,
+      server,
+      mint,
+      destination,
+      memo,
+      amountBaseUnits,
+      duplicateAuthority: true,
+    });
+
+    await expect(validateCollectorCryptPurchaseTransaction(transactionBase64, {
+      memo,
+      mint: mint.address,
+      amountBaseUnits,
+    })).resolves.toBeUndefined();
+  });
+
+  it("rejects a fifth token account that is not the operator authority", async () => {
+    const operator = await configureOperator();
+    const server = await randomSigner();
+    const mint = await randomSigner();
+    const destination = await randomSigner();
+    const unexpectedAccount = await randomSigner();
+    const transactionBase64 = await collectorPurchase({
+      operator,
+      server,
+      mint,
+      destination,
+      memo: "cc-unexpected-signer",
+      amountBaseUnits: 50_000_000n,
+      additionalAccount: unexpectedAccount,
+    });
+
+    await expect(validateCollectorCryptPurchaseTransaction(transactionBase64, {
+      memo: "cc-unexpected-signer",
+      mint: mint.address,
+      amountBaseUnits: 50_000_000n,
+    })).rejects.toThrow("unexpected permissions");
+  });
+
   it("rejects a prepared purchase whose payment does not match the pack price", async () => {
     const operator = await configureOperator();
     const server = await randomSigner();
@@ -119,6 +166,8 @@ async function collectorPurchase(input: {
   destination: KeyPairSigner;
   memo: string;
   amountBaseUnits: bigint;
+  duplicateAuthority?: boolean;
+  additionalAccount?: KeyPairSigner;
 }): Promise<string> {
   const [source] = await findAssociatedTokenPda({
     owner: input.operator.address,
@@ -130,7 +179,7 @@ async function collectorPurchase(input: {
     accounts: [{ address: input.server.address, role: AccountRole.READONLY_SIGNER }],
     data: new TextEncoder().encode(`${input.memo}:open`),
   };
-  const transfer = getTransferCheckedInstruction({
+  const canonicalTransfer = getTransferCheckedInstruction({
     source,
     mint: input.mint.address,
     destination: input.destination.address,
@@ -138,6 +187,14 @@ async function collectorPurchase(input: {
     amount: input.amountBaseUnits,
     decimals: 6,
   });
+  const extraAccount = input.duplicateAuthority
+    ? { address: input.operator.address, role: AccountRole.WRITABLE_SIGNER }
+    : input.additionalAccount
+      ? { address: input.additionalAccount.address, role: AccountRole.WRITABLE }
+      : undefined;
+  const transfer: Instruction = extraAccount
+    ? { ...canonicalTransfer, accounts: [...(canonicalTransfer.accounts ?? []), extraAccount] }
+    : canonicalTransfer;
   const message = pipe(
     createTransactionMessage({ version: "legacy" }),
     (value) => setTransactionMessageFeePayer(input.operator.address, value),

@@ -1,5 +1,12 @@
 import { loadEnvFile } from "node:process";
-import { createSolanaRpc, lamports } from "@solana/kit";
+import {
+  createSolanaRpc,
+  decompileTransactionMessage,
+  getBase64Encoder,
+  getCompiledTransactionMessageDecoder,
+  getTransactionDecoder,
+  lamports,
+} from "@solana/kit";
 import { findAssociatedTokenPda, TOKEN_PROGRAM_ADDRESS } from "@solana-program/token";
 import { address } from "@solana/kit";
 import { RealCollectorCryptAdapter } from "../src/integrations/collector-crypt/real";
@@ -49,6 +56,20 @@ async function main() {
     cardRecipient: operator.address,
     packCode: pack.code,
   });
+  if (process.argv.includes("--inspect")) {
+    const transaction = getTransactionDecoder().decode(getBase64Encoder().encode(prepared.transactionBase64));
+    const compiled = getCompiledTransactionMessageDecoder().decode(transaction.messageBytes);
+    const message = decompileTransactionMessage(compiled);
+    console.log("Prepared instruction shapes:");
+    for (const instruction of message.instructions) {
+      console.log(JSON.stringify({
+        program: instruction.programAddress,
+        dataLength: instruction.data?.length ?? 0,
+        discriminator: instruction.data?.[0] ?? null,
+        accounts: instruction.accounts?.map((account) => ({ address: account.address, role: account.role })) ?? [],
+      }));
+    }
+  }
   await validateCollectorCryptPurchaseTransaction(prepared.transactionBase64, {
     memo: prepared.memo,
     mint,

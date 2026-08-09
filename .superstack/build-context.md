@@ -57,5 +57,8 @@ debug:
     - error: "JoinRoomByOperator simulation returned AlreadyJoined after the second user's deposit landed."
       cause: Deposit confirmation and receipt recovery started concurrent contribution-sync requests. One registered the MagicBlock participant while the other simulated from a stale pre-join read and surfaced the expected AlreadyJoined guard as a failure.
       fix: Let receipt recovery own post-deposit synchronization, reconcile concurrent party joins idempotently, and treat the exact expected MagicBlock roster as a successful transaction postcondition.
-  last_debug_session: 2026-08-09T13:00:00+02:00
+    - error: "Collector Crypt purchase contains a malformed token transfer."
+      cause: Collector Crypt's current devnet TransferChecked instruction repeats the already-signing operator authority as a fifth account, while the local purchase validator accepted only the canonical four-account encoding.
+      fix: Accept only the canonical encoding or Collector Crypt's exact duplicate-operator variant, retain all amount, mint, source, destination, memo, signature, and program checks, and cover both the live variant and an unexpected fifth account with regression tests.
+  last_debug_session: 2026-08-09T11:23:21+02:00
 ```
