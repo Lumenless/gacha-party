@@ -6,6 +6,7 @@ export const dynamic = "force-dynamic";
 
 export default async function NewPartyPage() {
   const packs = await collectorCryptAdapter().listPacks();
+  const availablePacks = packs.filter(({ isOpen }) => isOpen);
   const realFunds = process.env.NEXT_PUBLIC_WALLET_MODE === "wallet" && process.env.NEXT_PUBLIC_FUNDS_MODE === "solana";
   return (
     <main className="mx-auto w-full max-w-7xl px-4 pb-12 pt-5 md:px-6 lg:px-8">
@@ -33,7 +34,7 @@ export default async function NewPartyPage() {
         </p>
       </div>
 
-      <CreatePartyForm exactPackPrice={realFunds} packs={packs.map((pack) => ({ ...pack, priceBaseUnits: pack.priceBaseUnits.toString() }))} />
+      <CreatePartyForm exactPackPrice={realFunds} packs={availablePacks.map((pack) => ({ ...pack, priceBaseUnits: pack.priceBaseUnits.toString() }))} />
     </main>
   );
 }

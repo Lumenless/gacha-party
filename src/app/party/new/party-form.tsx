@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowRight, Check, Coins, RadioTower, ShieldCheck, Users, WalletCards } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { createPartySchema, MAX_PARTY_PLAYERS, MIN_PARTY_PLAYERS, type CreatePartyInput } from "@/domain/party";
 import { formatUsdc, parseUsdc } from "@/domain/money";
@@ -40,11 +40,12 @@ export function CreatePartyForm({ packs, exactPackPrice = false }: { packs: Pack
   const router = useRouter();
   const walletAuth = useWalletAuth();
   const { error: showError } = useToast();
-  const defaultPack = packs.find(({ code, isOpen }) => code === "pokemon_50" && isOpen) ?? packs.find(({ isOpen }) => isOpen);
+  const availablePacks = useMemo(() => packs.filter(({ isOpen }) => isOpen), [packs]);
+  const defaultPack = availablePacks.find(({ code }) => code === "pokemon_50") ?? availablePacks[0];
   const activationRequired = walletAuth.enabled && process.env.NEXT_PUBLIC_ROOM_STATE_MODE === "magicblock";
   const [createdPartyId, setCreatedPartyId] = useState<string | null>(null);
   const [activationStage, setActivationStage] = useState<RoomActivationStage | "creating" | "error" | null>(null);
-  const orderedPacks = [...packs].sort((left, right) => {
+  const orderedPacks = [...availablePacks].sort((left, right) => {
     if (left.code === defaultPack?.code) return -1;
     if (right.code === defaultPack?.code) return 1;
     const leftPrice = BigInt(left.priceBaseUnits);
@@ -70,12 +71,12 @@ export function CreatePartyForm({ packs, exactPackPrice = false }: { packs: Pack
   });
 
   const selectedPack = useWatch({ control, name: "packCode" });
-  const activePack = packs.find(({ code }) => code === selectedPack) ?? defaultPack ?? packs[0];
+  const activePack = availablePacks.find(({ code }) => code === selectedPack) ?? defaultPack;
   useEffect(() => {
     if (!exactPackPrice) return;
-    const pack = packs.find(({ code }) => code === selectedPack);
+    const pack = availablePacks.find(({ code }) => code === selectedPack);
     if (pack) setValue("fundingTarget", formatUsdc(BigInt(pack.priceBaseUnits)), { shouldValidate: true });
-  }, [exactPackPrice, packs, selectedPack, setValue]);
+  }, [availablePacks, exactPackPrice, selectedPack, setValue]);
 
   async function onSubmit(values: CreatePartyInput) {
     clearErrors("root");

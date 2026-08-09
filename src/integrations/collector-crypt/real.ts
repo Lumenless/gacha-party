@@ -15,6 +15,13 @@ const attributeSchema = z.object({
   value: z.union([z.string(), z.number()]).optional(),
 }).passthrough();
 
+const machineStockSchema = z.object({
+  common: z.number().int().nonnegative(),
+  uncommon: z.number().int().nonnegative(),
+  rare: z.number().int().nonnegative(),
+  epic: z.number().int().nonnegative(),
+});
+
 const machinesSchema = z.object({
   machines: z.array(z.object({
     code: z.string().min(1),
@@ -25,7 +32,8 @@ const machinesSchema = z.object({
     price: z.number().nonnegative(),
     instantBuyback: z.number().int().min(0).max(100),
     public: z.boolean(),
-    stock: z.record(z.string(), z.number()).optional(),
+    lowThreshold: z.number().int().nonnegative().optional(),
+    stock: machineStockSchema.optional(),
   }).passthrough()),
 });
 
@@ -157,18 +165,24 @@ export class RealCollectorCryptAdapter implements CollectorCryptAdapter {
     const statusByCode = new Map(status.gachas.map((machine) => [machine.code, machine]));
     return data.machines
       .filter((machine) => machine.public)
-      .map((machine) => ({
-        code: machine.code,
-        name: machine.name,
-        shortName: machine.shortName,
-        imageUrl: absoluteAssetUrl(machine.thumbnailUrl || machine.image, this.baseUrl),
-        priceBaseUnits: parseUsdc(decimalUsdc(machine.price)),
-        buybackPercent: machine.instantBuyback,
-        isOpen: status.machineStatus === "running" &&
-          statusByCode.get(machine.code)?.status === "open" &&
-          statusByCode.get(machine.code)?.isOpen !== false &&
-          (!machine.stock || (Object.keys(machine.stock).length > 0 && Object.values(machine.stock).every((count) => count > 0))),
-      }));
+      .map((machine) => {
+        const lowThreshold = machine.lowThreshold;
+        const safeInventory = lowThreshold !== undefined &&
+          machine.stock !== undefined &&
+          Object.values(machine.stock).every((count) => count > lowThreshold);
+        return {
+          code: machine.code,
+          name: machine.name,
+          shortName: machine.shortName,
+          imageUrl: absoluteAssetUrl(machine.thumbnailUrl || machine.image, this.baseUrl),
+          priceBaseUnits: parseUsdc(decimalUsdc(machine.price)),
+          buybackPercent: machine.instantBuyback,
+          isOpen: status.machineStatus === "running" &&
+            statusByCode.get(machine.code)?.status === "open" &&
+            statusByCode.get(machine.code)?.isOpen !== false &&
+            safeInventory,
+        };
+      });
   }
 
   async preparePurchase(input: {

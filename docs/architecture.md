@@ -170,7 +170,8 @@ MagicBlock's eATA model is the later path if contribution balances themselves mu
 ## Milestone 5 decision — custodial Collector Crypt devnet execution
 
 - Collector Crypt real mode is devnet-only and uses `https://dev-gacha.collectorcrypt.com`. An API key is optional and sent only when configured for partner attribution.
-- The escrow stores one immutable operator and enforces `FUNDING → LOCKED → RELEASED → PURCHASED → SETTLED`. The host authorizes the irreversible lock; the operator authorizes release and all later audit transitions.
+- Pack discovery fails closed: the UI only receives public machines whose service and machine statuses are open, whose four stock tiers are present, and whose tier counts are all above Collector Crypt's live `lowThreshold`. Unavailable and incomplete machines are hidden rather than shown disabled; purchase preparation remains the definitive last-moment check.
+- The escrow stores one immutable operator and enforces `FUNDING → LOCKED → RELEASED → PURCHASED → SETTLED`. The exact-target deposit locks atomically; the operator authorizes release and all later audit transitions.
 - Collector purchase and settlement stages are persisted in Supabase before external submission. Reusing the same signed Collector transaction is safe, while recent-operation leases reject concurrent serverless attempts.
 - Before the operator signs a purchase, the app verifies Collector Crypt's server signature plus an exact memo, pack price, six-decimal devnet USDC mint, operator source ATA, fee payer, and program allowlist. Any changed or extra instruction fails closed.
 - `altPlayerAddress` sends the NFT to the dedicated operator. The UI labels this honestly as a custodial devnet demo.

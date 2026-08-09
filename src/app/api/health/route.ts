@@ -40,7 +40,7 @@ export async function GET() {
   } catch { /* reported below */ }
   try { program = await checkProgram(); } catch { /* reported below */ }
   if (collectorMode === "real") {
-    try { collectorCrypt = (await collectorCryptAdapter().listPacks()).length > 0; } catch { /* reported below */ }
+    try { collectorCrypt = (await collectorCryptAdapter().listPacks()).some(({ isOpen }) => isOpen); } catch { /* reported below */ }
   }
   const ready = configIssues.length === 0 && database && program && (collectorMode !== "real" || collectorCrypt);
   return NextResponse.json({

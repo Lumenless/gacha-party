@@ -22,7 +22,8 @@ describe("RealCollectorCryptAdapter", () => {
               price: 50,
               instantBuyback: 85,
               public: true,
-              stock: { common: 1, uncommon: 1, rare: 1, epic: 1 },
+              lowThreshold: 20,
+              stock: { common: 21, uncommon: 21, rare: 21, epic: 21 },
             }],
           },
     ), { status: 200 }));
@@ -88,7 +89,52 @@ describe("RealCollectorCryptAdapter", () => {
               price: 25,
               instantBuyback: 85,
               public: true,
+              lowThreshold: 0,
               stock: { common: 10, uncommon: 0, rare: 3, epic: 1 },
+            }],
+          },
+    ), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const [pack] = await new RealCollectorCryptAdapter().listPacks();
+    expect(pack.isOpen).toBe(false);
+  });
+
+  it("does not advertise a machine at or below its low-stock threshold", async () => {
+    const fetchMock = vi.fn().mockImplementation(async (url: string) => new Response(JSON.stringify(
+      url.endsWith("/api/status")
+        ? { machineStatus: "running", gachas: [{ code: "pokemon_25", status: "open", isOpen: true }] }
+        : {
+            machines: [{
+              code: "pokemon_25",
+              name: "Starter Pokémon Gacha Pack",
+              shortName: "PKMN 25",
+              price: 25,
+              instantBuyback: 85,
+              public: true,
+              lowThreshold: 20,
+              stock: { common: 19, uncommon: 735, rare: 2096, epic: 89 },
+            }],
+          },
+    ), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const [pack] = await new RealCollectorCryptAdapter().listPacks();
+    expect(pack.isOpen).toBe(false);
+  });
+
+  it("fails closed when machine inventory safety metadata is missing", async () => {
+    const fetchMock = vi.fn().mockImplementation(async (url: string) => new Response(JSON.stringify(
+      url.endsWith("/api/status")
+        ? { machineStatus: "running", gachas: [{ code: "pokemon_50", status: "open", isOpen: true }] }
+        : {
+            machines: [{
+              code: "pokemon_50",
+              name: "Elite Pokémon Gacha Pack",
+              shortName: "PKMN 50",
+              price: 50,
+              instantBuyback: 85,
+              public: true,
             }],
           },
     ), { status: 200 }));
