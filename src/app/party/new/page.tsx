@@ -14,7 +14,7 @@ export default async function NewPartyPage() {
           <RadioTower className="size-4" aria-hidden="true" /> New party
         </span>
         <span className="inline-flex min-h-10 shrink-0 items-center gap-2 px-4 text-sm text-muted-foreground">
-          <Users className="size-4" aria-hidden="true" /> 2–10 players
+          <Users className="size-4" aria-hidden="true" /> 1–10 players
         </span>
         <span className="inline-flex min-h-10 shrink-0 items-center gap-2 px-4 text-sm text-muted-foreground">
           <ShieldCheck className="size-4" aria-hidden="true" /> Majority vote

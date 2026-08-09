@@ -41,7 +41,7 @@ export function transitionParty(from: PartyStatus, to: PartyStatus): PartyStatus
   return to;
 }
 
-export const MIN_PARTY_PLAYERS = 2;
+export const MIN_PARTY_PLAYERS = 1;
 export const MAX_PARTY_PLAYERS = 10;
 
 export const createPartySchema = z.object({

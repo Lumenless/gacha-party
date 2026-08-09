@@ -212,10 +212,6 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
     : mirroredFunded;
   const target = BigInt(party.fundingTargetBaseUnits);
   const remaining = target - funded;
-  const requiresFriendDeposit = identity?.wallet === party.hostWallet && (escrow.snapshot?.participantCount ?? party.participants.length) < 2;
-  const maxContribution = requiresFriendDeposit
-    ? remaining > MIN_CONTRIBUTION_BASE_UNITS ? remaining - MIN_CONTRIBUTION_BASE_UNITS : 0n
-    : remaining;
   const percentHundredths = target === 0n ? 0n : (funded * 10_000n) / target;
   const percent = Number(percentHundredths) / 100;
   const effectiveFundingDeadline = escrow.enabled && escrow.snapshot
@@ -429,7 +425,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
 
   async function startOpening() {
     if (!identity) return;
-    if (chainRoom.enabled && !chainRoom.isOpening) {
+    if (chainRoom.enabled && party.participants.length > 1 && !chainRoom.isOpening) {
       if (chainRoom.status !== "active") {
         showError("The MagicBlock room is not active yet.");
         return;
@@ -480,11 +476,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
     try {
       const amount = parseUsdc(contribution);
       if (amount < MIN_CONTRIBUTION_BASE_UNITS) throw new Error("Contribution must be at least 1 USDC.");
-      if (amount > maxContribution) {
-        throw new Error(requiresFriendDeposit
-          ? `Leave at least 1 ${fundsTokenLabel} for another wallet so the vault can lock with two participants.`
-          : "Contribution exceeds the remaining funding target.");
-      }
+      if (amount > remaining) throw new Error("Contribution exceeds the remaining funding target.");
       if (!escrow.tokenAccount || amount > escrow.tokenAccount.amount) {
         throw new Error(`This wallet does not have enough ${fundsTokenLabel}.`);
       }
@@ -769,8 +761,6 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                 tokenLabel={fundsTokenLabel}
                 contribution={contribution}
                 remaining={remaining}
-                maxContribution={maxContribution}
-                requiresFriendDeposit={requiresFriendDeposit}
                 deadlinePassed={deadlinePassed}
                 lockedRecoveryPassed={lockedRecoveryPassed}
                 lockedRecoveryLabel={lockedRecoveryLabel}

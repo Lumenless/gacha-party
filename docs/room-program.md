@@ -9,7 +9,7 @@ Each room is a PDA derived from `party-room`, the host wallet, and an eight-byte
 - `initialize_room`: creates a room with the host as participant zero.
 - `join_room`: rejects duplicate wallets and full rooms.
 - `set_ready`: updates one participant’s ready bit.
-- `start_opening`: host-only, one-shot ER transition after at least two players joined and every current participant is ready; freezes membership and readiness and records the shared countdown timestamp.
+- `start_opening`: host-only, one-shot ER transition after every current participant is ready; a ready host may open alone. The transition freezes membership and readiness and records the shared countdown timestamp.
 - `react`: emits a compact reaction event without growing account storage.
 - `delegate_room`: host-authorized base-layer delegation with an optional explicit ER validator.
 - `commit_room`: host-authorized ER commit to the base layer.
@@ -34,12 +34,12 @@ The safe expiry path requires each available voter to release their own vote; a 
 
 The escrow PDA is derived from `party-escrow`, the host wallet, and the same eight-byte room identifier. Its bounded roster is independent from the delegated room so token custody never depends on deserializing an account currently owned by MagicBlock's delegation program.
 
-- `initialize_escrow`: creates the vault immediately with the host as participant one, a 2–10 player limit, six-decimal SPL mint, integer funding target, immutable Unix deadline, and fixed operator.
+- `initialize_escrow`: creates the vault immediately with the host as participant one, capacity for up to ten players, a six-decimal SPL mint, integer funding target, immutable Unix deadline, and fixed operator.
 - `register_escrow_participant`: retained as an idempotent operator recovery path for legacy/manual registration.
 - `deposit_contribution`: atomically registers a first-time signer, accepts one checked deposit of at least one USDC, rejects target overfunding, and creates a wallet-specific receipt PDA.
-- `refund_contribution`: returns the entire recorded amount while escrow is unlocked, including after deadline cancellation, and closes the receipt.
-- `cancel_expired_escrow`: permissionlessly changes an unlocked escrow to `CANCELLED` only after Solana `Clock` passes its deadline.
-- `lock_escrow`: host-authorized, fully-funded transition requiring at least two participants and an open deadline that permanently disables roster changes, deposits, and refunds.
+- `refund_contribution`: returns the entire recorded amount after cancellation and closes the receipt.
+- `cancel_expired_escrow`: permissionlessly changes an underfunded escrow to `CANCELLED` after its deadline, or recovers a locked-but-unreleased escrow after ten minutes.
+- The final exact-target deposit atomically transitions the escrow to `LOCKED`, including when the host is its only contributor.
 - `release_to_operator`: operator-authorized, one-time transfer of the exact target to the fixed operator token account.
 - `mark_purchased`: records the confirmed Collector Crypt signature and memo hash.
 - `mark_settled`: final replay guard, executed atomically with proportional participant payouts.
@@ -73,11 +73,13 @@ The program is deployed at [`BMKHnBM1oq1LyXFYyHq2gUdyugo1N8aGF6wtBnJNd6Nz`](http
 
 `MagicRouterRoomClient` prepares unsigned versioned transactions with a Router-selected blockhash. Wallet Standard signs the serialized transaction explicitly, then the client submits and confirms those exact signed bytes through the Magic Router. The app never hands a room transaction to a wallet until a user action requests it.
 
-The reproducible devnet smoke command simulates and submits a combined initialize-and-delegate transaction, decodes the room, applies a ready update and opening transition on the ER, verifies the authoritative countdown, and undelegates it:
+The reproducible devnet smoke command simulates and submits a combined initialize-and-delegate transaction, verifies the configured escrow and MagicBlock room, exercises the selected room flow, and undelegates it:
 
 ```bash
 pnpm smoke:program:devnet
 ```
+
+For a solo party, the smoke proves initialization, a host-only exact-target deposit and automatic lock, the host ready bit on MagicBlock, and undelegation. The product then uses its server countdown because no remote participant needs synchronization. Multiplayer rooms continue to require the ER-authoritative opening transition.
 
 The local escrow smoke creates a real six-decimal SPL test mint, deposits integer tokens, waits for the immutable deadline, atomically cancels and refunds, then verifies zero accounted vault balance, `CANCELLED` status, and a closed contribution receipt.
 
@@ -102,3 +104,5 @@ The fixed 2–10 player upgrade deployed on 2026-08-08 with signature [`3T66Mhq2
 The deposit-driven membership upgrade deployed on 2026-08-09 with signature [`39nhwH8ABAaqrdYejN5aJHR4mFVf9CKjhNfZ1oL4qpV4TXkAphA5AamV3JHxKMc8ejVmFqZydnkFrrDTxcz2K82P`](https://explorer.solana.com/tx/39nhwH8ABAaqrdYejN5aJHR4mFVf9CKjhNfZ1oL4qpV4TXkAphA5AamV3JHxKMc8ejVmFqZydnkFrrDTxcz2K82P?cluster=devnet). Room v4 stores the trusted operator; escrow v6 atomically registers first-time depositors. The verified Asia-ER smoke used room `6XzNGCCW9oRtvgoRuyB5csG2pdbPMSuvVTzzQjQhzuBr` and escrow `5MWB6iGn6r9Hq2bzqJoNBSj46dnZLZbVdd38h98Ngd` (party ID `127763b6`), then completed operator membership, both ready bits, countdown, and undelegation. Existing room v3 and escrow v5 parties must be recreated for this flow.
 
 The automatic-lock escrow v7 upgrade deployed on 2026-08-09 with signature [`669ptiZVwSP7dtGLxNZTJRrQGf3GajeqWSgVfaftXbZkN2iRbevKuKz4wWTDPWciyE4srwDAFTQBun2P8jvcoWsR`](https://explorer.solana.com/tx/669ptiZVwSP7dtGLxNZTJRrQGf3GajeqWSgVfaftXbZkN2iRbevKuKz4wWTDPWciyE4srwDAFTQBun2P8jvcoWsR?cluster=devnet). The final deposit now atomically locks the vault, refunds require cancellation, and a locked-but-unreleased vault becomes recoverable after ten minutes. The two-wallet Asia-ER smoke used room `9Kx8SbvfKouRas9x9Nx9AxLiAVBCR3WoqRpx5DtPWriA` and escrow `AiyQ24BDSx5wyVGXo2P593eybzfbKBJ1W4TURnAhstZH` (party ID `256e3c04`), proved the exact-target deposit lock, synchronized operator membership, set both ready bits, started the countdown, and undelegated successfully. Existing escrow v6 parties must be recreated; room v4 remains compatible.
+
+The solo-party logic upgrade deployed on 2026-08-09 with signature [`4u8NmMsVZmZe97gw2PTA5ghgeCFCTCnxbs3Gyq3PhfQVgga7ienE6qwiC3hrVHWkcUVV3ej2LcSBbyzZSYVvkzFM`](https://explorer.solana.com/tx/4u8NmMsVZmZe97gw2PTA5ghgeCFCTCnxbs3Gyq3PhfQVgga7ienE6qwiC3hrVHWkcUVV3ej2LcSBbyzZSYVvkzFM?cluster=devnet). It changes no account layouts: a single host may fill and lock escrow and the room program permits a ready host to open alone. The public Asia ER still served its cached previous binary immediately after the base-layer upgrade, so the product deliberately uses the server countdown for one-wallet rooms while multiplayer remains ER-authoritative. The passing solo smoke used room `FRdMdptEqjBq5XEYwL5D9Nafj1bBVgXbpN9BUFPg3gws` and escrow `768uUEF8Apjktkozd5Hpe3vWB9FvvXwAnhtys6zV8S4u` (party ID `13a54b3a`) and verified full host funding, automatic lock, MagicBlock readiness, countdown handoff, and undelegation.

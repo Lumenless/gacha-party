@@ -61,6 +61,9 @@ export async function verifiedMagicBlockCountdown(partyId: string): Promise<numb
 
   const party = await partyRepository.get(partyId);
   if (!party) throw new Error("Party not found.");
+  // A solo room has no remote clients to synchronize. Avoid making its opening
+  // depend on a public ER validator refreshing its cached program binary.
+  if (party.participants.length === 1) return undefined;
   const room = await (await roomStateClient()).fetchRoom(party.hostWallet, party.id);
   if (!room) throw new Error("The host must activate the MagicBlock room first.");
   if (room.version !== CURRENT_ROOM_ACCOUNT_VERSION) {

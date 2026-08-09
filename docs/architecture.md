@@ -91,7 +91,7 @@ Contribution amounts, the funding-complete gate, custody, votes, and settlement 
 - Chain and server updates are deliberately sequenced: onchain confirmation happens first, then the existing application mutation. Retries inspect the room PDA and skip an already-completed chain step, preventing duplicate join/ready transactions after a server or network failure.
 - Shareable room URLs use the MagicBlock social-room PDA as their canonical identifier. The server decodes the PDA's stored eight-byte room ID, verifies its host and derivation, and then loads product state from Supabase; legacy short-ID links redirect to the canonical onchain URL.
 - The home-page party list is wallet-session authenticated and returns summaries only. Membership is queried from Supabase's JSONB participant roster; ongoing rooms sort first, followed by completed and cancelled/expired rooms, newest activity first within each group.
-- The SSE room remains the product-state source for funding, reveal, and settlement. The MagicBlock PDA proves public wallet membership, ready state, and the authoritative one-shot opening timestamp.
+- The SSE room remains the product-state source for funding, reveal, and settlement. The MagicBlock PDA proves public wallet membership and ready state. Multiplayer rooms also require its authoritative one-shot opening timestamp; a one-wallet room uses the server countdown because there is no second client to synchronize.
 
 ## Milestone 6A decision — ER-authoritative opening
 
@@ -115,7 +115,7 @@ MagicBlock's eATA model is the later path if contribution balances themselves mu
 - `NEXT_PUBLIC_FUNDS_MODE=mock` remains the default. Real funding requires `wallet` identity mode plus matching, non-empty `NEXT_PUBLIC_USDC_MINT` and server-only `USDC_MINT` values.
 - Party creation initializes the MagicBlock room and the base-layer escrow in the same host-signed transaction. The host is participant one and can deposit immediately.
 - Escrow v7 uses a bounded dynamic roster and an immutable funding deadline. The user's first deposit atomically registers the signing wallet and moves its checked token amount. After confirmation, the server verifies the receipt and the trusted operator mirrors that wallet into room v4 on MagicBlock; interrupted mirror steps retry without another wallet transaction.
-- Contributions are committed while funding is open. The deposit that reaches the exact target atomically changes the escrow to `LOCKED`; there is no separate host lock instruction or race window between full funding and lock. The final deposit requires at least two registered wallets.
+- Contributions are committed while funding is open. The deposit that reaches the exact target atomically changes the escrow to `LOCKED`; there is no separate host lock instruction or race window between full funding and lock. A host may fund and open the complete pack alone.
 - If the target is missed, anyone may change the escrow from `FUNDING` to `CANCELLED` after the deadline. If a fully funded vault remains `LOCKED` and unreleased for more than ten minutes, anyone may also cancel it as an emergency recovery. Each receipt owner can refund their complete integer contribution only after cancellation.
 - A deadline cancellation and the caller's refund can share one atomic transaction. Refund preparation idempotently recreates the contributor's associated token account if it was closed, preventing a recoverable account-lifecycle issue from stranding funds.
 - Submitted funding signatures are persisted per party and wallet. After reload or confirmation timeout, the client verifies the escrow/receipt postcondition before relying on signature history; it blocks duplicate signing until confirmation, explicit failure, or blockhash expiry without matching state.
@@ -150,9 +150,9 @@ MagicBlock's eATA model is the later path if contribution balances themselves mu
 - A rejected or failed activation keeps the reserved invite ID and retries that same room instead of creating duplicate parties. No token approval or asset transfer occurs during activation.
 - The create surface uses a pack-detail composition: horizontally browsable live inventory, a dominant collectible preview, and a compact sticky party-action panel. This borrows the information hierarchy of strong gacha storefronts while keeping original Gacha Party styling, multiplayer controls, and custody disclosures.
 
-## Fixed 2–10 player decision
+## Fixed 1–10 player decision
 
-- Party creators no longer choose a room size. Every new party accepts up to ten unique wallets and requires at least two participants before the opening transition or escrow lock.
+- Party creators no longer choose a room size. Every new party accepts up to ten unique wallets, while the host may also fund, ready, and open a pack alone.
 - Room schema v4 keeps the fixed ten-player roster and adds the trusted operator used to mirror verified depositors. Escrow schema v6 makes a first deposit atomically append its signer to the ten-player roster.
 - The fixed upper bound keeps account rent, transaction decoding, and readiness checks deterministic while removing an unnecessary creation decision. Existing room v2 and escrow v4 accounts are layout-incompatible and must be replaced with newly created demo parties after deployment.
 - New room delegation targets MagicBlock's Asia devnet validator. During successive schema upgrades, EU and then US retained older cached program binaries; a fresh Asia delegation loaded room v4 correctly and passed atomic deposit registration, operator membership, two-wallet ready, countdown, and undelegation.

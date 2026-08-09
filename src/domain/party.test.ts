@@ -16,7 +16,7 @@ describe("party state machine", () => {
 
 describe("party size policy", () => {
   it("uses a fixed two-to-ten player range without accepting a creator override", () => {
-    expect(MIN_PARTY_PLAYERS).toBe(2);
+    expect(MIN_PARTY_PLAYERS).toBe(1);
     expect(MAX_PARTY_PLAYERS).toBe(10);
     const parsed = createPartySchema.parse({
       name: "Friday pull",

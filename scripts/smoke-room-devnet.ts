@@ -18,18 +18,12 @@ import {
 } from "../src/integrations/magicblock/router-client";
 import { DevnetEscrowClient, type PreparedEscrowTransaction } from "../src/integrations/solana/escrow-client";
 import { CURRENT_ESCROW_ACCOUNT_VERSION } from "../src/integrations/solana/program-versions";
-import { EscrowStatus, RoomPhase } from "../src/integrations/solana/program-client/src/generated";
-import { getGachaOperatorSigner } from "../src/server/gacha-operator";
+import { EscrowStatus } from "../src/integrations/solana/program-client/src/generated";
 
 async function main() {
   const walletPath = process.env.SOLANA_WALLET || resolve(homedir(), ".config/solana/id.json");
-  const secondWalletPath = process.env.SECOND_SOLANA_WALLET || resolve(homedir(), ".config/solana/devnet.json");
   const secretKey = Uint8Array.from(JSON.parse(readFileSync(walletPath, "utf8")) as number[]);
-  const secondSecretKey = Uint8Array.from(JSON.parse(readFileSync(secondWalletPath, "utf8")) as number[]);
   const signer = await createKeyPairSignerFromBytes(secretKey);
-  const secondSigner = await createKeyPairSignerFromBytes(secondSecretKey);
-  const operator = await getGachaOperatorSigner();
-  if (secondSigner.address === signer.address) throw new Error("The smoke test requires two distinct Solana wallets.");
   const client = await MagicRouterRoomClient.create();
   const escrowClient = await DevnetEscrowClient.create({
     mint: requiredEnvironment("USDC_MINT"),
@@ -95,40 +89,29 @@ async function main() {
   if (!escrow || escrow.version !== CURRENT_ESCROW_ACCOUNT_VERSION || escrow.participantCount !== 1 || escrow.maxPlayers !== 10) {
     throw new Error("Initialized escrow did not decode to the expected ten-player roster.");
   }
-  const contributorToken = await escrowClient.fetchWalletTokenAccount(secondSigner.address);
+  const contributorToken = await escrowClient.fetchWalletTokenAccount(signer.address);
   if (!contributorToken || contributorToken.amount < 1_000_000n) {
-    throw new Error("The second smoke wallet needs at least one configured devnet USDC token.");
+    throw new Error("The smoke wallet needs at least one configured devnet USDC token.");
   }
   await signAndSubmitEscrow(await escrowClient.prepareDeposit(
-    secondSigner.address,
+    signer.address,
     signer.address,
     partyId,
     contributorToken.address,
     1_000_000n,
-  ), secondSigner);
+  ));
   escrow = await escrowClient.fetchEscrow(signer.address, partyId);
-  const receipt = await escrowClient.fetchReceipt(signer.address, partyId, secondSigner.address);
+  const receipt = await escrowClient.fetchReceipt(signer.address, partyId, signer.address);
   if (
     !escrow ||
-    escrow.participantCount !== 2 ||
-    String(escrow.participants[1]) !== secondSigner.address ||
+    escrow.participantCount !== 1 ||
     receipt?.amount !== 1_000_000n ||
     escrow.status !== EscrowStatus.Locked ||
     escrow.lockedAt <= 0n
   ) {
-    throw new Error("The target deposit did not atomically register its contributor, receipt, and escrow lock.");
+    throw new Error("The host-only target deposit did not atomically create its receipt and lock the escrow.");
   }
 
-  await signAndSubmit(await client.prepareOperatorJoin(
-    operator.address,
-    secondSigner.address,
-    signer.address,
-    partyId,
-  ), operator);
-  await waitForRoom(
-    (room) => Boolean(room && room.participantCount === 2 && String(room.participants[1]) === secondSigner.address && room.revision === 2n),
-    "participant two to join",
-  );
   const delegated = await erClient.fetchRoom(signer.address, partyId);
   console.log(`room: ${initialized.address}`);
   console.log(`escrow: ${escrow.address}`);
@@ -137,22 +120,11 @@ async function main() {
 
   await signAndSubmit(await client.prepareReady(signer.address, signer.address, partyId, true));
   await waitForRoom(
-    (room) => Boolean(room && room.readyMask === 1 && room.revision === 3n),
+    (room) => Boolean(room && room.readyMask === 1 && room.revision === 2n),
     "the host ready update",
   );
 
-  await signAndSubmit(await client.prepareReady(secondSigner.address, signer.address, partyId, true), secondSigner);
-  await waitForRoom(
-    (room) => Boolean(room && room.readyMask === 3 && room.revision === 4n),
-    "both participants to become ready",
-  );
-
-  await signAndSubmit(await client.prepareStart(signer.address, partyId));
-  const opening = await waitForRoom(
-    (room) => Boolean(room && room.phase === RoomPhase.Opening && room.countdownEndsAt > 0n && room.revision === 5n),
-    "the authoritative opening countdown",
-  );
-  console.log(`countdown ends at: ${opening.countdownEndsAt.toString()}`);
+  console.log("solo opening: server countdown (no remote participant to synchronize)");
 
   await signAndSubmit(await client.prepareUndelegation(signer.address, partyId));
 }

@@ -385,13 +385,6 @@ pub mod gacha_party_room {
             next_total <= ctx.accounts.escrow.funding_target,
             EscrowError::FundingTargetExceeded
         );
-        if next_total == ctx.accounts.escrow.funding_target {
-            require!(
-                ctx.accounts.escrow.participant_count >= 2,
-                EscrowError::NotEnoughParticipants
-            );
-        }
-
         token::transfer_checked(
             CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
@@ -1081,10 +1074,6 @@ impl EscrowState {
             self.funding_target,
             EscrowError::FundingTargetExceeded
         );
-        require!(
-            self.participant_count >= 2,
-            EscrowError::NotEnoughParticipants
-        );
         self.status = EscrowStatus::Locked;
         self.locked_at = now;
         Ok(true)
@@ -1251,7 +1240,6 @@ impl RoomState {
     fn start_opening(&mut self, player: Pubkey, now: i64) -> Result<()> {
         require_keys_eq!(self.host, player, RoomError::HostRequired);
         self.require_lobby()?;
-        require!(self.participant_count >= 2, RoomError::NotEnoughPlayers);
         require!(self.everyone_ready(), RoomError::EveryoneMustBeReady);
         self.countdown_ends_at = now
             .checked_add(OPENING_LEAD_SECONDS)
@@ -1615,12 +1603,14 @@ mod tests {
     }
 
     #[test]
-    fn a_single_ready_host_cannot_start_opening() {
+    fn a_single_ready_host_can_start_opening() {
         let host = Pubkey::new_unique();
         let mut state = room(host, MAX_PLAYERS as u8);
         state.set_player_ready(host, true, 101).unwrap();
         assert!(state.everyone_ready());
-        assert!(state.start_opening(host, 102).is_err());
+        state.start_opening(host, 102).unwrap();
+        assert_eq!(state.phase, RoomPhase::Opening);
+        assert_eq!(state.countdown_ends_at, 102 + OPENING_LEAD_SECONDS);
     }
 
     #[test]
@@ -1705,13 +1695,13 @@ mod tests {
     }
 
     #[test]
-    fn fully_funded_escrow_requires_two_participants_to_lock() {
+    fn fully_funded_escrow_allows_one_participant_to_lock() {
         let host = Pubkey::new_unique();
         let mut state = escrow_state(host, 10_000_000, 1, 1);
 
-        assert!(state.lock_if_fully_funded(150).is_err());
-        assert_eq!(state.status, EscrowStatus::Funding);
-        assert_eq!(state.locked_at, 0);
+        assert!(state.lock_if_fully_funded(150).unwrap());
+        assert_eq!(state.status, EscrowStatus::Locked);
+        assert_eq!(state.locked_at, 150);
     }
 
     #[test]

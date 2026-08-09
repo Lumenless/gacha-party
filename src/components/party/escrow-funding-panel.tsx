@@ -39,8 +39,6 @@ export function EscrowFundingPanel({
   tokenLabel,
   contribution,
   remaining,
-  maxContribution,
-  requiresFriendDeposit,
   deadlinePassed,
   lockedRecoveryPassed,
   lockedRecoveryLabel,
@@ -63,8 +61,6 @@ export function EscrowFundingPanel({
   tokenLabel: string;
   contribution: string;
   remaining: bigint;
-  maxContribution: bigint;
-  requiresFriendDeposit: boolean;
   deadlinePassed: boolean;
   lockedRecoveryPassed: boolean;
   lockedRecoveryLabel: string | null;
@@ -209,27 +205,20 @@ export function EscrowFundingPanel({
         </div>
       )}
 
-      {isParticipant && tokenAccount && !receipt && fundingOpen && !deadlinePassed && maxContribution >= 1_000_000n && (
+      {isParticipant && tokenAccount && !receipt && fundingOpen && !deadlinePassed && remaining >= 1_000_000n && (
         <form onSubmit={(event) => { event.preventDefault(); onReviewDeposit(); }} className="mt-5">
           <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
             <div className="min-w-0 space-y-1.5">
               <label htmlFor="onchain-contribution" className="text-sm font-medium">Contribution amount</label>
               <div className="relative">
-                <Input id="onchain-contribution" value={contribution} onChange={(event) => onContributionChange(event.target.value)} inputMode="decimal" autoComplete="off" placeholder={formatUsdc(maxContribution)} className="pr-24 font-mono tabular-nums" aria-describedby="onchain-contribution-help" required />
+                <Input id="onchain-contribution" value={contribution} onChange={(event) => onContributionChange(event.target.value)} inputMode="decimal" autoComplete="off" placeholder={formatUsdc(remaining)} className="pr-24 font-mono tabular-nums" aria-describedby="onchain-contribution-help" required />
                 <span className="pointer-events-none absolute right-3 top-3 text-xs text-muted-foreground">{tokenLabel}</span>
               </div>
-              <p id="onchain-contribution-help" className="text-xs leading-5 text-muted-foreground">Minimum 1 {tokenLabel}. You can deposit up to {formatUsdc(maxContribution)} once.{requiresFriendDeposit ? ` Leave at least 1 ${tokenLabel} for another wallet.` : ""}</p>
+              <p id="onchain-contribution-help" className="text-xs leading-5 text-muted-foreground">Minimum 1 {tokenLabel}. You can deposit up to {formatUsdc(remaining)} once.</p>
             </div>
             <Button type="submit" className="w-full sm:mt-7 sm:w-auto">Deposit</Button>
           </div>
         </form>
-      )}
-
-      {isHost && tokenAccount && !receipt && fundingOpen && !deadlinePassed && maxContribution < 1_000_000n && (
-        <div className="mt-5 rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm">
-          <p className="font-semibold">Invite one friend to finish funding</p>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">Automatic locking requires at least two registered wallets. A friend can deposit the remaining {formatUsdc(remaining)} {tokenLabel}.</p>
-        </div>
       )}
 
       {receipt && fundingOpen && !deadlinePassed && (

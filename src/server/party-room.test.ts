@@ -131,6 +131,27 @@ describe("multiplayer room service", () => {
     expect(duplicate.countdownEndsAt).toBe(opening.countdownEndsAt);
   });
 
+  it("allows a solo host to fully fund, ready, and start the opening", async () => {
+    const funded = await contributeToParty(
+      "party-1",
+      { wallet: "DEMO_HOST_WALLET", amount: "50" },
+      realtime,
+    );
+    expect(funded.status).toBe("FUNDED");
+    expect(funded.participants).toHaveLength(1);
+
+    const ready = await markPartyReady("party-1", { wallet: "DEMO_HOST_WALLET" }, realtime);
+    expect(ready.status).toBe("READY");
+
+    const opening = await startPartyCountdown(
+      "party-1",
+      { wallet: "DEMO_HOST_WALLET" },
+      realtime,
+      1_000,
+    );
+    expect(opening.status).toBe("OPENING");
+  });
+
   it("uses an authoritative MagicBlock countdown timestamp when supplied", async () => {
     await joinParty("party-1", { wallet: "DemoPlayerWallet0001", displayName: "Alice" }, realtime);
     await contributeToParty("party-1", { wallet: "DEMO_HOST_WALLET", amount: "25" }, realtime);

@@ -22,7 +22,7 @@ Status: deployed to devnet under explicit hackathon release authorization; indep
 
 ## Evidence
 
-- Rust unit tests cover future-deadline validation, the exact deadline boundary, post-deadline funding rejection, atomic target locking, the two-wallet requirement, both cancellation paths, and refundability only after cancellation.
+- Rust unit tests cover future-deadline validation, the exact deadline boundary, post-deadline funding rejection, atomic target locking for one or more wallets, both cancellation paths, and refundability only after cancellation.
 - App tests cover expired Supabase reconciliation and malformed persisted recovery state.
 - A local-validator smoke used real SPL Token instructions to initialize, deposit, cross the deadline, atomically cancel/refund, close the receipt, and verify zero accounted balance.
 - Devnet v7 upgrade `669ptiZVwSP7dtGLxNZTJRrQGf3GajeqWSgVfaftXbZkN2iRbevKuKz4wWTDPWciyE4srwDAFTQBun2P8jvcoWsR` passed the combined MagicBlock/escrow smoke with room `9Kx8SbvfKouRas9x9Nx9AxLiAVBCR3WoqRpx5DtPWriA` and escrow `AiyQ24BDSx5wyVGXo2P593eybzfbKBJ1W4TURnAhstZH` (party ID `256e3c04`).
