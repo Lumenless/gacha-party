@@ -559,7 +559,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
               intent={chainIntent}
               transaction={chainRoom.transaction}
               canSignTransactions={walletAuth.canSignTransactions}
-              presentation={chainIntent === "join" || chainIntent === "ready" ? "dialog" : "card"}
+              presentation={chainIntent === "join" || chainIntent === "ready" || chainIntent === "start" ? "dialog" : "card"}
               onConfirm={() => void confirmChainIntent()}
               onRecover={() => void chainRoom.recoverPending()}
               onCancel={() => {
