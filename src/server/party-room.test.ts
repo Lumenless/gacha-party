@@ -218,6 +218,48 @@ describe("multiplayer room service", () => {
     expect(unchanged.revision).toBe(ready.revision);
   });
 
+  it("cancels a locked opening after the purchase recovery window", async () => {
+    await joinParty("party-1", { wallet: "DemoPlayerWallet0001", displayName: "Alice" }, realtime);
+    const roster = ["DEMO_HOST_WALLET", "DemoPlayerWallet0001"];
+    const fundedAmounts = new Map([
+      ["DEMO_HOST_WALLET", parseUsdc("20")],
+      ["DemoPlayerWallet0001", parseUsdc("30")],
+    ]);
+    await syncOnchainContributions("party-1", fundedAmounts, parseUsdc("50"), parseUsdc("50"), roster, realtime);
+    await markPartyReady("party-1", { wallet: "DEMO_HOST_WALLET" }, realtime);
+    await markPartyReady("party-1", { wallet: "DemoPlayerWallet0001" }, realtime);
+    await startPartyCountdown("party-1", { wallet: "DEMO_HOST_WALLET" }, realtime, 1_000);
+
+    const cancelled = await syncOnchainContributions(
+      "party-1",
+      fundedAmounts,
+      parseUsdc("50"),
+      parseUsdc("50"),
+      roster,
+      realtime,
+      true,
+      undefined,
+      true,
+    );
+    expect(cancelled.status).toBe("CANCELLED");
+
+    const partiallyRefunded = await syncOnchainContributions(
+      "party-1",
+      new Map([
+        ["DEMO_HOST_WALLET", 0n],
+        ["DemoPlayerWallet0001", parseUsdc("30")],
+      ]),
+      parseUsdc("30"),
+      parseUsdc("50"),
+      roster,
+      realtime,
+      true,
+      undefined,
+      true,
+    );
+    expect(partiallyRefunded.status).toBe("CANCELLED");
+  });
+
   it("rejects a changed funding sync after everyone is ready", async () => {
     await joinParty("party-1", { wallet: "DemoPlayerWallet0001", displayName: "Alice" }, realtime);
     const roster = ["DEMO_HOST_WALLET", "DemoPlayerWallet0001"];

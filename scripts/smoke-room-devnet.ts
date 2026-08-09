@@ -18,7 +18,7 @@ import {
 } from "../src/integrations/magicblock/router-client";
 import { DevnetEscrowClient, type PreparedEscrowTransaction } from "../src/integrations/solana/escrow-client";
 import { CURRENT_ESCROW_ACCOUNT_VERSION } from "../src/integrations/solana/program-versions";
-import { RoomPhase } from "../src/integrations/solana/program-client/src/generated";
+import { EscrowStatus, RoomPhase } from "../src/integrations/solana/program-client/src/generated";
 import { getGachaOperatorSigner } from "../src/server/gacha-operator";
 
 async function main() {
@@ -76,7 +76,7 @@ async function main() {
   const escrowInitialization = await escrowClient.buildInitializeInstruction(
     signer.address,
     partyId,
-    50_000_000n,
+    1_000_000n,
     BigInt(fundingDeadlineSeconds),
     10,
   );
@@ -108,8 +108,15 @@ async function main() {
   ), secondSigner);
   escrow = await escrowClient.fetchEscrow(signer.address, partyId);
   const receipt = await escrowClient.fetchReceipt(signer.address, partyId, secondSigner.address);
-  if (!escrow || escrow.participantCount !== 2 || String(escrow.participants[1]) !== secondSigner.address || receipt?.amount !== 1_000_000n) {
-    throw new Error("The first deposit did not atomically register its contributor and receipt.");
+  if (
+    !escrow ||
+    escrow.participantCount !== 2 ||
+    String(escrow.participants[1]) !== secondSigner.address ||
+    receipt?.amount !== 1_000_000n ||
+    escrow.status !== EscrowStatus.Locked ||
+    escrow.lockedAt <= 0n
+  ) {
+    throw new Error("The target deposit did not atomically register its contributor, receipt, and escrow lock.");
   }
 
   await signAndSubmit(await client.prepareOperatorJoin(

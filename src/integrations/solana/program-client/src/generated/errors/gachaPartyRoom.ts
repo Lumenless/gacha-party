@@ -17,54 +17,54 @@ export const GACHA_PARTY_ROOM_ERROR__INVALID_FUNDING_DEADLINE = 0x1771; // 6001
 export const GACHA_PARTY_ROOM_ERROR__FUNDING_DEADLINE_PASSED = 0x1772; // 6002
 /** FundingDeadlineNotReached: The funding deadline has not passed yet. */
 export const GACHA_PARTY_ROOM_ERROR__FUNDING_DEADLINE_NOT_REACHED = 0x1773; // 6003
+/** LockedRecoveryNotReady: The locked escrow recovery window has not passed yet. */
+export const GACHA_PARTY_ROOM_ERROR__LOCKED_RECOVERY_NOT_READY = 0x1774; // 6004
 /** InvalidParticipantCount: The escrow player limit must be between two and ten. */
-export const GACHA_PARTY_ROOM_ERROR__INVALID_PARTICIPANT_COUNT = 0x1774; // 6004
+export const GACHA_PARTY_ROOM_ERROR__INVALID_PARTICIPANT_COUNT = 0x1775; // 6005
 /** HostMustBeFirstParticipant: The host must be the first escrow participant. */
-export const GACHA_PARTY_ROOM_ERROR__HOST_MUST_BE_FIRST_PARTICIPANT = 0x1775; // 6005
+export const GACHA_PARTY_ROOM_ERROR__HOST_MUST_BE_FIRST_PARTICIPANT = 0x1776; // 6006
 /** InvalidParticipant: Escrow participants must be non-empty and unused slots must be empty. */
-export const GACHA_PARTY_ROOM_ERROR__INVALID_PARTICIPANT = 0x1776; // 6006
+export const GACHA_PARTY_ROOM_ERROR__INVALID_PARTICIPANT = 0x1777; // 6007
 /** DuplicateParticipant: Each escrow participant wallet must be unique. */
-export const GACHA_PARTY_ROOM_ERROR__DUPLICATE_PARTICIPANT = 0x1777; // 6007
+export const GACHA_PARTY_ROOM_ERROR__DUPLICATE_PARTICIPANT = 0x1778; // 6008
 /** NotEscrowParticipant: Only an escrow participant can contribute. */
-export const GACHA_PARTY_ROOM_ERROR__NOT_ESCROW_PARTICIPANT = 0x1778; // 6008
+export const GACHA_PARTY_ROOM_ERROR__NOT_ESCROW_PARTICIPANT = 0x1779; // 6009
 /** EscrowParticipantLimitReached: The escrow participant limit has been reached. */
-export const GACHA_PARTY_ROOM_ERROR__ESCROW_PARTICIPANT_LIMIT_REACHED = 0x1779; // 6009
+export const GACHA_PARTY_ROOM_ERROR__ESCROW_PARTICIPANT_LIMIT_REACHED = 0x177a; // 6010
 /** NotEnoughParticipants: At least two participants must join before the escrow can be locked. */
-export const GACHA_PARTY_ROOM_ERROR__NOT_ENOUGH_PARTICIPANTS = 0x177a; // 6010
+export const GACHA_PARTY_ROOM_ERROR__NOT_ENOUGH_PARTICIPANTS = 0x177b; // 6011
 /** InvalidContributionAmount: Contribution amount must be at least one USDC. */
-export const GACHA_PARTY_ROOM_ERROR__INVALID_CONTRIBUTION_AMOUNT = 0x177b; // 6011
+export const GACHA_PARTY_ROOM_ERROR__INVALID_CONTRIBUTION_AMOUNT = 0x177c; // 6012
 /** FundingTargetExceeded: This contribution would exceed the funding target. */
-export const GACHA_PARTY_ROOM_ERROR__FUNDING_TARGET_EXCEEDED = 0x177c; // 6012
+export const GACHA_PARTY_ROOM_ERROR__FUNDING_TARGET_EXCEEDED = 0x177d; // 6013
 /** AmountOverflow: Token amount arithmetic overflowed. */
-export const GACHA_PARTY_ROOM_ERROR__AMOUNT_OVERFLOW = 0x177d; // 6013
+export const GACHA_PARTY_ROOM_ERROR__AMOUNT_OVERFLOW = 0x177e; // 6014
 /** InvalidMintDecimals: The escrow mint does not use six decimals. */
-export const GACHA_PARTY_ROOM_ERROR__INVALID_MINT_DECIMALS = 0x177e; // 6014
+export const GACHA_PARTY_ROOM_ERROR__INVALID_MINT_DECIMALS = 0x177f; // 6015
 /** InvalidEscrowMint: The supplied token mint does not match the escrow. */
-export const GACHA_PARTY_ROOM_ERROR__INVALID_ESCROW_MINT = 0x177f; // 6015
+export const GACHA_PARTY_ROOM_ERROR__INVALID_ESCROW_MINT = 0x1780; // 6016
 /** InvalidEscrowVault: The supplied token vault does not match the escrow. */
-export const GACHA_PARTY_ROOM_ERROR__INVALID_ESCROW_VAULT = 0x1780; // 6016
+export const GACHA_PARTY_ROOM_ERROR__INVALID_ESCROW_VAULT = 0x1781; // 6017
 /** InvalidTokenOwner: The supplied token account has an invalid owner. */
-export const GACHA_PARTY_ROOM_ERROR__INVALID_TOKEN_OWNER = 0x1781; // 6017
+export const GACHA_PARTY_ROOM_ERROR__INVALID_TOKEN_OWNER = 0x1782; // 6018
 /** InvalidContributionReceipt: The contribution receipt does not belong to this signer and escrow. */
-export const GACHA_PARTY_ROOM_ERROR__INVALID_CONTRIBUTION_RECEIPT = 0x1782; // 6018
+export const GACHA_PARTY_ROOM_ERROR__INVALID_CONTRIBUTION_RECEIPT = 0x1783; // 6019
 /** InvalidEscrowBalance: The escrow balance accounting is inconsistent. */
-export const GACHA_PARTY_ROOM_ERROR__INVALID_ESCROW_BALANCE = 0x1783; // 6019
+export const GACHA_PARTY_ROOM_ERROR__INVALID_ESCROW_BALANCE = 0x1784; // 6020
 /** InvalidOperator: The escrow operator is invalid. */
-export const GACHA_PARTY_ROOM_ERROR__INVALID_OPERATOR = 0x1784; // 6020
+export const GACHA_PARTY_ROOM_ERROR__INVALID_OPERATOR = 0x1785; // 6021
 /** HostRequired: Only the escrow host can perform this action. */
-export const GACHA_PARTY_ROOM_ERROR__HOST_REQUIRED = 0x1785; // 6021
+export const GACHA_PARTY_ROOM_ERROR__HOST_REQUIRED = 0x1786; // 6022
 /** InvalidEscrowStatus: The escrow is not in the required lifecycle state. */
-export const GACHA_PARTY_ROOM_ERROR__INVALID_ESCROW_STATUS = 0x1786; // 6022
-/** EscrowNotFullyFunded: The escrow must be fully funded before it can be locked. */
-export const GACHA_PARTY_ROOM_ERROR__ESCROW_NOT_FULLY_FUNDED = 0x1787; // 6023
+export const GACHA_PARTY_ROOM_ERROR__INVALID_ESCROW_STATUS = 0x1787; // 6023
 /** InvalidPurchaseReference: The purchase signature or memo reference is invalid. */
 export const GACHA_PARTY_ROOM_ERROR__INVALID_PURCHASE_REFERENCE = 0x1788; // 6024
 
-export type GachaPartyRoomError = typeof GACHA_PARTY_ROOM_ERROR__AMOUNT_OVERFLOW | typeof GACHA_PARTY_ROOM_ERROR__DUPLICATE_PARTICIPANT | typeof GACHA_PARTY_ROOM_ERROR__ESCROW_NOT_FULLY_FUNDED | typeof GACHA_PARTY_ROOM_ERROR__ESCROW_PARTICIPANT_LIMIT_REACHED | typeof GACHA_PARTY_ROOM_ERROR__FUNDING_DEADLINE_NOT_REACHED | typeof GACHA_PARTY_ROOM_ERROR__FUNDING_DEADLINE_PASSED | typeof GACHA_PARTY_ROOM_ERROR__FUNDING_TARGET_EXCEEDED | typeof GACHA_PARTY_ROOM_ERROR__HOST_MUST_BE_FIRST_PARTICIPANT | typeof GACHA_PARTY_ROOM_ERROR__HOST_REQUIRED | typeof GACHA_PARTY_ROOM_ERROR__INVALID_CONTRIBUTION_AMOUNT | typeof GACHA_PARTY_ROOM_ERROR__INVALID_CONTRIBUTION_RECEIPT | typeof GACHA_PARTY_ROOM_ERROR__INVALID_ESCROW_BALANCE | typeof GACHA_PARTY_ROOM_ERROR__INVALID_ESCROW_MINT | typeof GACHA_PARTY_ROOM_ERROR__INVALID_ESCROW_STATUS | typeof GACHA_PARTY_ROOM_ERROR__INVALID_ESCROW_VAULT | typeof GACHA_PARTY_ROOM_ERROR__INVALID_FUNDING_DEADLINE | typeof GACHA_PARTY_ROOM_ERROR__INVALID_FUNDING_TARGET | typeof GACHA_PARTY_ROOM_ERROR__INVALID_MINT_DECIMALS | typeof GACHA_PARTY_ROOM_ERROR__INVALID_OPERATOR | typeof GACHA_PARTY_ROOM_ERROR__INVALID_PARTICIPANT | typeof GACHA_PARTY_ROOM_ERROR__INVALID_PARTICIPANT_COUNT | typeof GACHA_PARTY_ROOM_ERROR__INVALID_PURCHASE_REFERENCE | typeof GACHA_PARTY_ROOM_ERROR__INVALID_TOKEN_OWNER | typeof GACHA_PARTY_ROOM_ERROR__NOT_ENOUGH_PARTICIPANTS | typeof GACHA_PARTY_ROOM_ERROR__NOT_ESCROW_PARTICIPANT;
+export type GachaPartyRoomError = typeof GACHA_PARTY_ROOM_ERROR__AMOUNT_OVERFLOW | typeof GACHA_PARTY_ROOM_ERROR__DUPLICATE_PARTICIPANT | typeof GACHA_PARTY_ROOM_ERROR__ESCROW_PARTICIPANT_LIMIT_REACHED | typeof GACHA_PARTY_ROOM_ERROR__FUNDING_DEADLINE_NOT_REACHED | typeof GACHA_PARTY_ROOM_ERROR__FUNDING_DEADLINE_PASSED | typeof GACHA_PARTY_ROOM_ERROR__FUNDING_TARGET_EXCEEDED | typeof GACHA_PARTY_ROOM_ERROR__HOST_MUST_BE_FIRST_PARTICIPANT | typeof GACHA_PARTY_ROOM_ERROR__HOST_REQUIRED | typeof GACHA_PARTY_ROOM_ERROR__INVALID_CONTRIBUTION_AMOUNT | typeof GACHA_PARTY_ROOM_ERROR__INVALID_CONTRIBUTION_RECEIPT | typeof GACHA_PARTY_ROOM_ERROR__INVALID_ESCROW_BALANCE | typeof GACHA_PARTY_ROOM_ERROR__INVALID_ESCROW_MINT | typeof GACHA_PARTY_ROOM_ERROR__INVALID_ESCROW_STATUS | typeof GACHA_PARTY_ROOM_ERROR__INVALID_ESCROW_VAULT | typeof GACHA_PARTY_ROOM_ERROR__INVALID_FUNDING_DEADLINE | typeof GACHA_PARTY_ROOM_ERROR__INVALID_FUNDING_TARGET | typeof GACHA_PARTY_ROOM_ERROR__INVALID_MINT_DECIMALS | typeof GACHA_PARTY_ROOM_ERROR__INVALID_OPERATOR | typeof GACHA_PARTY_ROOM_ERROR__INVALID_PARTICIPANT | typeof GACHA_PARTY_ROOM_ERROR__INVALID_PARTICIPANT_COUNT | typeof GACHA_PARTY_ROOM_ERROR__INVALID_PURCHASE_REFERENCE | typeof GACHA_PARTY_ROOM_ERROR__INVALID_TOKEN_OWNER | typeof GACHA_PARTY_ROOM_ERROR__LOCKED_RECOVERY_NOT_READY | typeof GACHA_PARTY_ROOM_ERROR__NOT_ENOUGH_PARTICIPANTS | typeof GACHA_PARTY_ROOM_ERROR__NOT_ESCROW_PARTICIPANT;
 
 let gachaPartyRoomErrorMessages: Record<GachaPartyRoomError, string> | undefined;
 if (process.env.NODE_ENV !== 'production') {
-  gachaPartyRoomErrorMessages = { [GACHA_PARTY_ROOM_ERROR__AMOUNT_OVERFLOW]: `Token amount arithmetic overflowed.`, [GACHA_PARTY_ROOM_ERROR__DUPLICATE_PARTICIPANT]: `Each escrow participant wallet must be unique.`, [GACHA_PARTY_ROOM_ERROR__ESCROW_NOT_FULLY_FUNDED]: `The escrow must be fully funded before it can be locked.`, [GACHA_PARTY_ROOM_ERROR__ESCROW_PARTICIPANT_LIMIT_REACHED]: `The escrow participant limit has been reached.`, [GACHA_PARTY_ROOM_ERROR__FUNDING_DEADLINE_NOT_REACHED]: `The funding deadline has not passed yet.`, [GACHA_PARTY_ROOM_ERROR__FUNDING_DEADLINE_PASSED]: `The funding deadline has passed.`, [GACHA_PARTY_ROOM_ERROR__FUNDING_TARGET_EXCEEDED]: `This contribution would exceed the funding target.`, [GACHA_PARTY_ROOM_ERROR__HOST_MUST_BE_FIRST_PARTICIPANT]: `The host must be the first escrow participant.`, [GACHA_PARTY_ROOM_ERROR__HOST_REQUIRED]: `Only the escrow host can perform this action.`, [GACHA_PARTY_ROOM_ERROR__INVALID_CONTRIBUTION_AMOUNT]: `Contribution amount must be at least one USDC.`, [GACHA_PARTY_ROOM_ERROR__INVALID_CONTRIBUTION_RECEIPT]: `The contribution receipt does not belong to this signer and escrow.`, [GACHA_PARTY_ROOM_ERROR__INVALID_ESCROW_BALANCE]: `The escrow balance accounting is inconsistent.`, [GACHA_PARTY_ROOM_ERROR__INVALID_ESCROW_MINT]: `The supplied token mint does not match the escrow.`, [GACHA_PARTY_ROOM_ERROR__INVALID_ESCROW_STATUS]: `The escrow is not in the required lifecycle state.`, [GACHA_PARTY_ROOM_ERROR__INVALID_ESCROW_VAULT]: `The supplied token vault does not match the escrow.`, [GACHA_PARTY_ROOM_ERROR__INVALID_FUNDING_DEADLINE]: `The funding deadline must be in the future.`, [GACHA_PARTY_ROOM_ERROR__INVALID_FUNDING_TARGET]: `The funding target must be greater than zero.`, [GACHA_PARTY_ROOM_ERROR__INVALID_MINT_DECIMALS]: `The escrow mint does not use six decimals.`, [GACHA_PARTY_ROOM_ERROR__INVALID_OPERATOR]: `The escrow operator is invalid.`, [GACHA_PARTY_ROOM_ERROR__INVALID_PARTICIPANT]: `Escrow participants must be non-empty and unused slots must be empty.`, [GACHA_PARTY_ROOM_ERROR__INVALID_PARTICIPANT_COUNT]: `The escrow player limit must be between two and ten.`, [GACHA_PARTY_ROOM_ERROR__INVALID_PURCHASE_REFERENCE]: `The purchase signature or memo reference is invalid.`, [GACHA_PARTY_ROOM_ERROR__INVALID_TOKEN_OWNER]: `The supplied token account has an invalid owner.`, [GACHA_PARTY_ROOM_ERROR__NOT_ENOUGH_PARTICIPANTS]: `At least two participants must join before the escrow can be locked.`, [GACHA_PARTY_ROOM_ERROR__NOT_ESCROW_PARTICIPANT]: `Only an escrow participant can contribute.` };
+  gachaPartyRoomErrorMessages = { [GACHA_PARTY_ROOM_ERROR__AMOUNT_OVERFLOW]: `Token amount arithmetic overflowed.`, [GACHA_PARTY_ROOM_ERROR__DUPLICATE_PARTICIPANT]: `Each escrow participant wallet must be unique.`, [GACHA_PARTY_ROOM_ERROR__ESCROW_PARTICIPANT_LIMIT_REACHED]: `The escrow participant limit has been reached.`, [GACHA_PARTY_ROOM_ERROR__FUNDING_DEADLINE_NOT_REACHED]: `The funding deadline has not passed yet.`, [GACHA_PARTY_ROOM_ERROR__FUNDING_DEADLINE_PASSED]: `The funding deadline has passed.`, [GACHA_PARTY_ROOM_ERROR__FUNDING_TARGET_EXCEEDED]: `This contribution would exceed the funding target.`, [GACHA_PARTY_ROOM_ERROR__HOST_MUST_BE_FIRST_PARTICIPANT]: `The host must be the first escrow participant.`, [GACHA_PARTY_ROOM_ERROR__HOST_REQUIRED]: `Only the escrow host can perform this action.`, [GACHA_PARTY_ROOM_ERROR__INVALID_CONTRIBUTION_AMOUNT]: `Contribution amount must be at least one USDC.`, [GACHA_PARTY_ROOM_ERROR__INVALID_CONTRIBUTION_RECEIPT]: `The contribution receipt does not belong to this signer and escrow.`, [GACHA_PARTY_ROOM_ERROR__INVALID_ESCROW_BALANCE]: `The escrow balance accounting is inconsistent.`, [GACHA_PARTY_ROOM_ERROR__INVALID_ESCROW_MINT]: `The supplied token mint does not match the escrow.`, [GACHA_PARTY_ROOM_ERROR__INVALID_ESCROW_STATUS]: `The escrow is not in the required lifecycle state.`, [GACHA_PARTY_ROOM_ERROR__INVALID_ESCROW_VAULT]: `The supplied token vault does not match the escrow.`, [GACHA_PARTY_ROOM_ERROR__INVALID_FUNDING_DEADLINE]: `The funding deadline must be in the future.`, [GACHA_PARTY_ROOM_ERROR__INVALID_FUNDING_TARGET]: `The funding target must be greater than zero.`, [GACHA_PARTY_ROOM_ERROR__INVALID_MINT_DECIMALS]: `The escrow mint does not use six decimals.`, [GACHA_PARTY_ROOM_ERROR__INVALID_OPERATOR]: `The escrow operator is invalid.`, [GACHA_PARTY_ROOM_ERROR__INVALID_PARTICIPANT]: `Escrow participants must be non-empty and unused slots must be empty.`, [GACHA_PARTY_ROOM_ERROR__INVALID_PARTICIPANT_COUNT]: `The escrow player limit must be between two and ten.`, [GACHA_PARTY_ROOM_ERROR__INVALID_PURCHASE_REFERENCE]: `The purchase signature or memo reference is invalid.`, [GACHA_PARTY_ROOM_ERROR__INVALID_TOKEN_OWNER]: `The supplied token account has an invalid owner.`, [GACHA_PARTY_ROOM_ERROR__LOCKED_RECOVERY_NOT_READY]: `The locked escrow recovery window has not passed yet.`, [GACHA_PARTY_ROOM_ERROR__NOT_ENOUGH_PARTICIPANTS]: `At least two participants must join before the escrow can be locked.`, [GACHA_PARTY_ROOM_ERROR__NOT_ESCROW_PARTICIPANT]: `Only an escrow participant can contribute.` };
 }
 
 export function getGachaPartyRoomErrorMessage(code: GachaPartyRoomError): string {

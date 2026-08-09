@@ -4,6 +4,6 @@ import { CURRENT_ESCROW_ACCOUNT_VERSION, CURRENT_ROOM_ACCOUNT_VERSION } from "./
 describe("deployed program account versions", () => {
   it("matches the ten-player room and escrow layouts", () => {
     expect(CURRENT_ROOM_ACCOUNT_VERSION).toBe(4);
-    expect(CURRENT_ESCROW_ACCOUNT_VERSION).toBe(6);
+    expect(CURRENT_ESCROW_ACCOUNT_VERSION).toBe(7);
   });
 });

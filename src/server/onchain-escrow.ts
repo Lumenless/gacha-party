@@ -149,5 +149,6 @@ export async function syncVerifiedOnchainContributions(
     realtime,
     verified.escrow.status === EscrowStatus.Cancelled,
     new Date(Number(verified.escrow.fundingDeadline) * 1_000).toISOString(),
+    verified.escrow.lockedAt > 0n,
   );
 }

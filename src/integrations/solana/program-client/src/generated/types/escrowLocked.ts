@@ -6,18 +6,18 @@
  * @see https://github.com/codama-idl/codama
  */
 
-import { combineCodec, getAddressDecoder, getAddressEncoder, getStructDecoder, getStructEncoder, getU64Decoder, getU64Encoder, type Address, type FixedSizeCodec, type FixedSizeDecoder, type FixedSizeEncoder } from '@solana/kit';
+import { combineCodec, getAddressDecoder, getAddressEncoder, getI64Decoder, getI64Encoder, getStructDecoder, getStructEncoder, getU64Decoder, getU64Encoder, type Address, type FixedSizeCodec, type FixedSizeDecoder, type FixedSizeEncoder } from '@solana/kit';
 
-export type EscrowLocked = { escrow: Address; fundingTarget: bigint;  };
+export type EscrowLocked = { escrow: Address; fundingTarget: bigint; lockedAt: bigint;  };
 
-export type EscrowLockedArgs = { escrow: Address; fundingTarget: number | bigint;  };
+export type EscrowLockedArgs = { escrow: Address; fundingTarget: number | bigint; lockedAt: number | bigint;  };
 
 export function getEscrowLockedEncoder(): FixedSizeEncoder<EscrowLockedArgs> {
-    return getStructEncoder([['escrow', getAddressEncoder()], ['fundingTarget', getU64Encoder()]]);
+    return getStructEncoder([['escrow', getAddressEncoder()], ['fundingTarget', getU64Encoder()], ['lockedAt', getI64Encoder()]]);
 }
 
 export function getEscrowLockedDecoder(): FixedSizeDecoder<EscrowLocked> {
-    return getStructDecoder([['escrow', getAddressDecoder()], ['fundingTarget', getU64Decoder()]]);
+    return getStructDecoder([['escrow', getAddressDecoder()], ['fundingTarget', getU64Decoder()], ['lockedAt', getI64Decoder()]]);
 }
 
 export function getEscrowLockedCodec(): FixedSizeCodec<EscrowLockedArgs, EscrowLocked> {

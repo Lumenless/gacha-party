@@ -52,12 +52,12 @@ async function main() {
     signer.address,
     partyId,
     contributorToken,
-    5_000_000n,
+    4_000_000n,
   ));
 
   const funded = await client.fetchEscrow(signer.address, partyId);
   const receipt = await client.fetchReceipt(signer.address, partyId, signer.address);
-  if (!funded || funded.totalContributed !== 5_000_000n || !receipt || receipt.amount !== 5_000_000n) {
+  if (!funded || funded.totalContributed !== 4_000_000n || !receipt || receipt.amount !== 4_000_000n) {
     throw new Error("Escrow deposit did not produce the expected state and receipt.");
   }
 

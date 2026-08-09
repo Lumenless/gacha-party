@@ -41,6 +41,8 @@ type LiveState = "connecting" | "live" | "reconnecting";
 type VoteSecret = { vote: VoteChoice; nonce: string };
 
 const IDENTITY_KEY = "gacha-party-demo-identity";
+const LOCKED_RECOVERY_MS = 10 * 60 * 1_000;
+const MIN_CONTRIBUTION_BASE_UNITS = 1_000_000n;
 
 function createDemoIdentity(): DemoIdentity {
   const bytes = new Uint8Array(20);
@@ -188,7 +190,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
   }, [initialParty.id]);
 
   useEffect(() => {
-    if (!["FUNDING", "FUNDED", "OPENING", "VOTING"].includes(party.status)) return;
+    if (!["FUNDING", "FUNDED", "READY", "OPENING", "VOTING"].includes(party.status)) return;
     const update = () => setClock(Date.now());
     const initial = window.setTimeout(update, 0);
     const timer = window.setInterval(update, party.status === "OPENING" || party.status === "VOTING" ? 250 : 1_000);
@@ -210,6 +212,10 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
     : mirroredFunded;
   const target = BigInt(party.fundingTargetBaseUnits);
   const remaining = target - funded;
+  const requiresFriendDeposit = identity?.wallet === party.hostWallet && (escrow.snapshot?.participantCount ?? party.participants.length) < 2;
+  const maxContribution = requiresFriendDeposit
+    ? remaining > MIN_CONTRIBUTION_BASE_UNITS ? remaining - MIN_CONTRIBUTION_BASE_UNITS : 0n
+    : remaining;
   const percentHundredths = target === 0n ? 0n : (funded * 10_000n) / target;
   const percent = Number(percentHundredths) / 100;
   const effectiveFundingDeadline = escrow.enabled && escrow.snapshot
@@ -222,6 +228,14 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
     day: "numeric",
   }).format(effectiveFundingDeadline);
   const deadlinePassed = clock > effectiveFundingDeadline.getTime();
+  const lockedRecoveryAtMs = escrow.snapshot && escrow.snapshot.lockedAt > 0n
+    ? Number(escrow.snapshot.lockedAt) * 1_000 + LOCKED_RECOVERY_MS
+    : null;
+  const lockedRecoveryPassed = lockedRecoveryAtMs !== null && clock > lockedRecoveryAtMs;
+  const lockedRecoveryLabel = lockedRecoveryAtMs === null ? null : new Intl.DateTimeFormat("en", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(lockedRecoveryAtMs));
   const countdownMilliseconds = party.countdownEndsAt && clock
     ? new Date(party.countdownEndsAt).getTime() - clock
     : 3_000;
@@ -283,7 +297,8 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
     if (!escrow.enabled || escrow.status !== "active" || !identity || !currentParticipant || !escrow.snapshot) return;
     const receiptAmount = escrow.receipt?.amount ?? 0n;
     const mirrorAmount = BigInt(currentParticipant.contributionBaseUnits);
-    const statusMismatch = escrow.snapshot.status === ProgramEscrowStatus.Cancelled && party.status !== "EXPIRED";
+    const cancelledPartyStatus = escrow.snapshot.lockedAt > 0n ? "CANCELLED" : "EXPIRED";
+    const statusMismatch = escrow.snapshot.status === ProgramEscrowStatus.Cancelled && party.status !== cancelledPartyStatus;
     const partyDeadlineSeconds = BigInt(Math.floor(new Date(party.fundingDeadline).getTime() / 1_000));
     const syncKey = `${escrow.snapshot.status}:${party.status}:${escrow.snapshot.totalContributed}:${mirroredFunded}:${receiptAmount}:${mirrorAmount}:${escrow.snapshot.fundingDeadline}:${partyDeadlineSeconds}`;
     if ((statusMismatch || receiptAmount !== mirrorAmount || escrow.snapshot.totalContributed !== mirroredFunded || escrow.snapshot.fundingDeadline !== partyDeadlineSeconds) && escrowSyncRequested.current !== syncKey) {
@@ -464,8 +479,12 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
   function reviewEscrowDeposit() {
     try {
       const amount = parseUsdc(contribution);
-      if (amount < 1_000_000n) throw new Error("Contribution must be at least 1 USDC.");
-      if (amount > remaining) throw new Error("Contribution exceeds the remaining funding target.");
+      if (amount < MIN_CONTRIBUTION_BASE_UNITS) throw new Error("Contribution must be at least 1 USDC.");
+      if (amount > maxContribution) {
+        throw new Error(requiresFriendDeposit
+          ? `Leave at least 1 ${fundsTokenLabel} for another wallet so the vault can lock with two participants.`
+          : "Contribution exceeds the remaining funding target.");
+      }
       if (!escrow.tokenAccount || amount > escrow.tokenAccount.amount) {
         throw new Error(`This wallet does not have enough ${fundsTokenLabel}.`);
       }
@@ -484,10 +503,11 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
       : escrowIntent === "deposit"
         ? await escrow.deposit(escrowAmount)
         : escrowIntent === "refund"
-          ? await escrow.refund(deadlinePassed && escrow.snapshot?.status === ProgramEscrowStatus.Funding)
-          : escrowIntent === "cancel"
-            ? await escrow.cancel()
-            : await escrow.lock();
+          ? await escrow.refund(
+              (deadlinePassed && escrow.snapshot?.status === ProgramEscrowStatus.Funding) ||
+              (lockedRecoveryPassed && escrow.snapshot?.status === ProgramEscrowStatus.Locked),
+            )
+          : await escrow.cancel();
     if (!confirmed) return;
     if (escrowIntent === "deposit") {
       setContribution("");
@@ -743,14 +763,17 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                 tokenAccount={escrow.tokenAccount}
                 error={escrow.error}
                 rosterState={escrow.rosterState}
-                participantCount={party.participants.length}
                 isParticipant={Boolean(identity)}
                 isHost={identity?.wallet === party.hostWallet}
                 canSignTransactions={walletAuth.canSignTransactions}
                 tokenLabel={fundsTokenLabel}
                 contribution={contribution}
                 remaining={remaining}
+                maxContribution={maxContribution}
+                requiresFriendDeposit={requiresFriendDeposit}
                 deadlinePassed={deadlinePassed}
+                lockedRecoveryPassed={lockedRecoveryPassed}
+                lockedRecoveryLabel={lockedRecoveryLabel}
                 onContributionChange={setContribution}
                 onReviewInitialize={() => {
                   setEscrowAmount(0n);
@@ -778,7 +801,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                   mint={escrow.mint}
                   tokenLabel={fundsTokenLabel}
                   canSignTransactions={walletAuth.canSignTransactions}
-                  presentation={escrowIntent === "deposit" || escrowIntent === "refund" || escrowIntent === "lock" ? "dialog" : "card"}
+                  presentation={escrowIntent === "initialize" ? "card" : "dialog"}
                   onConfirm={() => void confirmEscrowIntent()}
                   onRecover={() => void escrow.recoverPending()}
                   onCancel={() => {
@@ -901,24 +924,13 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                     {escrow.snapshot?.status === ProgramEscrowStatus.Locked
                       ? "The escrow is locked. The operator will release the exact target and purchase this pack after the countdown."
                       : party.status === "READY"
-                        ? "Lock the escrow to disable refunds and authorize the pack purchase."
-                      : "Every player readies first. The host then locks refunds before starting the countdown."}
+                        ? "Everyone is ready to start the synchronized opening."
+                      : "Every player readies before the synchronized countdown starts."}
                   </p>
                 </div>
                 {!currentParticipant.ready ? (
                   <Button type="button" onClick={() => void markReady()} loading={pending === "ready"}>
                     I’m ready
-                  </Button>
-                ) : identity.wallet === party.hostWallet && party.status === "READY" && party.participants.length >= 2 && escrow.snapshot?.status === ProgramEscrowStatus.Funding ? (
-                  <Button
-                    type="button"
-                    onClick={() => {
-                      setEscrowAmount(target);
-                      escrow.resetTransaction();
-                      setEscrowIntent("lock");
-                    }}
-                  >
-                    Lock escrow
                   </Button>
                 ) : identity.wallet === party.hostWallet && party.status === "READY" && escrow.snapshot?.status === ProgramEscrowStatus.Locked ? (
                   <Button type="button" onClick={() => void startOpening()} loading={pending === "start"}>

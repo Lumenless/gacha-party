@@ -120,11 +120,13 @@ export async function syncOnchainContributions(
   onchainTarget: bigint,
   roster: readonly string[],
   realtime: RealtimePartyAdapter,
-  expired = false,
+  cancelled = false,
   canonicalFundingDeadline?: string,
+  lockedRecovery = false,
 ): Promise<Party> {
   const party = await requireParty(partyId);
-  const fundingCanChange = party.status === "FUNDING" || party.status === "FUNDED" || party.status === "EXPIRED";
+  const fundingCanChange = party.status === "FUNDING" || party.status === "FUNDED" || party.status === "EXPIRED" ||
+    (cancelled && (party.status === "READY" || party.status === "OPENING" || party.status === "CANCELLED"));
   const partyRoster = party.participants.map(({ wallet }) => wallet);
   if (roster.length !== partyRoster.length || roster.some((wallet, index) => wallet !== partyRoster[index])) {
     throw new Error("The onchain escrow roster does not match this party.");
@@ -146,11 +148,11 @@ export async function syncOnchainContributions(
     (participant) => BigInt(participant.contributionBaseUnits) === (amountsByWallet.get(participant.wallet) ?? 0n),
   );
   if (!fundingCanChange) {
-    if (!expired && onchainTotal === target && contributionsUnchanged) return party;
+    if (!cancelled && onchainTotal === target && contributionsUnchanged) return party;
     throw new Error("Onchain funding can no longer be synchronized for this party.");
   }
 
-  const nextStatus = expired ? "EXPIRED" : onchainTotal === target ? "FUNDED" : "FUNDING";
+  const nextStatus = cancelled ? lockedRecovery ? "CANCELLED" : "EXPIRED" : onchainTotal === target ? "FUNDED" : "FUNDING";
   const deadlineUnchanged = !canonicalFundingDeadline || party.fundingDeadline === canonicalFundingDeadline;
   const unchanged = deadlineUnchanged && party.status === nextStatus && contributionsUnchanged;
   if (unchanged) return party;
@@ -167,9 +169,11 @@ export async function syncOnchainContributions(
     activity: [
       ...party.activity,
       activity(
-        expired ? "EXPIRED" : "CONTRIBUTED",
-        expired
-          ? `Funding expired; ${onchainTotal.toString()} base units remain refundable`
+        cancelled ? lockedRecovery ? "CANCELLED" : "EXPIRED" : "CONTRIBUTED",
+        cancelled
+          ? lockedRecovery
+            ? `Purchase recovery opened; ${onchainTotal.toString()} base units remain refundable`
+            : `Funding expired; ${onchainTotal.toString()} base units remain refundable`
           : `Onchain funding synced at ${onchainTotal.toString()} base units`,
       ),
     ],
@@ -183,7 +187,6 @@ export async function markPartyReady(
 ): Promise<Party> {
   const input = walletActionSchema.parse(rawInput);
   const party = await requireParty(partyId);
-  assertFundingDeadlineOpen(party);
   if (party.status !== "FUNDED") throw new Error("The party must be fully funded first.");
   const participant = party.participants.find(({ wallet }) => wallet === input.wallet);
   if (!participant) throw new Error("Only party members can ready up.");

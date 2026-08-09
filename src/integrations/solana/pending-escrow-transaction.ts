@@ -8,7 +8,7 @@ export type PendingEscrowTransaction = {
   submittedAt: number;
 };
 
-const actions = new Set<EscrowAction>(["initialize", "deposit", "refund", "cancel", "lock"]);
+const actions = new Set<EscrowAction>(["initialize", "deposit", "refund", "cancel"]);
 
 export function pendingEscrowTransactionKey(partyId: string, wallet: string) {
   return `gacha-party:pending-escrow:${partyId}:${wallet}`;

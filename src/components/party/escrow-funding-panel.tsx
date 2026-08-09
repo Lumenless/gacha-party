@@ -33,14 +33,17 @@ export function EscrowFundingPanel({
   tokenAccount,
   error,
   rosterState,
-  participantCount,
   isParticipant,
   isHost,
   canSignTransactions,
   tokenLabel,
   contribution,
   remaining,
+  maxContribution,
+  requiresFriendDeposit,
   deadlinePassed,
+  lockedRecoveryPassed,
+  lockedRecoveryLabel,
   onContributionChange,
   onReviewInitialize,
   onReviewDeposit,
@@ -54,14 +57,17 @@ export function EscrowFundingPanel({
   tokenAccount: WalletTokenAccountSnapshot | null;
   error: string | null;
   rosterState: EscrowRosterState;
-  participantCount: number;
   isParticipant: boolean;
   isHost: boolean;
   canSignTransactions: boolean;
   tokenLabel: string;
   contribution: string;
   remaining: bigint;
+  maxContribution: bigint;
+  requiresFriendDeposit: boolean;
   deadlinePassed: boolean;
+  lockedRecoveryPassed: boolean;
+  lockedRecoveryLabel: string | null;
   onContributionChange: (value: string) => void;
   onReviewInitialize: () => void;
   onReviewDeposit: () => void;
@@ -70,6 +76,7 @@ export function EscrowFundingPanel({
   onRefresh: () => void;
 }) {
   const fundingOpen = snapshot?.status === ProgramEscrowStatus.Funding;
+  const locked = snapshot?.status === ProgramEscrowStatus.Locked;
   const cancelled = snapshot?.status === ProgramEscrowStatus.Cancelled;
   if (status === "disabled") return null;
 
@@ -202,26 +209,33 @@ export function EscrowFundingPanel({
         </div>
       )}
 
-      {isParticipant && tokenAccount && !receipt && fundingOpen && !deadlinePassed && (
+      {isParticipant && tokenAccount && !receipt && fundingOpen && !deadlinePassed && maxContribution >= 1_000_000n && (
         <form onSubmit={(event) => { event.preventDefault(); onReviewDeposit(); }} className="mt-5">
           <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
             <div className="min-w-0 space-y-1.5">
               <label htmlFor="onchain-contribution" className="text-sm font-medium">Contribution amount</label>
               <div className="relative">
-                <Input id="onchain-contribution" value={contribution} onChange={(event) => onContributionChange(event.target.value)} inputMode="decimal" autoComplete="off" placeholder={formatUsdc(remaining)} className="pr-24 font-mono tabular-nums" aria-describedby="onchain-contribution-help" required />
+                <Input id="onchain-contribution" value={contribution} onChange={(event) => onContributionChange(event.target.value)} inputMode="decimal" autoComplete="off" placeholder={formatUsdc(maxContribution)} className="pr-24 font-mono tabular-nums" aria-describedby="onchain-contribution-help" required />
                 <span className="pointer-events-none absolute right-3 top-3 text-xs text-muted-foreground">{tokenLabel}</span>
               </div>
-              <p id="onchain-contribution-help" className="text-xs text-muted-foreground">Minimum 1 {tokenLabel}. Up to {formatUsdc(remaining)} remains. You can deposit once.</p>
+              <p id="onchain-contribution-help" className="text-xs leading-5 text-muted-foreground">Minimum 1 {tokenLabel}. You can deposit up to {formatUsdc(maxContribution)} once.{requiresFriendDeposit ? ` Leave at least 1 ${tokenLabel} for another wallet.` : ""}</p>
             </div>
             <Button type="submit" className="w-full sm:mt-7 sm:w-auto">Deposit</Button>
           </div>
         </form>
       )}
 
+      {isHost && tokenAccount && !receipt && fundingOpen && !deadlinePassed && maxContribution < 1_000_000n && (
+        <div className="mt-5 rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm">
+          <p className="font-semibold">Invite one friend to finish funding</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">Automatic locking requires at least two registered wallets. A friend can deposit the remaining {formatUsdc(remaining)} {tokenLabel}.</p>
+        </div>
+      )}
+
       {receipt && fundingOpen && !deadlinePassed && (
-        <div className="mt-5 flex flex-col justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 p-4 sm:flex-row sm:items-center">
-          <div><p className="font-semibold">Contribution confirmed</p><p className="mt-1 text-xs text-muted-foreground">Refunds remain available until the host locks the fully funded escrow.</p></div>
-          <Button type="button" variant="secondary" onClick={onReviewRefund}><RotateCcw className="size-4" aria-hidden="true" /> Review refund</Button>
+        <div className="mt-5 rounded-lg border border-primary/30 bg-primary/5 p-4">
+          <p className="font-semibold">Contribution committed</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">If the target is missed, your complete contribution becomes refundable after the funding deadline. Reaching the target locks the vault automatically.</p>
         </div>
       )}
 
@@ -244,7 +258,7 @@ export function EscrowFundingPanel({
       {isParticipant && cancelled && (
         <div className="mt-5 flex flex-col justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 p-4 sm:flex-row sm:items-center">
           <div>
-            <p className="font-semibold">Funding cancelled safely</p>
+            <p className="font-semibold">{snapshot && snapshot.lockedAt > 0n ? "Purchase cancelled safely" : "Funding cancelled safely"}</p>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">
               {receipt ? "Your full recorded contribution remains in the vault until you sign its refund." : "You have no remaining deposit in this vault."}
             </p>
@@ -253,16 +267,28 @@ export function EscrowFundingPanel({
         </div>
       )}
 
-      {isHost && fundingOpen && !deadlinePassed && participantCount < 2 && snapshot?.totalContributed === snapshot?.fundingTarget && (
+      {locked && !lockedRecoveryPassed && (
         <div className="mt-5 rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm">
-          <p className="font-semibold">Fully funded — invite one friend</p>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">At least two registered players are required before the party can lock funds and open the pack.</p>
+          <p className="font-semibold">Vault locked automatically</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">The funding target is secured for this pack. If no purchase begins, recovery becomes available {lockedRecoveryLabel ? `at ${lockedRecoveryLabel}` : "after the safety window"}.</p>
         </div>
       )}
 
-      {!fundingOpen && !cancelled && (
+      {locked && lockedRecoveryPassed && (
+        <div className="mt-5 flex flex-col justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-4 sm:flex-row sm:items-center">
+          <div>
+            <p className="font-semibold">Purchase recovery available</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">The operator did not release the locked funds during the safety window. Cancel the purchase so contributors can reclaim their deposits.</p>
+          </div>
+          <Button type="button" variant="secondary" onClick={receipt ? onReviewRefund : onReviewCancel}>
+            <RotateCcw className="size-4" aria-hidden="true" /> {receipt ? "Review refund" : "Enable refunds"}
+          </Button>
+        </div>
+      )}
+
+      {!fundingOpen && !cancelled && !locked && (
         <div className="mt-5 rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm">
-          <p className="font-semibold">Escrow {snapshot?.status === ProgramEscrowStatus.Locked ? "locked for purchase" : "handed to the devnet operator"}</p>
+          <p className="font-semibold">Escrow handed to the devnet operator</p>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">Deposits and refunds are disabled by the onchain lifecycle.</p>
         </div>
       )}
@@ -274,8 +300,7 @@ const intentCopy: Record<EscrowIntent, { eyebrow: string; title: string }> = {
   initialize: { eyebrow: "Escrow activation", title: "Create this funding vault?" },
   deposit: { eyebrow: "Token contribution", title: "Deposit into the party vault?" },
   refund: { eyebrow: "Full refund", title: "Return your contribution?" },
-  cancel: { eyebrow: "Deadline enforcement", title: "Mark this funding round expired?" },
-  lock: { eyebrow: "Purchase authorization", title: "Lock the party escrow?" },
+  cancel: { eyebrow: "Escrow recovery", title: "Make contributions refundable?" },
 };
 
 export function EscrowTransactionReview({
@@ -306,7 +331,7 @@ export function EscrowTransactionReview({
   const submitted = transaction.action === intent ? transaction.signature : null;
   const actionError = transaction.action === intent ? transaction.error : null;
   const stageLabel = transaction.stage === "preparing" ? "Preparing…" : transaction.stage === "simulating" ? "Simulating…" : transaction.stage === "signing" ? "Confirm in wallet…" : transaction.stage === "submitting" ? "Submitting…" : transaction.stage === "recovering" ? "Checking status…" : "Confirming…";
-  const assets = intent === "initialize" || intent === "cancel" ? "None" : intent === "lock" ? "No transfer; refunds disabled" : `${formatUsdc(amount)} ${tokenLabel}`;
+  const assets = intent === "initialize" || intent === "cancel" ? "None" : `${formatUsdc(amount)} ${tokenLabel}`;
   const confirmLabel = intent === "deposit"
     ? `Deposit ${formatUsdc(amount)} ${tokenLabel}`
     : intent === "refund"
@@ -318,6 +343,9 @@ export function EscrowTransactionReview({
       <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">{intentCopy[intent].eyebrow}</p>
       <h2 className="mt-2 text-xl font-semibold">{intentCopy[intent].title}</h2>
       <p className="mt-2 text-sm leading-6 text-muted-foreground">The exact transaction will be simulated before your wallet opens. A signature is never requested automatically.</p>
+      {intent === "deposit" && (
+        <p className="mt-3 rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs leading-5 text-muted-foreground">This contribution is committed until the funding deadline. If it completes the target, the vault locks automatically for the pack purchase.</p>
+      )}
       <dl className="mt-5 grid gap-3 rounded-lg bg-muted/60 p-4 text-sm sm:grid-cols-2">
         <div><dt className="text-xs text-muted-foreground">Network</dt><dd className="mt-1 font-medium">Solana devnet</dd></div>
         <div><dt className="text-xs text-muted-foreground">Assets {intent === "refund" ? "returned" : "moved"}</dt><dd className="mt-1 font-mono tabular-nums">{assets}</dd></div>

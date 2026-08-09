@@ -24,7 +24,6 @@ import {
   getCancelExpiredEscrowInstruction,
   getDepositContributionInstructionAsync,
   getInitializeEscrowInstructionAsync,
-  getLockEscrowInstruction,
   getRefundContributionInstructionAsync,
   type ContributionReceipt,
   type EscrowState,
@@ -37,7 +36,7 @@ const CONTRIBUTION_SEED = new TextEncoder().encode("contribution");
 const U64_MAX = 18_446_744_073_709_551_615n;
 const MIN_CONTRIBUTION_AMOUNT = 1_000_000n;
 
-export type EscrowAction = "initialize" | "deposit" | "refund" | "cancel" | "lock";
+export type EscrowAction = "initialize" | "deposit" | "refund" | "cancel";
 
 export type PreparedEscrowTransaction = {
   action: EscrowAction;
@@ -143,17 +142,6 @@ export class DevnetEscrowClient {
       maxPlayers,
       operator: this.operator,
     });
-  }
-
-  async prepareLock(host: string, partyId: string): Promise<PreparedEscrowTransaction> {
-    const hostAddress = address(host);
-    const escrowAddress = await findEscrowAddress(host, partyId);
-    const instruction = getLockEscrowInstruction({
-      escrow: escrowAddress,
-      vault: await findEscrowVaultAddress(escrowAddress),
-      host: createNoopSigner(hostAddress),
-    });
-    return this.prepare("lock", escrowAddress, hostAddress, instruction);
   }
 
   async prepareDeposit(

@@ -20,7 +20,7 @@ import {
 import { escrowRosterState } from "./escrow-roster-state";
 
 export type EscrowStatus = "disabled" | "unconfigured" | "loading" | "missing" | "active" | "error";
-export type EscrowIntent = "initialize" | "deposit" | "refund" | "cancel" | "lock";
+export type EscrowIntent = "initialize" | "deposit" | "refund" | "cancel";
 export type EscrowTransactionStage = "idle" | "preparing" | "simulating" | "signing" | "submitting" | "confirming" | "recovering" | "confirmed" | "error";
 
 export type EscrowTransactionState = {
@@ -170,9 +170,7 @@ export function useSolanaEscrow(party: Pick<Party, "id" | "hostWallet" | "fundin
           ? Boolean(currentReceipt)
           : pending.action === "refund"
             ? !currentReceipt
-            : pending.action === "cancel"
-              ? currentEscrow?.status === ProgramEscrowStatus.Cancelled
-              : currentEscrow !== null && currentEscrow.status !== ProgramEscrowStatus.Funding;
+            : currentEscrow?.status === ProgramEscrowStatus.Cancelled;
       if (!stateConfirmsTransaction) await client.confirmSignature(pending.signature as Signature);
       localStorage.removeItem(key);
       setTransaction({ action: pending.action, stage: "confirmed", signature: pending.signature, error: null });
@@ -241,10 +239,6 @@ export function useSolanaEscrow(party: Pick<Party, "id" | "hostWallet" | "fundin
     ));
   }, [execute, mint, operator, party.hostWallet, party.id, wallet.walletAddress]);
 
-  const lock = useCallback(() => execute("lock", async () => (
-    await escrowClient(mint, operator)
-  ).prepareLock(party.hostWallet, party.id)), [execute, mint, operator, party.hostWallet, party.id]);
-
   const rosterState = useMemo(() => {
     if (!snapshot) return "matched" as const;
     const onchain = snapshot.participants.slice(0, snapshot.participantCount).map(String);
@@ -269,7 +263,6 @@ export function useSolanaEscrow(party: Pick<Party, "id" | "hostWallet" | "fundin
     deposit,
     refund,
     cancel,
-    lock,
     recoverPending,
     resetTransaction: () => setTransaction(idleTransaction),
   };

@@ -88,7 +88,7 @@ export type VoteChoice = "KEEP" | "SELL";
 
 export type PartyActivity = {
   id: string;
-  kind: "CREATED" | "JOINED" | "CONTRIBUTED" | "READY" | "COUNTDOWN" | "REVEALED" | "VOTE" | "SETTLED" | "EXPIRED";
+  kind: "CREATED" | "JOINED" | "CONTRIBUTED" | "READY" | "COUNTDOWN" | "REVEALED" | "VOTE" | "SETTLED" | "EXPIRED" | "CANCELLED";
   message: string;
   createdAt: string;
 };
