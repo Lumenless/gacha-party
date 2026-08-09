@@ -9,7 +9,7 @@ import {
   type PartyActivity,
 } from "@/domain/party";
 import type { RealtimePartyAdapter } from "@/integrations/contracts";
-import { partyRepository } from "./party-repository";
+import { ConcurrentPartyUpdateError, partyRepository } from "./party-repository";
 
 async function requireParty(partyId: string): Promise<Party> {
   const party = await partyRepository.get(partyId);
@@ -41,26 +41,32 @@ export async function joinParty(
 ): Promise<Party> {
   const input = joinPartySchema.parse(rawInput);
   const party = await requireParty(partyId);
+  if (party.participants.some(({ wallet }) => wallet === input.wallet)) return party;
   assertFundingDeadlineOpen(party);
   if (party.status !== "FUNDING" && party.status !== "FUNDED") {
     throw new Error("This party is no longer accepting players.");
   }
-  if (party.participants.some(({ wallet }) => wallet === input.wallet)) {
-    throw new Error("This wallet has already joined the party.");
-  }
   if (party.participants.length >= party.maxPlayers) throw new Error("This party is full.");
 
-  return saveAndPublish(
-    {
-      ...party,
-      participants: [
-        ...party.participants,
-        { wallet: input.wallet, displayName: input.displayName, contributionBaseUnits: "0", ready: false },
-      ],
-      activity: [...party.activity, activity("JOINED", `${input.displayName} joined the party`)],
-    },
-    realtime,
-  );
+  try {
+    return await saveAndPublish(
+      {
+        ...party,
+        participants: [
+          ...party.participants,
+          { wallet: input.wallet, displayName: input.displayName, contributionBaseUnits: "0", ready: false },
+        ],
+        activity: [...party.activity, activity("JOINED", `${input.displayName} joined the party`)],
+      },
+      realtime,
+    );
+  } catch (cause) {
+    if (cause instanceof ConcurrentPartyUpdateError) {
+      const latest = await requireParty(partyId);
+      if (latest.participants.some(({ wallet }) => wallet === input.wallet)) return latest;
+    }
+    throw cause;
+  }
 }
 
 export async function contributeToParty(

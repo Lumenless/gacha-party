@@ -38,18 +38,31 @@ beforeEach(async () => {
 });
 
 describe("multiplayer room service", () => {
-  it("joins a second wallet and rejects duplicate joins", async () => {
+  it("joins a second wallet and treats duplicate registration as idempotent", async () => {
     const joined = await joinParty(
       "party-1",
       { wallet: "DemoPlayerWallet0001", displayName: "Alice" },
       realtime,
     );
     expect(joined.participants).toHaveLength(2);
-    await expect(joinParty(
+    const duplicate = await joinParty(
       "party-1",
       { wallet: "DemoPlayerWallet0001", displayName: "Alice again" },
       realtime,
-    )).rejects.toThrow("already joined");
+    );
+    expect(duplicate.participants).toHaveLength(2);
+    expect(duplicate.revision).toBe(joined.revision);
+  });
+
+  it("reconciles concurrent registration of the same wallet", async () => {
+    const [first, second] = await Promise.all([
+      joinParty("party-1", { wallet: "DemoPlayerWallet0001", displayName: "Alice" }, realtime),
+      joinParty("party-1", { wallet: "DemoPlayerWallet0001", displayName: "Alice" }, realtime),
+    ]);
+
+    expect(first.participants).toHaveLength(2);
+    expect(second.participants).toHaveLength(2);
+    expect((await partyRepository.get("party-1"))?.participants).toHaveLength(2);
   });
 
   it("allows a friend to join after the host fully funds but before opening", async () => {

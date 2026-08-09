@@ -8,6 +8,15 @@ export function chainParticipantIndex(room: RoomAccountSnapshot | null, wallet: 
     .findIndex((participant) => participant === wallet);
 }
 
+export function chainParticipantRoster(room: RoomAccountSnapshot | null): string[] {
+  return room?.participants.slice(0, room.participantCount).map(String) ?? [];
+}
+
+export function chainRosterMatches(room: RoomAccountSnapshot | null, expected: readonly string[]): boolean {
+  const roster = chainParticipantRoster(room);
+  return roster.length === expected.length && roster.every((wallet, index) => wallet === expected[index]);
+}
+
 export function isChainParticipant(room: RoomAccountSnapshot | null, wallet: string): boolean {
   return chainParticipantIndex(room, wallet) >= 0;
 }

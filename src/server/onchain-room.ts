@@ -9,6 +9,7 @@ import {
 } from "@solana/kit";
 import { RoomPhase } from "@/integrations/solana/program-client/src/generated";
 import { MAGICBLOCK_DEVNET_ER_URL, MagicRouterRoomClient } from "@/integrations/magicblock/router-client";
+import { chainRosterMatches } from "@/integrations/magicblock/room-chain-state";
 import { CURRENT_ROOM_ACCOUNT_VERSION } from "@/integrations/solana/program-versions";
 import { partyRepository } from "./party-repository";
 import { getGachaOperatorSigner } from "./gacha-operator";
@@ -43,10 +44,7 @@ async function waitForMagicBlockRoster(
   for (let attempt = 0; attempt < OPERATOR_JOIN_CONFIRMATION_ATTEMPTS; attempt += 1) {
     try {
       const room = await client.fetchRoom(hostWallet, partyId);
-      const roster = room?.participants.slice(0, room.participantCount).map(String);
-      if (roster?.length === expected.length && roster.every((participant, index) => participant === expected[index])) {
-        return;
-      }
+      if (chainRosterMatches(room, expected)) return;
     } catch {
       // A transient ER read must not turn a successfully submitted join into a false failure.
     }
@@ -133,19 +131,29 @@ export async function registerVerifiedMagicBlockParticipant(
   const roomRoster = room.participants.slice(0, room.participantCount).map(String);
   const partyRoster = party.participants.map(({ wallet: participant }) => participant);
   const expected = [...partyRoster, wallet];
-  if (roomRoster.length === expected.length && roomRoster.every((participant, index) => participant === expected[index])) {
-    return null;
-  }
+  if (chainRosterMatches(room, expected)) return null;
   if (roomRoster.length !== partyRoster.length || roomRoster.some((participant, index) => participant !== partyRoster[index])) {
     throw new Error("The MagicBlock participant roster is out of sync with this party.");
   }
 
-  const router = await MagicRouterRoomClient.create();
-  const prepared = await router.prepareOperatorJoin(operator.address, wallet, party.hostWallet, party.id);
-  await router.simulateTransaction(prepared);
-  const decoded = getTransactionDecoder().decode(prepared.transaction) as Transaction & TransactionWithinSizeLimit & TransactionWithBlockhashLifetime;
-  const signed = await signTransaction([operator.keyPair], decoded);
-  const signature = await router.sendSignedTransaction(new Uint8Array(getTransactionEncoder().encode(signed)));
-  await waitForMagicBlockRoster(client, party.hostWallet, party.id, expected);
-  return signature;
+  try {
+    const router = await MagicRouterRoomClient.create();
+    const prepared = await router.prepareOperatorJoin(operator.address, wallet, party.hostWallet, party.id);
+    await router.simulateTransaction(prepared);
+    const decoded = getTransactionDecoder().decode(prepared.transaction) as Transaction & TransactionWithinSizeLimit & TransactionWithBlockhashLifetime;
+    const signed = await signTransaction([operator.keyPair], decoded);
+    const signature = await router.sendSignedTransaction(new Uint8Array(getTransactionEncoder().encode(signed)));
+    await waitForMagicBlockRoster(client, party.hostWallet, party.id, expected);
+    return signature;
+  } catch (cause) {
+    // Another recovery request may have joined the same wallet between our first
+    // read and simulation. The desired roster is authoritative; AlreadyJoined is
+    // success when that postcondition is now present.
+    try {
+      if (chainRosterMatches(await client.fetchRoom(party.hostWallet, party.id), expected)) return null;
+    } catch {
+      // Preserve the original transaction error when the recovery read also fails.
+    }
+    throw cause;
+  }
 }

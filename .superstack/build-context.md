@@ -54,5 +54,8 @@ debug:
     - error: "Collector Crypt request failed (500): Machine is empty after the opening transaction."
       cause: The selected devnet machine had an empty prize tier. The orchestrator released escrow before asking Collector Crypt to generate and validate the pack purchase, leaving a retryable RELEASED operation without a submitted purchase.
       fix: Generate and validate the exact purchase before releasing escrow, hide machines with any empty prize tier, preserve retry-safe operation state, and show manual recovery inside the synchronized opening dialog.
-  last_debug_session: 2026-08-09T12:45:00+02:00
+    - error: "JoinRoomByOperator simulation returned AlreadyJoined after the second user's deposit landed."
+      cause: Deposit confirmation and receipt recovery started concurrent contribution-sync requests. One registered the MagicBlock participant while the other simulated from a stale pre-join read and surfaced the expected AlreadyJoined guard as a failure.
+      fix: Let receipt recovery own post-deposit synchronization, reconcile concurrent party joins idempotently, and treat the exact expected MagicBlock roster as a successful transaction postcondition.
+  last_debug_session: 2026-08-09T13:00:00+02:00
 ```

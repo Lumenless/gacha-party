@@ -2,7 +2,14 @@ import { address } from "@solana/kit";
 import { describe, expect, it } from "vitest";
 import type { RoomAccountSnapshot } from "./router-client";
 import { RoomPhase } from "@/integrations/solana/program-client/src/generated";
-import { chainParticipantIndex, isChainOpening, isChainParticipant, isChainParticipantReady } from "./room-chain-state";
+import {
+  chainParticipantIndex,
+  chainParticipantRoster,
+  chainRosterMatches,
+  isChainOpening,
+  isChainParticipant,
+  isChainParticipantReady,
+} from "./room-chain-state";
 
 const host = address("8NZMiChYeGFhrZPSrVMacVXkgvMhK5RvAgQLBcZJUSLp");
 const player = address("9askQgGK5rStNqigyEA9FRjKevHBUWr4GWQZgJEyPpaX");
@@ -39,5 +46,11 @@ describe("MagicBlock room chain state", () => {
   it("recognizes the authoritative opening phase", () => {
     expect(isChainOpening(room)).toBe(false);
     expect(isChainOpening({ ...room, phase: RoomPhase.Opening, countdownEndsAt: 100n })).toBe(true);
+  });
+
+  it("matches the exact active participant roster in order", () => {
+    expect(chainParticipantRoster(room)).toEqual([String(host), String(player)]);
+    expect(chainRosterMatches(room, [String(host), String(player)])).toBe(true);
+    expect(chainRosterMatches(room, [String(player), String(host)])).toBe(false);
   });
 });
