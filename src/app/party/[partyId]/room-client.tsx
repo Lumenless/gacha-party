@@ -762,11 +762,6 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                   escrow.resetTransaction();
                   setEscrowIntent("cancel");
                 }}
-                onReviewLock={() => {
-                  setEscrowAmount(target);
-                  escrow.resetTransaction();
-                  setEscrowIntent("lock");
-                }}
                 onRefresh={() => void escrow.refresh()}
               />
               {escrowIntent && (
@@ -895,16 +890,29 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
               <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
                 <div>
                   <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Target reached onchain</p>
-                  <h2 className="mt-2 text-xl font-semibold">Ready for the real pull?</h2>
+                  <h2 className="mt-2 text-xl font-semibold">{party.status === "READY" ? "Everyone is ready" : "Ready for the real pull?"}</h2>
                   <p className="mt-1 text-sm leading-6 text-muted-foreground">
                     {escrow.snapshot?.status === ProgramEscrowStatus.Locked
                       ? "The escrow is locked. The operator will release the exact target and purchase this pack after the countdown."
+                      : party.status === "READY"
+                        ? "Lock the escrow to disable refunds and authorize the pack purchase."
                       : "Every player readies first. The host then locks refunds before starting the countdown."}
                   </p>
                 </div>
                 {!currentParticipant.ready ? (
                   <Button type="button" onClick={() => void markReady()} loading={pending === "ready"}>
                     I’m ready
+                  </Button>
+                ) : identity.wallet === party.hostWallet && party.status === "READY" && party.participants.length >= 2 && escrow.snapshot?.status === ProgramEscrowStatus.Funding ? (
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setEscrowAmount(target);
+                      escrow.resetTransaction();
+                      setEscrowIntent("lock");
+                    }}
+                  >
+                    Lock escrow
                   </Button>
                 ) : identity.wallet === party.hostWallet && party.status === "READY" && escrow.snapshot?.status === ProgramEscrowStatus.Locked ? (
                   <Button type="button" onClick={() => void startOpening()} loading={pending === "start"}>

@@ -45,7 +45,6 @@ export function EscrowFundingPanel({
   onReviewDeposit,
   onReviewRefund,
   onReviewCancel,
-  onReviewLock,
   onRefresh,
 }: {
   status: EscrowStatus;
@@ -67,7 +66,6 @@ export function EscrowFundingPanel({
   onReviewDeposit: () => void;
   onReviewRefund: () => void;
   onReviewCancel: () => void;
-  onReviewLock: () => void;
   onRefresh: () => void;
 }) {
   const fundingOpen = snapshot?.status === ProgramEscrowStatus.Funding;
@@ -234,13 +232,6 @@ export function EscrowFundingPanel({
             </p>
           </div>
           {receipt && <Button type="button" variant="secondary" onClick={onReviewRefund}><RotateCcw className="size-4" aria-hidden="true" /> Review refund</Button>}
-        </div>
-      )}
-
-      {isHost && fundingOpen && !deadlinePassed && participantCount >= 2 && snapshot?.totalContributed === snapshot?.fundingTarget && (
-        <div className="mt-5 flex flex-col justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 p-4 sm:flex-row sm:items-center">
-          <div><p className="font-semibold">Fully funded</p><p className="mt-1 text-xs text-muted-foreground">Locking permanently disables refunds and authorizes the devnet operator purchase.</p></div>
-          <Button type="button" onClick={onReviewLock}>Review lock</Button>
         </div>
       )}
 
