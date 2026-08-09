@@ -63,5 +63,8 @@ debug:
     - error: "InvalidPrivateVoteDeadline (6013), followed by a completed 0 KEEP / 0 SELL result."
       cause: The 30-second shared deadline could expire while a mobile wallet completed TEE authentication, vote-account delegation, permission activation, and casting. Expiry then treated the empty tally as a KEEP tie and marked the escrow settled.
       fix: Give Private ER setup 90 seconds, reopen or preserve voting whenever zero choices were released, and provide a guarded sole-participant recovery buyback for the already-settled legacy 0–0 KEEP card while keeping multiplayer and non-empty settlements immutable.
-  last_debug_session: 2026-08-09T12:00:17+02:00
+    - error: "The party must be fully funded first toast appeared during a successful opening."
+      cause: A confirmed MagicBlock ready intent remained active in the client and replayed its offchain ready mirror after the party had already advanced from FUNDED to OPENING.
+      fix: Clear successful join and ready intents immediately, replay confirmed recovery only while its party state is applicable, and treat an already-ready participant mirror as an idempotent no-op across later lifecycle states.
+  last_debug_session: 2026-08-09T12:24:00+02:00
 ```

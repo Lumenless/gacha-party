@@ -152,6 +152,30 @@ describe("multiplayer room service", () => {
     expect(opening.status).toBe("OPENING");
   });
 
+  it("ignores a delayed duplicate ready mirror after opening has started", async () => {
+    await contributeToParty(
+      "party-1",
+      { wallet: "DEMO_HOST_WALLET", amount: "50" },
+      realtime,
+    );
+    await markPartyReady("party-1", { wallet: "DEMO_HOST_WALLET" }, realtime);
+    const opening = await startPartyCountdown(
+      "party-1",
+      { wallet: "DEMO_HOST_WALLET" },
+      realtime,
+      1_000,
+    );
+
+    const duplicate = await markPartyReady(
+      "party-1",
+      { wallet: "DEMO_HOST_WALLET" },
+      realtime,
+    );
+
+    expect(duplicate.status).toBe("OPENING");
+    expect(duplicate.revision).toBe(opening.revision);
+  });
+
   it("uses an authoritative MagicBlock countdown timestamp when supplied", async () => {
     await joinParty("party-1", { wallet: "DemoPlayerWallet0001", displayName: "Alice" }, realtime);
     await contributeToParty("party-1", { wallet: "DEMO_HOST_WALLET", amount: "25" }, realtime);

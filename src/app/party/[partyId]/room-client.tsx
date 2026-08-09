@@ -461,8 +461,20 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
           ? await chainRoom.ready(identity.wallet)
           : await chainRoom.start(identity.wallet);
     if (!confirmed) return;
-    if (chainIntent === "join") await finishJoin();
-    if (chainIntent === "ready") await mutate("ready", { wallet: identity.wallet });
+    if (chainIntent === "join") {
+      const joined = await finishJoin();
+      if (joined) {
+        chainRoom.resetTransaction();
+        setChainIntent(null);
+      }
+    }
+    if (chainIntent === "ready") {
+      const readied = await mutate("ready", { wallet: identity.wallet });
+      if (readied) {
+        chainRoom.resetTransaction();
+        setChainIntent(null);
+      }
+    }
     if (chainIntent === "start") {
       const started = await mutate("start", { wallet: identity.wallet });
       if (started) {
@@ -619,8 +631,8 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
               onRecover={() => void chainRoom.recoverPending()}
               onCancel={() => {
                 if (chainRoom.transaction.stage === "confirmed") {
-                  if (chainIntent === "join" && !currentParticipant) void finishJoin();
-                  if (chainIntent === "ready" && currentParticipant && !currentParticipant.ready && identity) {
+                  if (chainIntent === "join" && party.status === "FUNDING" && !currentParticipant) void finishJoin();
+                  if (chainIntent === "ready" && party.status === "FUNDED" && currentParticipant && !currentParticipant.ready && identity) {
                     void mutate("ready", { wallet: identity.wallet });
                   }
                   if (chainIntent === "start" && party.status === "READY" && identity) {

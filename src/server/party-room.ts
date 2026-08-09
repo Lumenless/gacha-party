@@ -187,10 +187,13 @@ export async function markPartyReady(
 ): Promise<Party> {
   const input = walletActionSchema.parse(rawInput);
   const party = await requireParty(partyId);
-  if (party.status !== "FUNDED") throw new Error("The party must be fully funded first.");
   const participant = party.participants.find(({ wallet }) => wallet === input.wallet);
   if (!participant) throw new Error("Only party members can ready up.");
+  // A confirmed MagicBlock transaction can be mirrored more than once while
+  // clients reconcile. Once this wallet is ready, later mirrors are no-ops even
+  // if another client has already advanced the party to READY or OPENING.
   if (participant.ready) return party;
+  if (party.status !== "FUNDED") throw new Error("The party must be fully funded first.");
 
   const participants = party.participants.map((item) =>
     item.wallet === input.wallet ? { ...item, ready: true } : item,
