@@ -88,7 +88,7 @@ export function YourParties() {
         </div>
 
         {visibleState === "loading" && (
-          <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3" aria-label="Loading your parties">
+          <div className="mt-6 grid auto-cols-[minmax(17rem,22rem)] grid-flow-col gap-4 overflow-hidden" aria-label="Loading your parties">
             {Array.from({ length: 3 }, (_, index) => <div key={index} className="h-56 animate-pulse rounded-xl border bg-muted" />)}
           </div>
         )}
@@ -109,7 +109,10 @@ export function YourParties() {
         )}
 
         {visibleState === "success" && parties.length > 0 && (
-          <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div
+            className="mt-6 grid auto-cols-[minmax(17rem,22rem)] grid-flow-col gap-4 overflow-x-auto overscroll-x-contain pb-3 snap-x snap-mandatory"
+            aria-label="Your parties, horizontally scrollable"
+          >
             {parties.map((party) => {
               const funded = BigInt(party.fundedBaseUnits);
               const target = BigInt(party.fundingTargetBaseUnits);
@@ -119,7 +122,7 @@ export function YourParties() {
                 <Link
                   key={party.id}
                   href={`/party/${party.roomAddress ?? party.id}`}
-                  className="group overflow-hidden rounded-xl border bg-card transition-colors hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="group h-full snap-start overflow-hidden rounded-xl border bg-card transition-colors hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <div className="relative aspect-[16/7] overflow-hidden bg-muted">
                     <Image src={party.packImageUrl} alt="" fill className="object-cover transition-transform duration-300 motion-reduce:transition-none group-hover:scale-[1.02]" />
