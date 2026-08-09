@@ -904,7 +904,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                 </div>
                 {!currentParticipant.ready ? (
                   <Button type="button" onClick={() => void markReady()} loading={pending === "ready"}>
-                    {chainRoom.enabled && !chainRoom.isReady(identity.wallet) ? "Review ready update" : "I’m ready"}
+                    I’m ready
                   </Button>
                 ) : identity.wallet === party.hostWallet && party.status === "READY" && escrow.snapshot?.status === ProgramEscrowStatus.Locked ? (
                   <Button type="button" onClick={() => void startOpening()} loading={pending === "start"}>
@@ -927,7 +927,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                 </div>
                 {!currentParticipant.ready ? (
                   <Button type="button" onClick={() => void markReady()} loading={pending === "ready"}>
-                    {chainRoom.enabled && !chainRoom.isReady(identity.wallet) ? "Review ready update" : "I’m ready"}
+                    I’m ready
                   </Button>
                 ) : identity.wallet === party.hostWallet && party.status === "READY" ? (
                   <Button type="button" onClick={() => void startOpening()} loading={pending === "start"}>
