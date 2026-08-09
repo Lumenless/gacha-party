@@ -11,7 +11,6 @@ import {
   type TransactionWithBlockhashLifetime,
   type TransactionWithinSizeLimit,
 } from "@solana/kit";
-import { waitUntilPermissionActive } from "@magicblock-labs/ephemeral-rollups-kit";
 import { PrivateVoteChoice } from "../src/integrations/solana/program-client/src/generated";
 import {
   MagicBlockPrivateVoteClient,
@@ -61,12 +60,7 @@ async function main() {
   }
   console.log(`private vote: ${delegated.address}`);
 
-  await signAndSubmit(await client.preparePermission(signer.address, partyId));
-  if (!await waitUntilPermissionActive(session.endpoint, delegated.address, 15_000)) {
-    throw new Error("The TEE permission gateway did not activate the private account in time.");
-  }
-  console.log("permission gateway: active");
-  await signAndSubmit(await client.prepareCast(signer.address, partyId, "SELL"));
+  await signAndSubmit(await client.preparePermissionAndCast(signer.address, partyId, "SELL"));
   const cast = await client.fetchPrivateVote(signer.address, partyId);
   if (!cast || cast.choice !== PrivateVoteChoice.Sell || cast.castAt <= 0n) {
     throw new Error("Authenticated TEE state did not record the private vote.");
@@ -94,24 +88,7 @@ async function main() {
   while (Math.floor(Date.now() / 1_000) <= revealAfter) {
     await new Promise((resolveWait) => setTimeout(resolveWait, 500));
   }
-  await signAndSubmit(await client.prepareOpen(signer.address, partyId));
-
-  let publicTeeVote: PrivateVoteSnapshot | null = null;
-  const publicReadDeadline = Date.now() + 15_000;
-  while (!publicTeeVote && Date.now() < publicReadDeadline) {
-    try {
-      publicTeeVote = await unauthorized.fetchPrivateVote(signer.address, partyId);
-    } catch {
-      // The permission gateway may briefly retain its closed-account cache.
-    }
-    if (!publicTeeVote) await new Promise((resolveWait) => setTimeout(resolveWait, 500));
-  }
-  if (!publicTeeVote || publicTeeVote.choice !== PrivateVoteChoice.Sell) {
-    throw new Error("The expired vote did not become publicly readable after permission cleanup.");
-  }
-  console.log("deadline release: public on TEE");
-
-  await signAndSubmit(await client.prepareUndelegation(signer.address, partyId));
+  await signAndSubmit(await client.prepareOpenAndUndelegation(signer.address, partyId));
   let baseVote: PrivateVoteSnapshot | null = null;
   const baseCommitDeadline = Date.now() + 20_000;
   while (

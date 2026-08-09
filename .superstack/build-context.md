@@ -68,6 +68,9 @@ debug:
       fix: Clear successful join and ready intents immediately, replay confirmed recovery only while its party state is applicable, and treat an already-ready participant mirror as an idempotent no-op across later lifecycle states.
     - error: "A solo SELL decision requested four wallet approvals."
       cause: The one-player flow unnecessarily ran the full Private ER lifecycle: TEE authentication, voter initialization and delegation, permission creation, and sealed casting even though no other voter existed.
-      fix: Settle authenticated solo KEEP or SELL decisions directly through the guarded custody/settlement path, and batch same-layer permission plus cast and open plus undelegation instructions for multiplayer Private ER voting.
-  last_debug_session: 2026-08-09T12:42:00+02:00
+      fix: Keep the Private ER lifecycle for every hackathon opening, but batch same-layer permission plus cast and open plus undelegation instructions to reduce wallet approvals.
+    - error: "A solo SELL choice left the wallet USDC balance unchanged."
+      cause: Production party f2137ed9 had one sealed commitment but zero released votes. No buyback or payout transaction existed; the UI did not clearly distinguish a sealed vote from a completed sale.
+      fix: Restore Private ER release for solo rooms, persist release recovery data across tabs until settlement, keep the opening dialog explicit that buyback waits for the deadline and release signature, and retain polling so the confirmed payout balance appears after atomic settlement.
+  last_debug_session: 2026-08-09T13:02:00+02:00
 ```

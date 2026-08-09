@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { soloDecisionSchema, transitionParty, voteCommitSchema, voteRevealSchema, walletActionSchema, type Party, type PartyActivity, type VoteChoice } from "@/domain/party";
+import { transitionParty, voteCommitSchema, voteRevealSchema, walletActionSchema, type Party, type PartyActivity, type VoteChoice } from "@/domain/party";
 import { calculateSettlement } from "@/domain/settlement";
 import type { CollectorCryptAdapter } from "@/integrations/collector-crypt/types";
 import type { CardCustodyAdapter, RealtimePartyAdapter, SealedVotingAdapter } from "@/integrations/contracts";
@@ -178,40 +178,6 @@ async function settleDecision(
     settlement: { mode: "KEEP", idempotencyKey, completedAt, vaultAddress },
     activity: [...party.activity, activity("SETTLED", "KEEP won and the card moved to the demo party vault")],
   };
-}
-
-export async function decideSoloParty(
-  partyId: string,
-  rawInput: unknown,
-  realtime: RealtimePartyAdapter,
-  collectorCrypt: CollectorCryptAdapter,
-  custody: CardCustodyAdapter,
-  now = Date.now(),
-  realSell?: (party: Party, collectorCrypt: CollectorCryptAdapter) => Promise<RealSellSettlement>,
-  realKeep?: (party: Party) => Promise<unknown>,
-): Promise<Party> {
-  const input = soloDecisionSchema.parse(rawInput);
-  const party = await requireParty(partyId);
-  requireParticipant(party, input.wallet);
-  if (party.status === "COMPLETED") return party;
-  if (party.participants.length !== 1) {
-    throw new Error("Multiplayer parties must use sealed voting.");
-  }
-  if (party.status !== "VOTING" || !party.voting || !party.reveal) {
-    throw new Error("The card is not ready for a decision.");
-  }
-
-  const tally = input.vote === "SELL" ? { keep: 0, sell: 1 } : { keep: 1, sell: 0 };
-  const idempotencyKey = `${party.id}:${party.reveal.mint}:${input.vote}:v1`;
-  if (!await settlementLock.tryAcquire(partyId, idempotencyKey) && !await settlementLock.tryResume(partyId, idempotencyKey, now)) {
-    throw new Error("Settlement is already processing. Retry shortly.");
-  }
-  const completed = await saveAndPublish(
-    await settleDecision(party, input.vote, tally, collectorCrypt, custody, realSell, realKeep),
-    realtime,
-  );
-  await settlementLock.complete(partyId, idempotencyKey);
-  return completed;
 }
 
 export async function revealPartyVote(

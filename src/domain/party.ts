@@ -84,10 +84,6 @@ export const voteRevealSchema = walletActionSchema.extend({
   nonce: z.string().min(16).max(128),
 });
 
-export const soloDecisionSchema = walletActionSchema.extend({
-  vote: z.enum(["KEEP", "SELL"]),
-});
-
 export type VoteChoice = "KEEP" | "SELL";
 
 export type PartyActivity = {

@@ -142,8 +142,9 @@ MagicBlock's eATA model is the later path if contribution balances themselves mu
 - The browser-facing Kit boundary verifies the Intel TDX quote before asking the connected wallet to sign MagicBlock's authentication challenge. Auth tokens are accepted only from an HTTPS base endpoint and never committed or sent to the application server.
 - A devnet smoke test proved authenticated initialization, permission activation, private SELL write, authenticated read, an unauthorized read returning no account data, rejection of early permission cleanup, deadline-gated public release, and an intact commit back to Solana.
 - Expiry is voter-driven: available wallets release after the deadline and unavailable wallets abstain. This avoids granting the host or application server early read access. A future shared private coordinator may add an all-voted shortcut.
-- A solo opener makes a direct KEEP or SELL decision because there is no second voter from whom to hide it. The authenticated server applies the same custody and idempotent settlement paths without creating a pointless Private ER voter account.
-- Multiplayer PER batches permission creation with the sealed cast, then batches permission opening with undelegation. Base-layer delegation and TEE execution still require separate transactions because they execute on different SVM layers.
+- The browser persists its random reveal nonce per party and wallet in both tab and durable local storage until a verified release succeeds. Reloading or reopening the room can therefore resume an interrupted payout without creating a second vote or settlement.
+- Solo and multiplayer openings both use the verified Private ER lifecycle so the hackathon demo exercises MagicBlock even with one wallet. A sealed SELL is not treated as a completed sale: buyback and payout begin only after the vote returns to devnet.
+- PER batches permission creation with the sealed cast, then batches permission opening with undelegation. Base-layer delegation and TEE execution still require separate transactions because they execute on different SVM layers.
 - PER stays opt-in because it requires wallet verification, cross-layer transactions, and a fixed deadline. Commit-reveal remains the default demo mode; neither mode silently falls back to the other.
 
 ## Room creation UX decision
