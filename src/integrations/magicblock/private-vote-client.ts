@@ -104,6 +104,25 @@ export class MagicBlockPrivateVoteClient {
     }));
   }
 
+  async preparePermissionAndCast(voter: string, partyId: string, choice: "KEEP" | "SELL") {
+    const voterAddress = address(voter);
+    const privateVote = await findPrivateVoteAddress(voter, partyId);
+    const permission = await permissionPdaFromAccount(privateVote);
+    return this.prepare("cast", "tee", voterAddress, privateVote, [
+      getInitializePrivateVotePermissionInstruction({
+        voter: createNoopSigner(voterAddress),
+        privateVote,
+        permission,
+      }),
+      getCastPrivateVoteInstruction({
+        voter: createNoopSigner(voterAddress),
+        privateVote,
+        permission,
+        choice: choice === "KEEP" ? 1 : 2,
+      }),
+    ]);
+  }
+
   async prepareCast(voter: string, partyId: string, choice: "KEEP" | "SELL") {
     const voterAddress = address(voter);
     const privateVote = await findPrivateVoteAddress(voter, partyId);
@@ -132,6 +151,22 @@ export class MagicBlockPrivateVoteClient {
       voter: createNoopSigner(voterAddress),
       privateVote,
     }));
+  }
+
+  async prepareOpenAndUndelegation(voter: string, partyId: string) {
+    const voterAddress = address(voter);
+    const privateVote = await findPrivateVoteAddress(voter, partyId);
+    return this.prepare("undelegate", "tee", voterAddress, privateVote, [
+      getOpenPrivateVoteInstruction({
+        voter: createNoopSigner(voterAddress),
+        privateVote,
+        permission: await permissionPdaFromAccount(privateVote),
+      }),
+      getUndelegatePrivateVoteInstruction({
+        voter: createNoopSigner(voterAddress),
+        privateVote,
+      }),
+    ]);
   }
 
   async fetchPrivateVote(voter: string, partyId: string): Promise<PrivateVoteSnapshot | null> {

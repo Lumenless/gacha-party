@@ -66,5 +66,8 @@ debug:
     - error: "The party must be fully funded first toast appeared during a successful opening."
       cause: A confirmed MagicBlock ready intent remained active in the client and replayed its offchain ready mirror after the party had already advanced from FUNDED to OPENING.
       fix: Clear successful join and ready intents immediately, replay confirmed recovery only while its party state is applicable, and treat an already-ready participant mirror as an idempotent no-op across later lifecycle states.
-  last_debug_session: 2026-08-09T12:24:00+02:00
+    - error: "A solo SELL decision requested four wallet approvals."
+      cause: The one-player flow unnecessarily ran the full Private ER lifecycle: TEE authentication, voter initialization and delegation, permission creation, and sealed casting even though no other voter existed.
+      fix: Settle authenticated solo KEEP or SELL decisions directly through the guarded custody/settlement path, and batch same-layer permission plus cast and open plus undelegation instructions for multiplayer Private ER voting.
+  last_debug_session: 2026-08-09T12:42:00+02:00
 ```

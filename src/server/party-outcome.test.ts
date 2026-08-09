@@ -7,7 +7,7 @@ import type { RealtimePartyAdapter, SealedVotingAdapter } from "@/integrations/c
 import { CommitRevealVotingAdapter, createVoteCommitment } from "@/integrations/voting/commit-reveal";
 import { partyRepository } from "./party-repository";
 import { settlementLock } from "./settlement-lock";
-import { commitPartyVote, expirePartyVote, revealPartyCard, revealPartyVote, sellHeldPartyCard } from "./party-outcome";
+import { commitPartyVote, decideSoloParty, expirePartyVote, revealPartyCard, revealPartyVote, sellHeldPartyCard } from "./party-outcome";
 
 const realtime: RealtimePartyAdapter = {
   async publish() {},
@@ -175,6 +175,44 @@ describe("reveal, sealed voting and settlement", () => {
     } finally {
       process.env.VOTING_MODE = previousMode;
     }
+  });
+
+  it("settles a solo SELL decision immediately without sealed voting", async () => {
+    const original = (await partyRepository.get("outcome-party"))!;
+    await partyRepository.save({
+      ...original,
+      revision: original.revision + 1,
+      participants: [
+        { ...original.participants[0]!, contributionBaseUnits: parseUsdc("50").toString() },
+      ],
+    }, original.revision);
+    await revealPartyCard("outcome-party", { wallet: "DEMO_HOST_WALLET" }, realtime, collector, 2_000);
+
+    const completed = await decideSoloParty(
+      "outcome-party",
+      { wallet: "DEMO_HOST_WALLET", vote: "SELL" },
+      realtime,
+      collector,
+      custody,
+      3_000,
+    );
+
+    expect(completed.status).toBe("COMPLETED");
+    expect(completed.voting?.result).toEqual({ keep: 0, sell: 1, outcome: "SELL" });
+    expect(completed.settlement?.mode).toBe("SELL");
+    expect(completed.settlement?.shares).toHaveLength(1);
+  });
+
+  it("does not let a multiplayer party bypass sealed voting", async () => {
+    await revealPartyCard("outcome-party", { wallet: "DEMO_HOST_WALLET" }, realtime, collector, 2_000);
+    await expect(decideSoloParty(
+      "outcome-party",
+      { wallet: "DEMO_HOST_WALLET", vote: "SELL" },
+      realtime,
+      collector,
+      custody,
+      3_000,
+    )).rejects.toThrow("Multiplayer parties must use sealed voting");
   });
 
   it("reopens an expired vote instead of settling an empty tally as KEEP", async () => {

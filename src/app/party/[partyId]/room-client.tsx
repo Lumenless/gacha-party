@@ -36,7 +36,7 @@ import { useSolanaEscrow, type EscrowIntent } from "@/integrations/solana/use-so
 import { EscrowStatus as ProgramEscrowStatus } from "@/integrations/solana/program-client/src/generated";
 
 type DemoIdentity = { wallet: string; displayName: string };
-type PendingAction = "join" | "contribute" | "syncContribution" | "ready" | "start" | "reveal" | "voteCommit" | "voteReveal" | "voteExpire" | "sellHeld" | null;
+type PendingAction = "join" | "contribute" | "syncContribution" | "ready" | "start" | "reveal" | "decide" | "voteCommit" | "voteReveal" | "voteExpire" | "sellHeld" | null;
 type LiveState = "connecting" | "live" | "reconnecting";
 type VoteSecret = { vote: VoteChoice; nonce: string };
 
@@ -104,8 +104,8 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
   const membershipSyncRequested = useRef<string | null>(null);
   const chainRoom = useMagicBlockRoom(party);
   const privateVote = useMagicBlockPrivateVote(party.id);
+  const privateVotingEnabled = privateVote.enabled && party.participants.length > 1;
   const {
-    enabled: privateVotingEnabled,
     transaction: privateVoteTransaction,
     seal: sealPrivateVote,
     release: releasePrivateVote,
@@ -261,6 +261,8 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
     try {
       const actionPath = action === "voteCommit"
         ? "vote/commit"
+        : action === "decide"
+          ? "decision"
         : action === "voteReveal"
           ? "vote/reveal"
           : action === "voteExpire"
@@ -539,6 +541,10 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
   async function castVote(event: FormEvent) {
     event.preventDefault();
     if (!identity || !selectedVote) return;
+    if (party.participants.length === 1) {
+      await mutate("decide", { wallet: identity.wallet, vote: selectedVote });
+      return;
+    }
     const nonce = randomHex(24);
     const secret = { vote: selectedVote, nonce };
     const commitment = await voteCommitment(party.id, identity.wallet, selectedVote, nonce);
@@ -734,15 +740,19 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                   {formatUsdc(BigInt(party.reveal.insuredValueBaseUnits))} USDC insured value
                 </p>
                 <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                  Choose privately. Votes stay sealed until everyone votes or the timer ends.
+                  {party.participants.length === 1
+                    ? "Choose what to do with your card. Your choice is applied immediately."
+                    : "Choose privately. Votes stay sealed until everyone votes or the timer ends."}
                 </p>
               </div>
             </div>
 
             <div className="mt-6 border-t pt-5">
               <div className="flex items-center gap-2 text-primary">
-                <EyeOff className="size-4" aria-hidden="true" />
-                <p className="font-mono text-xs uppercase tracking-[0.18em]">Sealed decision</p>
+                {party.participants.length === 1 ? <Coins className="size-4" aria-hidden="true" /> : <EyeOff className="size-4" aria-hidden="true" />}
+                <p className="font-mono text-xs uppercase tracking-[0.18em]">
+                  {party.participants.length === 1 ? "Your decision" : "Sealed decision"}
+                </p>
               </div>
               <h3 className="mt-2 text-lg font-semibold">Keep it or sell it?</h3>
 
@@ -782,13 +792,22 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                     type="submit"
                     className="mt-4 w-full"
                     disabled={!selectedVote || (privateVotingEnabled && !walletAuth.canSignTransactions)}
-                    loading={pending === "voteCommit" || ["authenticating", "initializing", "permissioning", "casting"].includes(privateVoteTransaction.stage)}
+                    loading={pending === "decide" || pending === "voteCommit" || ["authenticating", "initializing", "permissioning", "casting"].includes(privateVoteTransaction.stage)}
                   >
-                    <LockKeyhole className="size-4" aria-hidden="true" /> Seal my vote
+                    {party.participants.length === 1
+                      ? selectedVote === "SELL"
+                        ? <><Coins className="size-4" aria-hidden="true" /> Sell card</>
+                        : <><Landmark className="size-4" aria-hidden="true" /> Keep card</>
+                      : <><LockKeyhole className="size-4" aria-hidden="true" /> Seal my vote</>}
                   </Button>
                   {privateVotingEnabled && (
                     <p className="mt-3 text-xs leading-5 text-muted-foreground">
                       Your wallet verifies the MagicBlock TEE and seals the vote. No tokens move.
+                    </p>
+                  )}
+                  {party.participants.length === 1 && (
+                    <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                      No sealed vote is needed when you open alone. The devnet operator completes the selected custody or buyback action.
                     </p>
                   )}
                 </>
@@ -816,10 +835,12 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                 </div>
               )}
 
-              <div className="mt-4 flex items-center justify-between gap-4 border-t pt-4 text-xs text-muted-foreground">
-                <span>{party.voting.commitCount} / {party.participants.length} votes sealed</span>
-                <span>{party.voting.revealCount} {privateVotingEnabled ? "released on devnet" : "revealed"}</span>
-              </div>
+              {party.participants.length > 1 && (
+                <div className="mt-4 flex items-center justify-between gap-4 border-t pt-4 text-xs text-muted-foreground">
+                  <span>{party.voting.commitCount} / {party.participants.length} votes sealed</span>
+                  <span>{party.voting.revealCount} {privateVotingEnabled ? "released on devnet" : "revealed"}</span>
+                </div>
+              )}
               <Button type="button" variant="ghost" className="mt-2 w-full" onClick={() => setOpeningDialogDismissed(true)}>
                 Close
               </Button>

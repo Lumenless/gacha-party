@@ -121,20 +121,7 @@ export function useMagicBlockPrivateVote(partyId: string) {
 
       await submit(
         client,
-        await client.preparePermission(wallet.walletAddress, partyId),
-        "permissioning",
-      );
-      const permissionActive = await import("@magicblock-labs/ephemeral-rollups-kit")
-        .then(({ waitUntilPermissionActive }) => waitUntilPermissionActive(
-          sessionRef.current!.session.endpoint,
-          snapshot!.address,
-          15_000,
-        ));
-      if (!permissionActive) throw new Error("The private permission gateway did not activate in time.");
-
-      await submit(
-        client,
-        await client.prepareCast(wallet.walletAddress, partyId, choice),
+        await client.preparePermissionAndCast(wallet.walletAddress, partyId, choice),
         "casting",
       );
       const sealed = await client.fetchPrivateVote(wallet.walletAddress, partyId);
@@ -173,11 +160,11 @@ export function useMagicBlockPrivateVote(partyId: string) {
       );
       let opened: PrivateVoteSnapshot | null = null;
       try { opened = await publicClient.fetchPrivateVote(wallet.walletAddress, partyId); } catch { /* still private */ }
-      if (!opened) {
-        await submit(client, await client.prepareOpen(wallet.walletAddress, partyId), "opening");
+      if (opened) {
+        await submit(client, await client.prepareUndelegation(wallet.walletAddress, partyId), "undelegating");
+      } else {
+        await submit(client, await client.prepareOpenAndUndelegation(wallet.walletAddress, partyId), "undelegating");
       }
-
-      await submit(client, await client.prepareUndelegation(wallet.walletAddress, partyId), "undelegating");
       const released = await poll(
         () => client.fetchBasePrivateVote(wallet.walletAddress!, partyId),
         (value) => value.choice === expected && value.castAt === sealed.castAt,
