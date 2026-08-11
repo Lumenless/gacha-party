@@ -2,18 +2,16 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   Check,
+  ChevronDown,
   Clock3,
   Coins,
-  Copy,
   EyeOff,
   Landmark,
   LockKeyhole,
-  Radio,
-  ShieldCheck,
   Sparkles,
   Users,
   WalletCards,
@@ -79,6 +77,36 @@ async function voteCommitment(partyId: string, wallet: string, vote: VoteChoice,
   const data = new TextEncoder().encode(`${partyId}:${wallet}:${vote}:${nonce}`);
   const digest = await crypto.subtle.digest("SHA-256", data);
   return Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, "0")).join("");
+}
+
+function NextStep({
+  title,
+  detail,
+  icon,
+  action,
+}: {
+  title: string;
+  detail?: string;
+  icon: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <section className="mt-6 rounded-xl border border-primary/40 bg-primary/5 p-4 sm:p-5" aria-labelledby="next-step-title">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="grid size-11 shrink-0 place-items-center rounded-full bg-primary/15 text-primary" aria-hidden="true">
+            {icon}
+          </span>
+          <div className="min-w-0">
+            <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Next step</p>
+            <h2 id="next-step-title" className="mt-1 text-xl font-semibold">{title}</h2>
+            {detail && <p className="mt-1 text-sm text-muted-foreground">{detail}</p>}
+          </div>
+        </div>
+        {action && <div className="shrink-0 sm:text-right">{action}</div>}
+      </div>
+    </section>
+  );
 }
 
 export function RoomClient({ initialParty }: { initialParty: Party }) {
@@ -259,10 +287,6 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
     ? Number(escrow.snapshot.lockedAt) * 1_000 + LOCKED_RECOVERY_MS
     : null;
   const lockedRecoveryPassed = lockedRecoveryAtMs !== null && clock > lockedRecoveryAtMs;
-  const lockedRecoveryLabel = lockedRecoveryAtMs === null ? null : new Intl.DateTimeFormat("en", {
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(lockedRecoveryAtMs));
   const countdownMilliseconds = party.countdownEndsAt && clock
     ? new Date(party.countdownEndsAt).getTime() - clock
     : 3_000;
@@ -362,12 +386,13 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
   }, [currentParticipant, identity, mutate, openingError, party.countdownEndsAt, party.hostWallet, party.status, realExecution, clock]);
 
   useEffect(() => {
+    const releaseFlowAlreadyShown = voteReleasePrompted.current && privateVoteFlow?.phase !== "seal";
     if (
       party.status !== "VOTING" ||
       !party.voting ||
       !identity ||
       !voteSecret ||
-      voteReleasePrompted.current ||
+      releaseFlowAlreadyShown ||
       (privateVotingEnabled
         ? votingSeconds > 0
         : party.voting.phase === "COMMIT" && votingSeconds > 0)
@@ -378,7 +403,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
       setPrivateVoteFlow({ phase: "release", choice: voteSecret.vote });
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [identity, party.status, party.voting, privateVotingEnabled, voteSecret, votingSeconds]);
+  }, [identity, party.status, party.voting, privateVoteFlow?.phase, privateVotingEnabled, voteSecret, votingSeconds]);
 
   useEffect(() => {
     if (
@@ -628,6 +653,18 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
     }
   }
 
+  function scrollToFunding() {
+    document.getElementById("funding")?.scrollIntoView({ block: "start" });
+    window.setTimeout(() => document.getElementById("onchain-contribution")?.focus(), 0);
+  }
+
+  const isHost = identity?.wallet === party.hostWallet;
+  const escrowLocked = !escrow.enabled || escrow.snapshot?.status === ProgramEscrowStatus.Locked;
+  const unreadyCount = party.participants.filter((participant) => !participant.ready).length;
+  const releaseRequired = party.status === "VOTING" && Boolean(
+    voteSecret && votingSeconds === 0 && privateVotingEnabled && privateVoteTransaction.stage !== "released",
+  );
+
   return (
     <main className="mx-auto w-full max-w-7xl px-4 py-8 md:px-6 lg:px-8">
       <div className="flex flex-col justify-between gap-4 border-b pb-6 sm:flex-row sm:items-end">
@@ -646,34 +683,162 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
           </div>
           <h1 className="display-type mt-3 text-4xl font-semibold">{party.name}</h1>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {identity && (
-            <span className="inline-flex min-h-11 items-center gap-2 rounded-md border bg-secondary px-4 font-mono text-xs text-secondary-foreground">
-              <span className="size-2 rounded-full bg-primary" aria-hidden="true" />
-              {truncateWallet(identity.wallet)}
-            </span>
-          )}
-          <Button type="button" variant="secondary" onClick={copyInvite} aria-live="polite">
-            {copied ? <Check className="size-4 text-primary" aria-hidden="true" /> : <Copy className="size-4" aria-hidden="true" />}
-            {copied ? "Invite copied" : "Copy invite"}
-          </Button>
-        </div>
       </div>
+
+      {!identity ? (
+        <NextStep
+          title="Connect your wallet"
+          detail="Connect to deposit, ready up, and vote."
+          icon={<WalletCards className="size-5" />}
+          action={<WalletAuthButton />}
+        />
+      ) : chainRoom.enabled && chainRoom.status === "missing" ? (
+        <NextStep
+          title={isHost ? "Activate this party" : "Waiting for the host"}
+          detail={isHost ? "Activate the shared room before continuing." : "The host needs to activate this room."}
+          icon={<Sparkles className="size-5" />}
+          action={isHost ? <Button type="button" onClick={() => {
+            chainRoom.resetTransaction();
+            setChainIntent("initialize");
+          }}>Activate party</Button> : undefined}
+        />
+      ) : party.status === "FUNDING" ? (
+        deadlinePassed ? (
+          <NextStep
+            title="Funding ended"
+            detail={escrow.receipt ? "Return your contribution from the party vault." : "This party did not reach its target."}
+            icon={<Clock3 className="size-5" />}
+            action={escrow.receipt ? <Button type="button" onClick={scrollToFunding}>Review refund</Button> : undefined}
+          />
+        ) : escrow.enabled && escrow.status === "missing" ? (
+          <NextStep
+            title={isHost ? "Create the party vault" : "Waiting for the host"}
+            detail={isHost ? "Create the vault before deposits open." : "Deposits open after the vault is ready."}
+            icon={<Landmark className="size-5" />}
+            action={isHost ? <Button type="button" onClick={() => {
+              setEscrowAmount(0n);
+              escrow.resetTransaction();
+              setEscrowIntent("initialize");
+            }}>Create vault</Button> : undefined}
+          />
+        ) : !escrow.enabled && !currentParticipant ? (
+          <NextStep
+            title="Join this party"
+            detail="Join before adding funds."
+            icon={<Users className="size-5" />}
+            action={<Button type="button" onClick={() => setJoinDialogOpen(true)}>Join party</Button>}
+          />
+        ) : escrow.receipt ? (
+          <NextStep
+            title="Invite your party"
+            detail={`${formatUsdc(remaining)} ${escrow.enabled ? fundsTokenLabel : "USDC"} left to fund.`}
+            icon={<Users className="size-5" />}
+            action={<Button type="button" onClick={copyInvite}>{copied ? "Invite copied" : "Copy invite"}</Button>}
+          />
+        ) : (
+          <NextStep
+            title="Deposit into the party"
+            detail={`${formatUsdc(remaining)} ${escrow.enabled ? fundsTokenLabel : "USDC"} remaining.`}
+            icon={<Coins className="size-5" />}
+            action={<Button type="button" onClick={scrollToFunding}>Deposit</Button>}
+          />
+        )
+      ) : (party.status === "FUNDED" || party.status === "READY") && currentParticipant ? (
+        !currentParticipant.ready ? (
+          <NextStep
+            title="Ready to open?"
+            detail="Confirm when you’re ready for the countdown."
+            icon={<Check className="size-5" />}
+            action={<Button type="button" onClick={() => void markReady()} loading={pending === "ready"}>I’m ready</Button>}
+          />
+        ) : escrow.enabled && !escrowLocked ? (
+          <NextStep
+            title="Securing the party vault…"
+            detail="Your ready status is confirmed."
+            icon={<Landmark className="size-5" />}
+          />
+        ) : isHost && party.status === "READY" ? (
+          <NextStep
+            title="Everyone’s ready"
+            detail="Start the shared countdown."
+            icon={<Sparkles className="size-5" />}
+            action={<Button type="button" onClick={() => void startOpening()} loading={pending === "start"}>Open pack</Button>}
+          />
+        ) : (
+          <NextStep
+            title={unreadyCount > 0 ? `Waiting for ${unreadyCount} ${unreadyCount === 1 ? "player" : "players"}` : "Waiting for the host"}
+            detail={unreadyCount > 0 ? "Your ready status is confirmed." : "Everyone is ready to open."}
+            icon={<Users className="size-5" />}
+          />
+        )
+      ) : party.status === "OPENING" ? (
+        <NextStep
+          title={countdownLabel === "OPEN" ? "Opening pack…" : `Opening in ${countdownLabel}`}
+          icon={<Sparkles className="size-5" />}
+          action={openingDialogDismissed ? <Button type="button" onClick={() => setOpeningDialogDismissed(false)}>View opening</Button> : undefined}
+        />
+      ) : party.status === "VOTING" && currentParticipant ? (
+        releaseRequired ? (
+          <NextStep
+            title="Release your vote"
+            detail="Release it from the Private ER to finish settlement."
+            icon={<EyeOff className="size-5" />}
+            action={(
+              <Button type="button" onClick={() => {
+                setPrivateVoteFlowError(null);
+                setPrivateVoteFlow({ phase: "release", choice: voteSecret!.vote });
+              }}>
+                Release and settle
+              </Button>
+            )}
+          />
+        ) : voteSecret ? (
+          <NextStep
+            title={votingSeconds > 0 ? `Vote sealed · ${votingSeconds}s` : "Vote sealed"}
+            detail={votingSeconds > 0 ? "Waiting for the private reveal timer." : "Settlement is processing."}
+            icon={<EyeOff className="size-5" />}
+            action={<Button type="button" variant="secondary" onClick={() => setOpeningDialogDismissed(false)}>View vote</Button>}
+          />
+        ) : (
+          <NextStep
+            title="Keep or sell?"
+            detail="Cast your private vote."
+            icon={<EyeOff className="size-5" />}
+            action={<Button type="button" onClick={() => setOpeningDialogDismissed(false)}>Vote now</Button>}
+          />
+        )
+      ) : party.status === "COMPLETED" ? (
+        <NextStep
+          title="Party complete"
+          detail={party.settlement?.mode === "SELL" ? "Buyback proceeds were distributed." : "The card is held by the party."}
+          icon={<Check className="size-5" />}
+          action={<a href="#result" className="inline-flex min-h-11 items-center justify-center rounded-md bg-primary px-5 text-sm font-semibold text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">View result</a>}
+        />
+      ) : party.status === "CANCELLED" || party.status === "EXPIRED" ? (
+        <NextStep
+          title="Funding ended"
+          detail={escrow.receipt ? "Your contribution is ready to return." : "No action is required."}
+          icon={<Clock3 className="size-5" />}
+          action={escrow.receipt ? <Button type="button" onClick={scrollToFunding}>Review refund</Button> : undefined}
+        />
+      ) : null}
 
       {chainRoom.enabled && (
         <div className="mt-5 space-y-4">
-          <ChainRoomPanel
-            status={chainRoom.status}
-            snapshot={chainRoom.snapshot}
-            error={chainRoom.error}
-            isHost={identity?.wallet === party.hostWallet}
-            canSignTransactions={walletAuth.canSignTransactions}
-            onReviewActivation={() => {
-              chainRoom.resetTransaction();
-              setChainIntent("initialize");
-            }}
-            onRefresh={() => void chainRoom.refresh()}
-          />
+          {chainRoom.status !== "active" && (
+            <ChainRoomPanel
+              status={chainRoom.status}
+              snapshot={chainRoom.snapshot}
+              error={chainRoom.error}
+              isHost={identity?.wallet === party.hostWallet}
+              canSignTransactions={walletAuth.canSignTransactions}
+              onReviewActivation={() => {
+                chainRoom.resetTransaction();
+                setChainIntent("initialize");
+              }}
+              onRefresh={() => void chainRoom.refresh()}
+            />
+          )}
           {chainIntent && (
             <ChainTransactionReview
               intent={chainIntent}
@@ -903,6 +1068,8 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
           transaction={privateVoteTransaction}
           actionPending={pending === "voteCommit" || pending === "voteReveal"}
           flowError={privateVoteFlowError}
+          secondsRemaining={votingSeconds}
+          remainingVoters={Math.max(0, party.participants.length - (party.voting?.commitCount ?? 0))}
           onContinue={() => void continuePrivateVoteFlow()}
           onClose={() => setPrivateVoteFlow(null)}
         />
@@ -950,7 +1117,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
         </div>
       </Dialog>
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-[.78fr_1.22fr]">
+      <div className="mt-6 grid gap-6 lg:grid-cols-[.78fr_1.22fr]">
         <section className="h-fit rounded-xl border bg-card p-5">
           <div className="relative mx-auto aspect-[4/5] max-w-64 overflow-hidden rounded-xl bg-muted">
             <Image
@@ -970,7 +1137,7 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
               </div>
             )}
           </div>
-          <div className="mt-5 flex items-end justify-between gap-3">
+          <div className="mt-5">
             <div>
               <p className="text-xs text-muted-foreground">{party.reveal ? `${party.reveal.rarity} · ${party.reveal.grade}` : "Selected pack"}</p>
               <h2 className="mt-1 text-lg font-semibold">{party.reveal?.name ?? party.packName}</h2>
@@ -980,17 +1147,14 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                 </p>
               )}
             </div>
-            <span className="rounded-full border px-3 py-1.5 text-xs text-muted-foreground">
-              {realExecution ? (party.reveal ? "Devnet reveal" : "Live devnet pack") : (party.reveal ? "Demo reveal" : "Mock pack")}
-            </span>
           </div>
 
-          <div className="mt-6 border-t pt-5">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold">Room activity</h2>
-              <Radio className="size-4 text-primary" aria-hidden="true" />
-            </div>
-            <ol className="mt-4 space-y-3">
+          <details className="group mt-5 border-t pt-4">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between rounded-md text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              Activity
+              <ChevronDown className="size-4 text-muted-foreground transition-transform duration-150 ease-out group-open:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
+            </summary>
+            <ol className="space-y-3 pb-1 pt-2">
               {party.activity.slice(-5).reverse().map((item) => (
                 <li key={item.id} className="flex gap-3 text-xs leading-5 text-muted-foreground">
                   <span className="mt-2 size-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
@@ -998,11 +1162,11 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                 </li>
               ))}
             </ol>
-          </div>
+          </details>
         </section>
 
-        <section className="space-y-6">
-          <div className="rounded-xl border bg-card p-5 sm:p-6">
+        <section className="space-y-5">
+          <div id="funding" className="scroll-mt-4 rounded-xl border bg-card p-5 sm:p-6">
             <div className="flex items-baseline justify-between gap-4">
               <div>
                 <p className="text-sm text-muted-foreground">Funding progress</p>
@@ -1017,8 +1181,6 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
             </div>
             <div className="mt-4 flex flex-wrap gap-4 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1.5"><Clock3 className="size-4" aria-hidden="true" /> Ends {deadline}</span>
-              <span className="inline-flex items-center gap-1.5"><ShieldCheck className="size-4" aria-hidden="true" /> Simple majority</span>
-              <span className="inline-flex items-center gap-1.5"><Sparkles className="size-4" aria-hidden="true" /> {escrow.enabled ? `Onchain ${fundsTokenLabel}` : "Mock USDC only"}</span>
             </div>
           </div>
 
@@ -1039,7 +1201,6 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                 remaining={remaining}
                 deadlinePassed={deadlinePassed}
                 lockedRecoveryPassed={lockedRecoveryPassed}
-                lockedRecoveryLabel={lockedRecoveryLabel}
                 onContributionChange={setContribution}
                 onReviewInitialize={() => {
                   setEscrowAmount(0n);
@@ -1080,56 +1241,33 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
           )}
 
           {!escrow.enabled && !currentParticipant && identity && !deadlinePassed && (party.status === "FUNDING" || party.status === "FUNDED") && party.participants.length < party.maxPlayers && escrow.snapshot?.status !== ProgramEscrowStatus.Locked && (
-            <>
-              <div className="flex flex-col justify-between gap-4 rounded-xl border border-primary/30 bg-primary/5 p-5 sm:flex-row sm:items-center sm:p-6">
+            <Dialog
+              open={joinDialogOpen}
+              ariaLabel="Join this party"
+              dismissible={pending !== "join"}
+              onClose={() => setJoinDialogOpen(false)}
+            >
+              <form onSubmit={join}>
                 <div className="flex items-center gap-3">
                   <span className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/15 text-primary"><WalletCards className="size-5" aria-hidden="true" /></span>
-                  <div><h2 className="font-semibold">Join this party</h2><p className="text-xs text-muted-foreground">Join the room before contributing to its shared vault.</p></div>
+                  <h2 className="text-xl font-semibold">Join this party</h2>
                 </div>
-                <Button type="button" onClick={() => setJoinDialogOpen(true)}>Join party</Button>
-              </div>
-              <Dialog
-                open={joinDialogOpen}
-                ariaLabel="Join this party"
-                dismissible={pending !== "join"}
-                onClose={() => setJoinDialogOpen(false)}
-              >
-                <form onSubmit={join}>
-                  <div className="flex items-center gap-3">
-                    <span className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/15 text-primary"><WalletCards className="size-5" aria-hidden="true" /></span>
-                    <div><h2 className="text-xl font-semibold">Join this party</h2><p className="mt-1 text-sm text-muted-foreground">{walletAuth.enabled ? "Your verified Solana wallet identifies you in this room." : "A browser-scoped demo wallet will represent you."}</p></div>
-                  </div>
-                  <div className="mt-5 space-y-1.5">
-                    <label htmlFor="displayName" className="text-sm font-medium">Display name</label>
-                    <Input id="displayName" value={displayName} onChange={(event) => setDisplayName(event.target.value)} minLength={2} maxLength={24} autoComplete="nickname" required autoFocus />
-                  </div>
-                  <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                    <Button type="button" variant="ghost" onClick={() => setJoinDialogOpen(false)} disabled={pending === "join"}>Cancel</Button>
-                    <Button type="submit" loading={pending === "join"} disabled={chainRoom.enabled && chainRoom.status !== "active"}>
-                      {chainRoom.enabled && !chainRoom.isParticipant(identity.wallet) ? "Review onchain join" : `Join with ${walletAuth.enabled ? "wallet" : "demo wallet"}`}
-                    </Button>
-                  </div>
-                </form>
-              </Dialog>
-            </>
+                <div className="mt-5 space-y-1.5">
+                  <label htmlFor="displayName" className="text-sm font-medium">Display name</label>
+                  <Input id="displayName" value={displayName} onChange={(event) => setDisplayName(event.target.value)} minLength={2} maxLength={24} autoComplete="nickname" required autoFocus />
+                </div>
+                <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                  <Button type="button" variant="ghost" onClick={() => setJoinDialogOpen(false)} disabled={pending === "join"}>Cancel</Button>
+                  <Button type="submit" loading={pending === "join"} disabled={chainRoom.enabled && chainRoom.status !== "active"}>Join party</Button>
+                </div>
+              </form>
+            </Dialog>
           )}
 
-          {walletAuth.enabled && !identity && (
-            <div className="rounded-xl border border-primary/30 bg-primary/5 p-5 sm:p-6">
-              <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-                <div>
-                  <h2 className="font-semibold">Verify a wallet to enter</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">Sign a free message. No transaction or token approval is requested.</p>
-                </div>
-                <WalletAuthButton />
-              </div>
-            </div>
-          )}
-
-          <div className="rounded-xl border bg-card p-5 sm:p-6">
+          <div id="party" className="rounded-xl border bg-card p-5 sm:p-6">
             <div className="flex items-center justify-between">
               <h2 className="font-semibold">Party</h2>
-              <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"><Users className="size-4" aria-hidden="true" /> {party.participants.length} / {party.maxPlayers}</span>
+              <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"><Users className="size-4" aria-hidden="true" /> {party.participants.length}</span>
             </div>
             <ul className="mt-4 space-y-2">
               {party.participants.map((participant) => {
@@ -1154,11 +1292,6 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                 );
               })}
             </ul>
-            {party.participants.length < party.maxPlayers && !deadlinePassed && (party.status === "FUNDING" || party.status === "FUNDED") && escrow.snapshot?.status !== ProgramEscrowStatus.Locked && (
-              <div className="mt-3 flex min-h-14 items-center justify-between rounded-lg border border-dashed px-3 text-sm text-muted-foreground">
-                <span>Waiting for friends</span><Copy className="size-4" aria-hidden="true" />
-              </div>
-            )}
           </div>
 
           {currentParticipant && party.status === "FUNDING" && !escrow.enabled && (
@@ -1180,110 +1313,8 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
             </form>
           )}
 
-          {identity && currentParticipant && !deadlinePassed && (party.status === "FUNDED" || party.status === "READY") && escrow.enabled && (
-            <div className="rounded-xl border border-primary/30 bg-primary/5 p-5 sm:p-6">
-              <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-                <div>
-                  <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Target reached onchain</p>
-                  <h2 className="mt-2 text-xl font-semibold">{party.status === "READY" ? "Everyone is ready" : "Ready for the real pull?"}</h2>
-                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                    {escrow.snapshot?.status === ProgramEscrowStatus.Locked
-                      ? "The escrow is locked. The operator will release the exact target and purchase this pack after the countdown."
-                      : party.status === "READY"
-                        ? "Everyone is ready to start the synchronized opening."
-                      : "Every player readies before the synchronized countdown starts."}
-                  </p>
-                </div>
-                {!currentParticipant.ready ? (
-                  <Button type="button" onClick={() => void markReady()} loading={pending === "ready"}>
-                    I’m ready
-                  </Button>
-                ) : identity.wallet === party.hostWallet && party.status === "READY" && escrow.snapshot?.status === ProgramEscrowStatus.Locked ? (
-                  <Button type="button" onClick={() => void startOpening()} loading={pending === "start"}>
-                    Open pack
-                  </Button>
-                ) : (
-                  <span className="inline-flex min-h-11 items-center gap-2 rounded-md border border-primary/30 bg-primary/10 px-4 text-sm font-semibold text-primary"><Check className="size-4" aria-hidden="true" /> Ready</span>
-                )}
-              </div>
-            </div>
-          )}
-
-          {identity && currentParticipant && !escrow.enabled && (party.status === "FUNDED" || party.status === "READY") && (
-            <div className="rounded-xl border border-primary/30 bg-primary/5 p-5 sm:p-6">
-              <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-                <div>
-                  <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Fully funded</p>
-                  <h2 className="mt-2 text-xl font-semibold">Ready to pull?</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">Every player must lock in before the countdown.</p>
-                </div>
-                {!currentParticipant.ready ? (
-                  <Button type="button" onClick={() => void markReady()} loading={pending === "ready"}>
-                    I’m ready
-                  </Button>
-                ) : identity.wallet === party.hostWallet && party.status === "READY" ? (
-                  <Button type="button" onClick={() => void startOpening()} loading={pending === "start"}>
-                    Open pack
-                  </Button>
-                ) : (
-                  <span className="inline-flex min-h-11 items-center gap-2 rounded-md border border-primary/30 bg-primary/10 px-4 text-sm font-semibold text-primary"><Check className="size-4" aria-hidden="true" /> Ready</span>
-                )}
-              </div>
-            </div>
-          )}
-
-          {party.status === "OPENING" && (
-            <div className="rounded-xl border border-primary/30 bg-primary/5 p-5 text-center">
-              <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Synchronized opening</p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Every connected browser is counting down from the same {chainRoom.enabled ? "MagicBlock ER" : "server"} timestamp.
-              </p>
-              {openingDialogDismissed && (
-                <Button type="button" variant="secondary" className="mt-4" onClick={() => setOpeningDialogDismissed(false)}>
-                  View opening
-                </Button>
-              )}
-            </div>
-          )}
-
-          {party.status === "VOTING" && party.voting && currentParticipant && (
-            <div className="rounded-xl border border-primary/30 bg-primary/5 p-5 sm:p-6">
-              <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
-                <div>
-                  <div className="flex items-center gap-2 text-primary">
-                    <EyeOff className="size-4" aria-hidden="true" />
-                    <p className="font-mono text-xs uppercase tracking-[0.18em]">Sealed decision</p>
-                  </div>
-                  <h2 className="mt-3 text-xl font-semibold">{voteSecret ? "Your vote is sealed" : "Your card is ready"}</h2>
-                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                    {voteSecret
-                      ? votingSeconds === 0 && privateVotingEnabled && privateVoteTransaction.stage !== "released"
-                        ? "Your choice is still sealed. Release it from the Private ER to finish the vote and settlement."
-                        : "Open the reveal to follow the private vote and shared result."
-                      : "View the revealed card and choose whether the party should keep or sell it."}
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  onClick={() => {
-                    if (voteSecret && votingSeconds === 0 && privateVotingEnabled && privateVoteTransaction.stage !== "released") {
-                      setPrivateVoteFlowError(null);
-                      setPrivateVoteFlow({ phase: "release", choice: voteSecret.vote });
-                      return;
-                    }
-                    setOpeningDialogDismissed(false);
-                  }}
-                >
-                  {voteSecret && votingSeconds === 0 && privateVotingEnabled && privateVoteTransaction.stage !== "released"
-                    ? "Release vote and settle"
-                    : voteSecret ? "View sealed vote" : "View card & vote"}
-                </Button>
-              </div>
-            </div>
-          )}
-
           {party.status === "COMPLETED" && party.voting?.result && party.settlement && (
-            <div className="rounded-xl border border-primary/30 bg-primary/5 p-5 sm:p-6">
+            <div id="result" className="scroll-mt-4 rounded-xl border border-primary/30 bg-primary/5 p-5 sm:p-6">
               <div className="text-center">
                 <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Decision revealed</p>
                 <h2 className="display-type mt-3 text-4xl font-semibold">{party.voting.result.outcome} wins<span className="text-primary">.</span></h2>
@@ -1334,9 +1365,8 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
         </section>
       </div>
 
-      <div className="mt-8 flex items-center justify-between gap-4">
+      <div className="mt-8">
         <Link href="/" className="inline-flex min-h-11 items-center rounded-md text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Back to home</Link>
-        <p className="hidden text-xs text-muted-foreground sm:block">{chainRoom.enabled ? "MagicBlock Router + SSE" : "Realtime demo transport · SSE"}</p>
       </div>
     </main>
   );

@@ -1,18 +1,131 @@
 # Gacha Party
 
-Pool USDC with friends, open Collector Crypt packs together, and split the outcome in real time.
+> **Pull together.** Pool USDC with friends, open Collector Crypt packs together, and split the outcome in real time.
+
+[Live demo](https://gacha.lumenless.com) · [MagicBlock Solana Blitz V7](https://magicblock.gg) · Solana devnet
+
+Gacha Party turns a pack opening into a multiplayer room. Participants fund one Collector Crypt pack, ready up, watch the same countdown, reveal the same collectible, and privately decide whether to keep it or sell it through buyback.
+
+## Demo flow
+
+1. Connect a Solana wallet and create a party.
+2. Share the room link or fund the pack alone.
+3. Deposit devnet USDC into the party vault.
+4. Mark every participating wallet ready.
+5. Open the pack with a synchronized MagicBlock countdown.
+6. Reveal the Collector Crypt card to everyone at once.
+7. Cast a sealed `KEEP` or `SELL` vote through a MagicBlock Private ER.
+8. If `SELL` wins, distribute confirmed buyback proceeds proportionally to depositors.
+
+The room always presents one prominent **Next step** action, so the demo can move cleanly from funding to settlement.
+
+## What runs where
+
+| Layer | Responsibility |
+|---|---|
+| MagicBlock Ephemeral Rollup | Public multiplayer state: membership, ready status, and synchronized opening timestamp |
+| MagicBlock Private Ephemeral Rollup | Wallet-scoped sealed `KEEP` / `SELL` choices inside a verified TEE |
+| Solana devnet | SPL-token vault, checked deposits, receipts, refunds, custody lifecycle, and atomic payout settlement |
+| Collector Crypt devnet | Live pack inventory, purchase preparation, opening result, and buyback |
+| Supabase + SSE | Durable product metadata and cross-instance realtime delivery for the Vercel app |
+
+MagicBlock ER state proves the collaborative room transition. Financial custody remains on Solana's base layer. Private votes return to devnet only after their onchain reveal time.
+
+## Current devnet implementation
+
+- Wallet Standard discovery and signed wallet authentication
+- Shareable, onchain-addressed party rooms
+- Fixed 1–10 participant capacity, including solo openings
+- Dynamic SPL-token escrow with one immutable receipt per contributor
+- Automatic vault locking at the exact funding target
+- Deadline cancellation and participant-controlled full refunds
+- MagicBlock ER membership, readiness, and shared countdown
+- Verified MagicBlock Private ER voting with resumable signing steps
+- Live Collector Crypt inventory filtering and deterministic purchase validation
+- Idempotent purchase, buyback, custody, and settlement operations
+- Integer-only USDC math with deterministic remainder allocation
+- Supabase-backed realtime rooms suitable for Vercel serverless instances
+
+The deployed flow is **devnet-only** and deliberately custodial: a dedicated operator signs Collector Crypt purchase and buyback transactions and temporarily receives the revealed asset. Do not reuse this custody model for mainnet without an independent security review and a production custody design.
+
+## Stack
+
+- Next.js 16, React 19, TypeScript, Tailwind CSS 4
+- `@solana/kit` and Wallet Standard
+- Anchor program with Codama-generated TypeScript clients
+- MagicBlock Ephemeral Rollups Kit
+- Collector Crypt Gacha API adapter with runtime validation
+- Supabase Postgres, Realtime, and row-level security
+- Zod and Vitest
+- pnpm 10, Node.js 22–24
+
+## Repository structure
+
+```text
+src/app                         Next.js pages and API routes
+src/components                  Room, wallet, and transaction UI
+src/domain                      Party state machine, money, and settlement rules
+src/integrations                Solana, MagicBlock, Collector Crypt, and voting adapters
+src/server                      Repositories and application orchestration
+programs/gacha-party-room       Anchor room, escrow, and private-vote program
+supabase/migrations             Durable runtime schema and settlement locks
+scripts                         Devnet checks, code generation, and smoke tests
+docs                            Architecture, program, security, and deployment notes
+```
 
 ## Run locally
+
+### Prerequisites
+
+- Node.js `>=22 <25`
+- pnpm `10.28.0`
+- A Supabase project or local Supabase instance
+
+### Setup
 
 ```bash
 pnpm install
 cp .env.example .env.local
+```
+
+Apply the checked-in Supabase migrations:
+
+```bash
+pnpm dlx supabase login
+pnpm dlx supabase link --project-ref <project-ref>
+pnpm dlx supabase db push
+```
+
+Set at least these server-only values in `.env.local`:
+
+```dotenv
+SERVER_STORAGE_MODE=supabase
+SUPABASE_URL=https://<project-ref>.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=<service-role-secret>
+AUTH_SESSION_SECRET=<at-least-32-random-characters>
+```
+
+Then start the app:
+
+```bash
 pnpm dev
 ```
 
-Apply the Supabase migration and fill `SUPABASE_URL` plus `SUPABASE_SERVICE_ROLE_KEY` before starting the app. Application runtime uses Supabase locally and on Vercel; Vitest alone uses isolated in-memory adapters. See [docs/vercel-deployment.md](docs/vercel-deployment.md).
+The `.env.example` defaults to clearly labelled mock integrations. This keeps the complete browser flow available without moving tokens. For the full devnet configuration, use the [Vercel and Supabase deployment guide](docs/vercel-deployment.md).
 
-The default feature modes remain clearly labelled mock modes. They support the complete cross-browser demo without submitting token transfers or Collector Crypt purchases.
+## Integration modes
+
+| Feature | Local fallback | Devnet mode |
+|---|---|---|
+| Identity | `NEXT_PUBLIC_WALLET_MODE=mock` | `wallet` |
+| Public room | `NEXT_PUBLIC_ROOM_STATE_MODE=mock` | `magicblock` |
+| Funding | `NEXT_PUBLIC_FUNDS_MODE=mock` | `solana` |
+| Voting | `commit-reveal` | `magicblock-per` on both public and server variables |
+| Collector Crypt | `COLLECTOR_CRYPT_MODE=mock` | `real` |
+
+`COLLECTOR_CRYPT_API_KEY` is optional and is used only for partner revenue attribution. Real devnet execution still requires a dedicated operator public key, its server-only secret key, the supported mint, and funded devnet accounts.
+
+Never place `SUPABASE_SERVICE_ROLE_KEY` or `GACHA_OPERATOR_SECRET_KEY` in a `NEXT_PUBLIC_` variable.
 
 ## Quality checks
 
@@ -22,81 +135,47 @@ pnpm lint
 pnpm test
 pnpm build
 pnpm test:program
-pnpm build:program
-pnpm generate:program-client
-pnpm smoke:escrow:localnet
 ```
 
-See [docs/architecture.md](docs/architecture.md) for the current architecture and integration decisions.
-
-## Wallet mode
-
-The complete multiplayer loop runs in mock mode by default. To use real Solana wallet ownership for party identity while keeping USDC simulated:
-
-1. Copy `.env.example` to `.env.local`.
-2. Set `NEXT_PUBLIC_WALLET_MODE=wallet`.
-3. Set `AUTH_SESSION_SECRET` to a random value of at least 32 characters.
-4. Start the app and connect a Wallet Standard-compatible Solana wallet.
-
-Wallet mode always signs a free login message first. To enable public room transactions as well, set `NEXT_PUBLIC_ROOM_STATE_MODE=magicblock`. The host can then review and sign room activation, participants can review and sign joins, and funded participants can review and sign ready updates. Every room transaction is simulated before the wallet prompt and confirmed through the Magic Router. The base-layer escrow client is available through the opt-in funding mode below.
-
-Keep `NEXT_PUBLIC_ROOM_STATE_MODE=mock` for the reliable no-wallet demo. MagicBlock mode requires the connected wallet to hold a small amount of devnet SOL for transaction fees and room rent.
-
-## Private ER voting
-
-Verified MagicBlock Private ER voting is opt-in:
-
-```bash
-NEXT_PUBLIC_VOTING_MODE=magicblock-per
-VOTING_MODE=magicblock-per
-```
-
-Both variables must match. The browser verifies the TDX-backed TEE, authenticates with a wallet message, creates a voter-scoped account, activates wallet-only permissioning, and casts inside the TEE. At the deadline, the voter releases and undelegates the account. The server derives that PDA and accepts the choice only when the account is owned by the deployed program on Solana devnet. Offline voters abstain; the host and server never receive early permission to read individual choices.
-
-## Devnet Collector Crypt flow
-
-Real mode uses a dedicated custodial devnet operator. Enable it only after upgrading the checked-in program, applying all Supabase migrations, and funding the operator with devnet SOL:
-
-```bash
-NEXT_PUBLIC_WALLET_MODE=wallet
-NEXT_PUBLIC_FUNDS_MODE=solana
-NEXT_PUBLIC_USDC_MINT=<verified-devnet-mint>
-USDC_MINT=<same-verified-devnet-mint>
-NEXT_PUBLIC_FUNDS_TOKEN_LABEL="USDC"
-NEXT_PUBLIC_GACHA_OPERATOR_ADDRESS=<operator-public-key>
-GACHA_OPERATOR_ADDRESS=<same-operator-public-key>
-GACHA_OPERATOR_SECRET_KEY=<base64-keypair-json>
-COLLECTOR_CRYPT_MODE=real
-COLLECTOR_CRYPT_API_BASE_URL=https://dev-gacha.collectorcrypt.com
-```
-
-Party creation immediately creates a base-layer vault with the host registered, so the host can deposit before friends arrive. Each friend signs a MagicBlock join; the server verifies that membership before the devnet operator registers the wallet in escrow. The immutable onchain deadline stops joins, deposits, and locking; after expiry, anyone can cancel while each contributor alone signs a full refund to their own token account. Participants sign checked deposits, everyone readies, and the host signs the irreversible lock. The operator then releases the exact target, signs Collector Crypt’s partially signed transaction, receives the NFT, and either keeps it for the party or signs buyback. SELL payouts and the final escrow marker share one atomic transaction, preventing double settlement.
-
-Submitted funding transactions are stored locally by signature until chain state confirms their effect. Reloading the page resumes confirmation and reconciles escrow/receipt state before the app permits another signature, covering RPC timeouts and interrupted server synchronization without risking a duplicate payment.
-
-`COLLECTOR_CRYPT_API_KEY` is optional and used only for partner attribution. Never place `GACHA_OPERATOR_SECRET_KEY` in a `NEXT_PUBLIC_` variable or commit it.
-
-Verify inventory, API access, operator balances, and configuration without creating a purchase:
+Integration checks:
 
 ```bash
 pnpm check:collector:devnet
-```
-
-Optionally prepare and strictly validate an unsigned transaction (it is never signed or submitted):
-
-```bash
-pnpm check:collector:devnet -- --prepare pokemon_50
-```
-
-## MagicBlock room program
-
-The Anchor program under `programs/gacha-party-room` implements a compact collaborative room PDA plus a separate base-layer SPL token escrow with participant allowlisting, checked deposits, receipts, and refunds. It contains no simulated financial state. See [docs/room-program.md](docs/room-program.md).
-
-Devnet program: [BMKHnBM1oq1LyXFYyHq2gUdyugo1N8aGF6wtBnJNd6Nz](https://explorer.solana.com/address/BMKHnBM1oq1LyXFYyHq2gUdyugo1N8aGF6wtBnJNd6Nz?cluster=devnet)
-
-To exercise initialize, delegate, ER ready update, and undelegate with the configured devnet keypair:
-
-```bash
 pnpm smoke:program:devnet
 pnpm smoke:private-vote:devnet
+pnpm smoke:escrow:localnet
 ```
+
+The Collector Crypt check reads inventory and validates configuration without purchasing a pack. Add `-- --prepare <machine-id>` to validate an unsigned purchase transaction without signing or submitting it.
+
+## Onchain program
+
+Devnet program: [`BMKHnBM1oq1LyXFYyHq2gUdyugo1N8aGF6wtBnJNd6Nz`](https://explorer.solana.com/address/BMKHnBM1oq1LyXFYyHq2gUdyugo1N8aGF6wtBnJNd6Nz?cluster=devnet)
+
+The program contains three boundaries:
+
+- a public room PDA delegated to MagicBlock for collaborative state;
+- a base-layer SPL-token escrow and contributor receipts;
+- per-wallet private vote PDAs delegated to the MagicBlock TEE validator.
+
+See [docs/room-program.md](docs/room-program.md) for account layouts and lifecycle details.
+
+## Security and trust model
+
+- All token amounts use integer base units; financial code never uses floating point.
+- Deposits use checked SPL-token transfers and cannot exceed the remaining target.
+- Settlement is idempotent and uses confirmed buyback proceeds.
+- Payout transfers and the final escrow marker share one atomic transaction.
+- External Collector Crypt transactions are validated before the operator signs them.
+- Private voting fails closed if TEE verification, account permissioning, or release verification fails.
+- Supabase service-role access and operator keys remain server-only.
+- The current operator custody model is suitable only for this devnet hackathon demo.
+
+## Documentation
+
+- [Architecture and integration decisions](docs/architecture.md)
+- [Room and escrow program](docs/room-program.md)
+- [Deadline refunds security review](docs/security-review-deadline-refunds.md)
+- [Vercel and Supabase deployment](docs/vercel-deployment.md)
+- [MagicBlock documentation](https://docs.magicblock.gg)
+- [Collector Crypt Gacha documentation](https://docs.collectorcrypt.com/gacha/api)

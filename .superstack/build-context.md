@@ -36,6 +36,7 @@ build_status:
     - deadline-cancellation-and-transaction-recovery
     - deposit-driven-automatic-membership
     - resumable-private-vote-signing-ui
+    - state-driven-room-action-hierarchy
   mvp_complete: false
   tests_passing: true
   devnet_deployed: true
@@ -76,5 +77,8 @@ debug:
     - error: "Private voting requested multiple unexplained wallet approvals and a canceled later approval restarted an opaque flow."
       cause: The UI represented the entire Private ER lifecycle as one button and automatically initiated release at the deadline, even though setup, sealed casting, and release are separate resumable approvals.
       fix: Show a six-step Private ER signing dialog, disclose the wallet message and transactions before signing, persist confirmed progress, resume from onchain account state, and require an explicit release-and-settle action instead of opening the wallet automatically.
-  last_debug_session: 2026-08-09T14:20:00+02:00
+    - error: "A sealed solo vote appeared stuck on Wait for the shared deadline."
+      cause: Every Private ER voter account has an immutable 90-second onchain reveal timestamp, but the signing dialog showed neither the remaining time nor whether another participant was actually pending.
+      fix: Present the deadline as a live onchain privacy timer, state explicitly when no other voter is pending, automatically switch the dialog to release-and-settle at zero, and avoid labeling the still-pending flow as Done.
+  last_debug_session: 2026-08-09T14:48:00+02:00
 ```

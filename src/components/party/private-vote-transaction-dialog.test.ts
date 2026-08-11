@@ -62,4 +62,22 @@ describe("private vote transaction progress", () => {
     expect(steps[4]?.status).toBe("complete");
     expect(steps[5]?.status).toBe("active");
   });
+
+  it("shows a sealed solo vote as waiting only for its onchain reveal time", () => {
+    const steps = getPrivateVoteFlowSteps(
+      "seal",
+      "SELL",
+      transaction({ stage: "sealed", signatures: ["setup", "seal"] }),
+      false,
+      null,
+      37,
+      0,
+    );
+
+    expect(steps[3]).toMatchObject({
+      title: "Private reveal timer",
+      detail: "No other votes are pending. Onchain reveal unlocks in 37s.",
+      status: "active",
+    });
+  });
 });

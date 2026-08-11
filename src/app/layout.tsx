@@ -21,7 +21,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <header className="mx-auto flex h-18 w-full max-w-7xl items-center justify-between px-4 md:px-6 lg:px-8">
           <Link
             href="/"
-            className="flex min-h-11 items-center gap-2 rounded-md text-sm font-semibold tracking-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-md text-sm font-semibold tracking-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:justify-start"
           >
             <span className="grid size-8 place-items-center rounded-md bg-primary text-primary-foreground">
               <Sparkles className="size-4" aria-hidden="true" />

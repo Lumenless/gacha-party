@@ -32,6 +32,8 @@ export function getPrivateVoteFlowSteps(
   transaction: PrivateVoteTransactionState,
   actionPending: boolean,
   flowError: string | null,
+  secondsRemaining = 0,
+  remainingVoters = 0,
 ): PrivateVoteFlowStep[] {
   const transactionFailed = transaction.stage === "error";
   const sealError = transactionFailed && phase === "seal" ? sealFailureIndex(transaction) : -1;
@@ -62,9 +64,13 @@ export function getPrivateVoteFlowSteps(
           : sealComplete ? "complete" : "upcoming",
     },
     {
-      title: "Wait for the shared deadline",
-      detail: "The choice remains hidden until the voting window closes.",
-      status: phase === "seal" ? "upcoming" : "complete",
+      title: "Private reveal timer",
+      detail: phase === "seal" && sealComplete
+        ? remainingVoters > 0
+          ? `${remainingVoters} ${remainingVoters === 1 ? "player has" : "players have"} not sealed yet. Onchain reveal unlocks in ${secondsRemaining}s.`
+          : `No other votes are pending. Onchain reveal unlocks in ${secondsRemaining}s.`
+        : "The choice remains hidden until its onchain reveal time.",
+      status: phase === "seal" ? sealComplete ? "active" : "upcoming" : "complete",
     },
     {
       title: "Release vote to Solana",
@@ -102,6 +108,8 @@ export function PrivateVoteTransactionDialog({
   transaction,
   actionPending,
   flowError,
+  secondsRemaining,
+  remainingVoters,
   onContinue,
   onClose,
 }: {
@@ -111,6 +119,8 @@ export function PrivateVoteTransactionDialog({
   transaction: PrivateVoteTransactionState;
   actionPending: boolean;
   flowError: string | null;
+  secondsRemaining: number;
+  remainingVoters: number;
   onContinue: () => void;
   onClose: () => void;
 }) {
@@ -118,8 +128,17 @@ export function PrivateVoteTransactionDialog({
   const failed = transaction.stage === "error" || Boolean(flowError);
   const sealed = phase === "seal" && transaction.stage === "sealed";
   const readyToRelease = phase === "release" && !busy && !failed && transaction.stage !== "released";
-  const steps = getPrivateVoteFlowSteps(phase, choice, transaction, actionPending, flowError);
+  const steps = getPrivateVoteFlowSteps(
+    phase,
+    choice,
+    transaction,
+    actionPending,
+    flowError,
+    secondsRemaining,
+    remainingVoters,
+  );
   const error = flowError ?? transaction.error;
+  const waitingForReveal = phase === "seal" && transaction.stage === "sealed" && !flowError;
 
   return (
     <Dialog
@@ -135,11 +154,22 @@ export function PrivateVoteTransactionDialog({
         </span>
         <div>
           <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">MagicBlock Private ER</p>
-          <h2 className="mt-1 text-xl font-semibold">
-            {phase === "complete" ? "Settlement complete" : phase === "release" ? "Release and settle" : `Seal ${choice}`}
-          </h2>
+          <div className="mt-1 flex flex-wrap items-center gap-3">
+            <h2 className="text-xl font-semibold">
+              {phase === "complete" ? "Settlement complete" : phase === "release" ? "Release and settle" : waitingForReveal ? `${choice} vote sealed` : `Seal ${choice}`}
+            </h2>
+            {waitingForReveal && (
+              <span className="rounded-full border border-primary/30 bg-primary/5 px-2.5 py-1 font-mono text-xs tabular-nums text-primary" aria-live="polite">
+                Unlocks in {secondsRemaining}s
+              </span>
+            )}
+          </div>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            {phase === "seal"
+            {waitingForReveal
+              ? remainingVoters > 0
+                ? `Your choice is private. ${remainingVoters} ${remainingVoters === 1 ? "player still needs" : "players still need"} to seal, and MagicBlock will allow release when the timer reaches zero.`
+                : "Nobody else is pending. MagicBlock enforces this short privacy window onchain; this dialog advances to release when the timer reaches zero."
+              : phase === "seal"
               ? "First-time voting asks for one wallet message and two transactions. Confirmed steps are not repeated if you retry."
               : phase === "release"
                 ? "One final transaction publishes the expired vote. Settlement follows without another wallet approval."
@@ -193,7 +223,7 @@ export function PrivateVoteTransactionDialog({
       <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         {!busy && (
           <Button type="button" variant="ghost" onClick={onClose}>
-            {sealed || phase === "complete" ? "Done" : "Close"}
+            {phase === "complete" ? "Done" : sealed ? "Continue in room" : "Close"}
           </Button>
         )}
         {(failed || readyToRelease) && (

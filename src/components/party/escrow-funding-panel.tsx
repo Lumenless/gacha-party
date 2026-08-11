@@ -41,7 +41,6 @@ export function EscrowFundingPanel({
   remaining,
   deadlinePassed,
   lockedRecoveryPassed,
-  lockedRecoveryLabel,
   onContributionChange,
   onReviewInitialize,
   onReviewDeposit,
@@ -63,7 +62,6 @@ export function EscrowFundingPanel({
   remaining: bigint;
   deadlinePassed: boolean;
   lockedRecoveryPassed: boolean;
-  lockedRecoveryLabel: string | null;
   onContributionChange: (value: string) => void;
   onReviewInitialize: () => void;
   onReviewDeposit: () => void;
@@ -157,28 +155,21 @@ export function EscrowFundingPanel({
   }
 
   return (
-    <div className="rounded-xl border border-primary/30 bg-card p-5 sm:p-6">
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
-        <div className="flex gap-3">
-          <span className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/15 text-primary"><ShieldCheck className="size-5" aria-hidden="true" /></span>
-          <div>
-            <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Onchain escrow active</p>
-            <h2 className="mt-1 font-semibold">Deposits are verified from receipts</h2>
-            <p className="mt-1 text-sm text-muted-foreground">{snapshot?.participantCount ?? 0} registered wallet{snapshot?.participantCount === 1 ? "" : "s"} · Solana devnet</p>
-          </div>
-        </div>
+    <div className="rounded-xl border bg-card p-5 sm:p-6">
+      <div className="flex items-center justify-between gap-4">
+        <h2 className="font-semibold">Party vault</h2>
         {snapshot && (
           <a href={explorerAddress(snapshot.address)} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-2 rounded-md px-2 text-sm font-semibold text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            View escrow <ExternalLink className="size-4" aria-hidden="true" />
+            Explorer <ExternalLink className="size-4" aria-hidden="true" />
           </a>
         )}
       </div>
 
-      <dl className="mt-5 grid gap-3 rounded-lg bg-muted/60 p-4 text-sm sm:grid-cols-2">
+      <dl className="mt-3 grid gap-3 rounded-lg bg-muted/60 p-4 text-sm sm:grid-cols-2">
         <div>
           <dt className="text-xs text-muted-foreground">Wallet balance</dt>
           <dd className="mt-1 font-mono tabular-nums">{tokenAccount ? `${formatUsdc(tokenAccount.amount)} ${tokenLabel}` : "Token account not found"}</dd>
-          <a href={DEVNET_USDC_FAUCET_URL} target="_blank" rel="noreferrer" className="mt-2 inline-flex min-h-6 items-center gap-1 text-xs font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <a href={DEVNET_USDC_FAUCET_URL} target="_blank" rel="noreferrer" className="mt-1 inline-flex min-h-10 items-center gap-1 rounded-md text-xs font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             Get Devnet USDC <ExternalLink className="size-3" aria-hidden="true" />
           </a>
         </div>
@@ -222,9 +213,9 @@ export function EscrowFundingPanel({
       )}
 
       {receipt && fundingOpen && !deadlinePassed && (
-        <div className="mt-5 rounded-lg border border-primary/30 bg-primary/5 p-4">
-          <p className="font-semibold">Contribution committed</p>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">If the target is missed, your complete contribution becomes refundable after the funding deadline. Reaching the target locks the vault automatically.</p>
+        <div className="mt-4 flex items-center gap-2 rounded-lg bg-primary/5 p-3 text-sm text-primary">
+          <ShieldCheck className="size-4 shrink-0" aria-hidden="true" />
+          <p className="font-medium">Deposit confirmed</p>
         </div>
       )}
 
@@ -256,13 +247,6 @@ export function EscrowFundingPanel({
         </div>
       )}
 
-      {locked && !lockedRecoveryPassed && (
-        <div className="mt-5 rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm">
-          <p className="font-semibold">Vault locked automatically</p>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">The funding target is secured for this pack. If no purchase begins, recovery becomes available {lockedRecoveryLabel ? `at ${lockedRecoveryLabel}` : "after the safety window"}.</p>
-        </div>
-      )}
-
       {locked && lockedRecoveryPassed && (
         <div className="mt-5 flex flex-col justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-4 sm:flex-row sm:items-center">
           <div>
@@ -275,12 +259,6 @@ export function EscrowFundingPanel({
         </div>
       )}
 
-      {!fundingOpen && !cancelled && !locked && (
-        <div className="mt-5 rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm">
-          <p className="font-semibold">Escrow handed to the devnet operator</p>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">Deposits and refunds are disabled by the onchain lifecycle.</p>
-        </div>
-      )}
     </div>
   );
 }
