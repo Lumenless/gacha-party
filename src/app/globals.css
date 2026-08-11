@@ -63,6 +63,18 @@ body {
 ::selection { background: var(--primary); color: var(--primary-foreground); }
 
 .display-type { letter-spacing: -0.055em; }
+.party-action::before {
+  position: absolute;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 88% 18%, color-mix(in srgb, var(--primary) 18%, transparent), transparent 16rem),
+    linear-gradient(115deg, color-mix(in srgb, var(--primary) 8%, transparent), transparent 55%);
+}
+.party-action-icon {
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 22%, transparent);
+}
 .noise { position: relative; isolation: isolate; }
 .noise::before {
   position: fixed;
@@ -76,8 +88,13 @@ body {
 
 @media (prefers-reduced-motion: no-preference) {
   .pack-float { animation: pack-float 5s ease-in-out infinite; }
+  .party-action-icon { animation: action-pulse 2.5s ease-in-out infinite; }
   @keyframes pack-float {
     0%, 100% { transform: translateY(0) rotate(2deg); }
     50% { transform: translateY(-10px) rotate(-1deg); }
+  }
+  @keyframes action-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 22%, transparent); }
+    50% { box-shadow: 0 0 0 8px transparent; }
   }
 }

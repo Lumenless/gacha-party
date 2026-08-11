@@ -9,6 +9,7 @@ import {
   ChevronDown,
   Clock3,
   Coins,
+  Copy,
   EyeOff,
   Landmark,
   LockKeyhole,
@@ -50,11 +51,6 @@ function createDemoIdentity(): DemoIdentity {
   return { wallet: `Demo${suffix}`, displayName: `Player ${suffix.slice(-2).toUpperCase()}` };
 }
 
-function truncateWallet(wallet: string) {
-  if (wallet === "DEMO_HOST_WALLET") return "DemoHost...Wallet";
-  return wallet.length > 12 ? `${wallet.slice(0, 6)}...${wallet.slice(-4)}` : wallet;
-}
-
 function explorerTransaction(signature: string) {
   return `https://explorer.solana.com/tx/${signature}?cluster=devnet`;
 }
@@ -91,21 +87,60 @@ function NextStep({
   action?: ReactNode;
 }) {
   return (
-    <section className="mt-6 rounded-xl border border-primary/40 bg-primary/5 p-4 sm:p-5" aria-labelledby="next-step-title">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="grid size-11 shrink-0 place-items-center rounded-full bg-primary/15 text-primary" aria-hidden="true">
+    <section className="party-action relative mt-5 overflow-hidden rounded-xl border border-primary/45 bg-card p-5 sm:p-6" aria-labelledby="next-step-title">
+      <div className="relative z-10 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-start gap-4">
+          <span className="party-action-icon grid size-12 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground" aria-hidden="true">
             {icon}
           </span>
           <div className="min-w-0">
-            <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Next step</p>
-            <h2 id="next-step-title" className="mt-1 text-xl font-semibold">{title}</h2>
-            {detail && <p className="mt-1 text-sm text-muted-foreground">{detail}</p>}
+            <p className="font-mono text-xs font-semibold uppercase tracking-[0.18em] text-primary">Your move</p>
+            <h2 id="next-step-title" className="display-type mt-2 text-2xl font-semibold sm:text-3xl">{title}</h2>
+            {detail && <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">{detail}</p>}
           </div>
         </div>
-        {action && <div className="shrink-0 sm:text-right">{action}</div>}
+        {action && <div className="grid shrink-0 [&>*]:w-full sm:block sm:[&>*]:w-auto">{action}</div>}
       </div>
     </section>
+  );
+}
+
+const PARTY_STAGES = ["Fund", "Ready", "Open", "Decide"] as const;
+
+function partyStage(status: Party["status"]) {
+  if (status === "DRAFT" || status === "FUNDING" || status === "EXPIRED" || status === "CANCELLED") return 0;
+  if (status === "FUNDED" || status === "READY") return 1;
+  if (status === "OPENING") return 2;
+  if (status === "REVEALED" || status === "VOTING") return 3;
+  return 4;
+}
+
+function PartyProgress({ status }: { status: Party["status"] }) {
+  const current = partyStage(status);
+  return (
+    <ol className="grid grid-cols-4" aria-label="Party progress">
+      {PARTY_STAGES.map((label, index) => {
+        const complete = current > index;
+        const active = current === index;
+        return (
+          <li key={label} className="relative flex flex-col items-center gap-2 text-center">
+            {index > 0 && <span className={complete || active ? "absolute right-1/2 top-3 h-px w-full bg-primary" : "absolute right-1/2 top-3 h-px w-full bg-border"} aria-hidden="true" />}
+            <span
+              className={complete
+                ? "relative z-10 grid size-6 place-items-center rounded-full bg-primary text-primary-foreground"
+                : active
+                  ? "relative z-10 grid size-6 place-items-center rounded-full border border-primary bg-background text-primary ring-4 ring-primary/10"
+                  : "relative z-10 grid size-6 place-items-center rounded-full border bg-background text-muted-foreground"}
+              aria-current={active ? "step" : undefined}
+            >
+              {complete ? <Check className="size-3.5" aria-hidden="true" /> : <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />}
+              <span className="sr-only">{complete ? "Complete" : active ? "Current" : "Upcoming"}</span>
+            </span>
+            <span className={active || complete ? "text-xs font-semibold text-foreground" : "text-xs text-muted-foreground"}>{label}</span>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -666,10 +701,11 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
   );
 
   return (
-    <main className="mx-auto w-full max-w-7xl px-4 py-8 md:px-6 lg:px-8">
-      <div className="flex flex-col justify-between gap-4 border-b pb-6 sm:flex-row sm:items-end">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
+    <main className="mx-auto w-full max-w-7xl px-4 pb-12 pt-4 md:px-6 lg:px-8">
+      <div className="rounded-xl border bg-card/70 p-4 backdrop-blur-sm sm:p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
             <span className="size-2 rounded-full bg-primary" aria-hidden="true" />
             <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">
               {party.status === "COMPLETED"
@@ -680,8 +716,17 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
               {liveState === "live" ? <Wifi className="size-3 text-primary" aria-hidden="true" /> : <WifiOff className="size-3" aria-hidden="true" />}
               {liveState === "live" ? "Live" : liveState === "connecting" ? "Connecting" : "Reconnecting"}
             </span>
+            </div>
+            <h1 className="display-type mt-2 truncate text-3xl font-semibold sm:text-4xl">{party.name}</h1>
+            <p className="mt-1 truncate text-sm text-muted-foreground">{party.packName}</p>
           </div>
-          <h1 className="display-type mt-3 text-4xl font-semibold">{party.name}</h1>
+          <Button type="button" variant="ghost" className="shrink-0 px-3" onClick={copyInvite} aria-label="Copy party invite">
+            <Copy className="size-4" aria-hidden="true" />
+            <span className="hidden sm:inline">{copied ? "Copied" : "Invite"}</span>
+          </Button>
+        </div>
+        <div className="mt-5 border-t pt-4">
+          <PartyProgress status={party.status} />
         </div>
       </div>
 
@@ -1281,12 +1326,12 @@ export function RoomClient({ initialParty }: { initialParty: Party }) {
                       <span className="grid size-9 shrink-0 place-items-center rounded-full bg-primary/15 text-xs font-semibold text-primary">{initials(participant.displayName)}</span>
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">{participant.displayName}{participant.wallet === party.hostWallet ? " · Host" : ""}</p>
-                        <p className="truncate font-mono text-xs text-muted-foreground">{truncateWallet(participant.wallet)}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">{participant.ready ? "Ready to pull" : "In the party"}</p>
                       </div>
                     </div>
                     <div className="shrink-0 text-right">
                       <p className="font-mono text-sm tabular-nums">{formatUsdc(contributed)} {escrow.enabled ? fundsTokenLabel : "USDC"}</p>
-                      <p className={participant.ready ? "text-xs text-primary" : "text-xs text-muted-foreground"}>{participant.ready ? "Ready" : `${share.toFixed(0)}% share`}</p>
+                      <p className="text-xs text-muted-foreground">{share.toFixed(0)}% share</p>
                     </div>
                   </li>
                 );

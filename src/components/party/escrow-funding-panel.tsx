@@ -111,17 +111,17 @@ export function EscrowFundingPanel({
           <div className="flex gap-3">
             <span className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/15 text-primary"><Landmark className="size-5" aria-hidden="true" /></span>
             <div>
-              <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Base-layer custody</p>
-              <h2 className="mt-1 font-semibold">Create the funding vault</h2>
+              <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Party funds</p>
+              <h2 className="mt-1 font-semibold">Open deposits</h2>
               <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">
                 {isHost
-                  ? "Creates a devnet token vault with you as the first participant. Friends are registered as they join. No tokens move during activation."
-                  : "The host must create the escrow before participants can deposit."}
+                  ? "Create the party vault so everyone can deposit."
+                  : "The host is opening deposits."}
               </p>
             </div>
           </div>
           {isHost && (canSignTransactions
-            ? <Button type="button" onClick={onReviewInitialize}>Review escrow</Button>
+            ? <Button type="button" onClick={onReviewInitialize}>Open deposits</Button>
             : <WalletAuthButton />)}
         </div>
       </div>
@@ -157,23 +157,23 @@ export function EscrowFundingPanel({
   return (
     <div className="rounded-xl border bg-card p-5 sm:p-6">
       <div className="flex items-center justify-between gap-4">
-        <h2 className="font-semibold">Party vault</h2>
+        <h2 className="font-semibold">Your funds</h2>
         {snapshot && (
           <a href={explorerAddress(snapshot.address)} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-2 rounded-md px-2 text-sm font-semibold text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            Explorer <ExternalLink className="size-4" aria-hidden="true" />
+            View vault <ExternalLink className="size-4" aria-hidden="true" />
           </a>
         )}
       </div>
 
       <dl className="mt-3 grid gap-3 rounded-lg bg-muted/60 p-4 text-sm sm:grid-cols-2">
         <div>
-          <dt className="text-xs text-muted-foreground">Wallet balance</dt>
+          <dt className="text-xs text-muted-foreground">In your wallet</dt>
           <dd className="mt-1 font-mono tabular-nums">{tokenAccount ? `${formatUsdc(tokenAccount.amount)} ${tokenLabel}` : "Token account not found"}</dd>
           <a href={DEVNET_USDC_FAUCET_URL} target="_blank" rel="noreferrer" className="mt-1 inline-flex min-h-10 items-center gap-1 rounded-md text-xs font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             Get Devnet USDC <ExternalLink className="size-3" aria-hidden="true" />
           </a>
         </div>
-        <div><dt className="text-xs text-muted-foreground">Your receipt</dt><dd className="mt-1 font-mono tabular-nums">{receipt ? `${formatUsdc(receipt.amount)} ${tokenLabel}` : "No deposit"}</dd></div>
+        <div><dt className="text-xs text-muted-foreground">In this party</dt><dd className="mt-1 font-mono tabular-nums">{receipt ? `${formatUsdc(receipt.amount)} ${tokenLabel}` : "Not funded yet"}</dd></div>
       </dl>
 
       {isParticipant && !tokenAccount && !receipt && (
@@ -191,8 +191,8 @@ export function EscrowFundingPanel({
 
       {!isParticipant && (
         <div className="mt-4 rounded-lg border bg-muted/40 p-4 text-sm">
-          <p className="font-semibold">Connect a wallet to deposit</p>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">Your first deposit automatically adds the wallet to this party.</p>
+          <p className="font-semibold">Deposit to join</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">Your first deposit adds you to the party automatically.</p>
         </div>
       )}
 

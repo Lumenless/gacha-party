@@ -3,10 +3,10 @@
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowRight, Check, Coins, RadioTower, ShieldCheck, Users, WalletCards } from "lucide-react";
+import { ArrowRight, Check, Coins, ShieldCheck, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
-import { createPartySchema, MAX_PARTY_PLAYERS, MIN_PARTY_PLAYERS, type CreatePartyInput } from "@/domain/party";
+import { createPartySchema, MAX_PARTY_PLAYERS, type CreatePartyInput } from "@/domain/party";
 import { formatUsdc, parseUsdc } from "@/domain/money";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -174,7 +174,7 @@ export function CreatePartyForm({ packs, exactPackPrice = false }: { packs: Pack
       </fieldset>
 
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_23rem] xl:grid-cols-[minmax(0,1fr)_25rem]">
-        <section className="relative min-h-[30rem] overflow-hidden rounded-xl border bg-card/35 p-5 sm:min-h-[36rem] sm:p-7" aria-label="Selected pack preview">
+        <section className="relative min-h-[22rem] overflow-hidden rounded-xl border bg-card/35 p-5 sm:p-7 lg:min-h-[36rem]" aria-label="Selected pack preview">
           <div className="relative z-10 flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="font-mono text-xs uppercase tracking-[0.16em] text-primary">Party pull preview</p>
@@ -188,7 +188,7 @@ export function CreatePartyForm({ packs, exactPackPrice = false }: { packs: Pack
           </div>
 
           {activePack ? (
-            <div className="relative mx-auto mt-8 h-[22rem] max-w-2xl sm:mt-10 sm:h-[27rem]">
+            <div className="relative mx-auto mt-5 h-[15rem] max-w-2xl sm:mt-7 sm:h-[18rem] lg:mt-10 lg:h-[27rem]">
               <div className="absolute inset-y-8 left-[9%] hidden aspect-[4/5] -rotate-6 overflow-hidden rounded-xl border bg-muted opacity-25 sm:block">
                 <Image src={activePack.imageUrl} alt="" fill sizes="220px" className="object-cover" />
               </div>
@@ -212,7 +212,7 @@ export function CreatePartyForm({ packs, exactPackPrice = false }: { packs: Pack
             </div>
           )}
 
-          <div className="relative z-10 mt-5 flex flex-wrap justify-center gap-x-6 gap-y-2 text-xs text-muted-foreground">
+          <div className="relative z-10 mt-5 hidden flex-wrap justify-center gap-x-6 gap-y-2 text-xs text-muted-foreground sm:flex">
             <span className="inline-flex items-center gap-2"><Users className="size-4 text-primary" aria-hidden="true" /> Pool with friends</span>
             <span className="inline-flex items-center gap-2"><ShieldCheck className="size-4 text-primary" aria-hidden="true" /> Sealed majority vote</span>
             <span className="inline-flex items-center gap-2"><Coins className="size-4 text-primary" aria-hidden="true" /> Proportional split</span>
@@ -278,25 +278,18 @@ export function CreatePartyForm({ packs, exactPackPrice = false }: { packs: Pack
               disabled={!selectedPack || (activationRequired && !walletAuth.canSignTransactions)}
               title={activationRequired && !walletAuth.canSignTransactions ? "Connect the host wallet from the header to enable signing." : undefined}
             >
-              {pendingLabel ?? (activationStage === "error" && createdPartyId ? "Retry activation" : activationRequired ? "Create & activate" : "Create room")}
-              {!isSubmitting && (activationRequired ? <WalletCards className="size-4" aria-hidden="true" /> : <ArrowRight className="size-4" aria-hidden="true" />)}
+              {pendingLabel ?? (activationStage === "error" && createdPartyId ? "Try again" : "Start party")}
+              {!isSubmitting && <ArrowRight className="size-4" aria-hidden="true" />}
             </Button>
           )}
 
-          <div className="mt-4 grid grid-cols-3 gap-2 rounded-lg bg-muted/60 p-3 text-xs">
-            <div><p className="text-muted-foreground">Players</p><p className="mt-1 font-medium">{MIN_PARTY_PLAYERS}–{MAX_PARTY_PLAYERS}</p></div>
-            <div><p className="text-muted-foreground">Decision</p><p className="mt-1 font-medium">Simple majority</p></div>
-            <div><p className="text-muted-foreground">Custody</p><p className="mt-1 font-medium">Devnet operator</p></div>
-          </div>
+          <p className="mt-4 text-center text-xs text-muted-foreground">Up to {MAX_PARTY_PLAYERS} players · private majority vote · devnet</p>
 
-          <p className="mt-4 flex items-start gap-2 text-xs leading-5 text-muted-foreground" aria-live="polite">
-            <RadioTower className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
-            {createdPartyId && activationStage === "error"
-              ? "The invite is saved. Retry activates the same party."
-              : activationRequired
-                ? "One simulated devnet transaction creates and delegates the room. No assets move."
-                : "This demo creates an off-chain room. No assets move."}
-          </p>
+          {(pendingLabel || (createdPartyId && activationStage === "error")) && (
+            <p className="mt-3 text-center text-xs leading-5 text-muted-foreground" aria-live="polite">
+              {createdPartyId && activationStage === "error" ? "Your invite is safe. Try again to finish setup." : pendingLabel}
+            </p>
+          )}
         </aside>
       </div>
     </form>
